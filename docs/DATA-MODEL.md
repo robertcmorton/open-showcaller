@@ -86,6 +86,16 @@ Decisions and rationale:
 - `rundown_snapshots` are full-state copies (cheap at rundown scale — tens of KB): manual "save version", automatic on show start, hourly while editing. Restore = load snapshot into a new doc, replace.
 - Templates are just snapshots under `templates`; "create from template" = copy blob, strip show-specific values.
 
-## 4. Explicitly out of v1 schema
+## 4. Per-user personalization (NOT in the CRDT)
+
+Private notes, *personal* highlights, per-user column layout/visibility, and theme are per-user views over the shared document — putting them in the Y.Doc would leak them to every client and bloat the doc. They live in one Postgres table instead:
+
+| table | key columns | notes |
+|---|---|---|
+| `user_rundown_prefs` | user_id + rundown_id (PK), column_layout jsonb, theme?, notes jsonb, highlights jsonb, updated_at | `notes`/`highlights` keyed by row id; delivered over the `show` channel at welcome + on change; synced across that user's own devices only |
+
+*Global* highlights, by contrast, are shared content and live on the row inside the Y.Doc. Per-cell change history is derived server-side from the Yjs update log (origin metadata carries user id) — no extra authoring cost, materialized into `rundown_cell_history` lazily if querying updates proves slow.
+
+## 5. Explicitly out of v1 schema
 
 Task management, content hub, chat, notifications, org dashboards, timecode pro-mode tables — designed *around* (nothing here blocks them; they'd be sibling tables keyed on `events`/`rundowns`), but not created.
