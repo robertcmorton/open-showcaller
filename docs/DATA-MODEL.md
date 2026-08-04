@@ -45,6 +45,8 @@ All ids are ULIDs (sortable, collision-safe for client-side generation inside CR
 
 Why relational show state (not in the CRDT): transport commands need a single authority, ordering, and permissions — a server-owned row with a monotonic `seq` gives us that trivially; CRDTs give us none of it. The sync server holds the hot copy in memory and writes through to Postgres.
 
+`show_transitions` doubles as the **as-run log**: per-row timestamps, repeat-run counts, per-row over/under offsets, and the show report export are all derived from it joined against the plan — no separate as-run tables needed. Segment-budget countdown columns are pure projections computed by the timing engine, never stored.
+
 ---
 
 ## 2. Yjs document shape (one Y.Doc per rundown)
@@ -59,7 +61,8 @@ Y.Doc guid = rundown ULID
 └─ rows:      Y.Map<rowId, Y.Map>
                 { id
                 , type: "cue" | "group"
-                , hardStartSec?: number | null         // anchors cascade; groups usually set this
+                , hardStartSec?: number | null         // anchor flag: timing foundation for rows below
+                , backtime?: boolean                   // anchored row calculates upward into preceding rows
                 , durationSec?: number | null
                 , durationHidden?: boolean
                 , durationMuted?: boolean
