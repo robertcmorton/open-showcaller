@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { and, eq } from "drizzle-orm";
 import { ulid } from "ulid";
-import { serializeCsv } from "@open-showcaller/core";
+import { serializeCsv } from "@opencall/core";
 import {
   buildRundownDoc,
   decodeDoc,
@@ -10,7 +10,7 @@ import {
   schema,
   type DbHandle,
   type SeedRow,
-} from "@open-showcaller/db";
+} from "@opencall/db";
 import * as Y from "yjs";
 
 /**

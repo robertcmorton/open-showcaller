@@ -1,4 +1,4 @@
-# Open Showcaller
+# OpenCall
 
 An open-source, self-hostable rundown and show-calling app for live event production.
 

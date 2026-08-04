@@ -1,5 +1,5 @@
 {
-  "name": "open-showcaller",
+  "name": "opencall",
   "private": true,
   "version": "0.0.1",
   "packageManager": "pnpm@9.15.9",
@@ -7,7 +7,7 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "dev": "turbo run dev",
-    "seed": "pnpm --filter @open-showcaller/db run seed",
+    "seed": "pnpm --filter @opencall/db run seed",
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {

@@ -1,7 +1,7 @@
 "use client";
 
-import { computeTiming, formatDuration, formatTimeOfDay } from "@open-showcaller/core";
-import { projectRundownDoc } from "@open-showcaller/db/doc";
+import { computeTiming, formatDuration, formatTimeOfDay } from "@opencall/core";
+import { projectRundownDoc } from "@opencall/db/doc";
 import { useShowChannel } from "../lib/showChannel";
 import { useLiveTiming } from "../lib/useLiveTiming";
 import { useRundownDoc, useWakeLock } from "../lib/useRundownDoc";

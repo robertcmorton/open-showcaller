@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { computeLiveTiming, localSecondsOfDay, type LiveShowTiming, type PlanTiming } from "@open-showcaller/core";
+import { computeLiveTiming, localSecondsOfDay, type LiveShowTiming, type PlanTiming } from "@opencall/core";
 import type { ShowChannel } from "./showChannel";
 
 /**

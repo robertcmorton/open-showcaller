@@ -7,7 +7,7 @@ import {
   type CmdAction,
   type Role,
   type ShowStatePayload,
-} from "@open-showcaller/protocol";
+} from "@opencall/protocol";
 
 const SHOW_WS_URL = process.env.NEXT_PUBLIC_SYNC_WS_URL ?? "ws://localhost:8787";
 const OFFSET_SAMPLES = 5;

@@ -1,7 +1,7 @@
 "use client";
 
-import { parseCsv, parseDurationShorthand, parseTimeOfDay } from "@open-showcaller/core";
-import { DEFAULT_COLUMNS, type SeedRow } from "@open-showcaller/db/doc";
+import { parseCsv, parseDurationShorthand, parseTimeOfDay } from "@opencall/core";
+import { DEFAULT_COLUMNS, type SeedRow } from "@opencall/db/doc";
 
 export const API_URL = process.env.NEXT_PUBLIC_SYNC_HTTP_URL ?? "http://localhost:8787";
 

@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ["@open-showcaller/core", "@open-showcaller/protocol", "@open-showcaller/db"],
+  transpilePackages: ["@opencall/core", "@opencall/protocol", "@opencall/db"],
 };
 
 export default nextConfig;

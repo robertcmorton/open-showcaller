@@ -1,6 +1,6 @@
 import * as Y from "yjs";
 import { ulid } from "ulid";
-import type { PlanRow } from "@open-showcaller/core";
+import type { PlanRow } from "@opencall/core";
 
 /** Column kinds understood by the grid. Timing fields live on the row, not in cells. */
 export type ColumnKind = "title" | "startTime" | "duration" | "richtext";

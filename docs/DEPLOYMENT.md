@@ -4,21 +4,21 @@ Everything runs on **Railway** in one project (consolidated 2026-08-04; an initi
 
 | Service | What it runs | URL / notes |
 |---|---|---|
-| `open-showcaller` | Web app (Next.js) | https://open-showcaller-production.up.railway.app — domain targets port **3000** (`PORT=3000` set explicitly) |
-| `@open-showcaller/sync` | Sync server: HTTP API + show channel (ws `/`) + doc sync (ws `/doc`) | https://open-showcallersync-production.up.railway.app — domain targets port **8080** (Railway-injected `PORT`) |
+| `opencall` | Web app (Next.js) | https://opencall-production.up.railway.app — domain targets port **3000** (`PORT=3000` set explicitly) |
+| `@opencall/sync` | Sync server: HTTP API + show channel (ws `/`) + doc sync (ws `/doc`) | https://opencallsync-production.up.railway.app — domain targets port **8080** (Railway-injected `PORT`) |
 | `Postgres` | Managed PostgreSQL with volume | referenced by sync as `DATABASE_URL=${{Postgres.DATABASE_URL}}` |
 
 Both app services build from the same GitHub repo (`main`, auto-deploy) with the Railpack builder at the repo root:
 
-- web: build `pnpm --filter @open-showcaller/web build`, start `pnpm --filter @open-showcaller/web start`, watch `/apps/web/**`
-- sync: build `pnpm --filter @open-showcaller/sync build`, start `pnpm --filter @open-showcaller/sync start`, watch `/apps/sync/**`
+- web: build `pnpm --filter @opencall/web build`, start `pnpm --filter @opencall/web start`, watch `/apps/web/**`
+- sync: build `pnpm --filter @opencall/sync build`, start `pnpm --filter @opencall/sync start`, watch `/apps/sync/**`
 
 ## Web service variables (build-time — changing them requires a rebuild)
 
 ```
-NEXT_PUBLIC_SYNC_HTTP_URL=https://open-showcallersync-production.up.railway.app
-NEXT_PUBLIC_SYNC_WS_URL=wss://open-showcallersync-production.up.railway.app
-NEXT_PUBLIC_DOC_WS_URL=wss://open-showcallersync-production.up.railway.app/doc
+NEXT_PUBLIC_SYNC_HTTP_URL=https://opencallsync-production.up.railway.app
+NEXT_PUBLIC_SYNC_WS_URL=wss://opencallsync-production.up.railway.app
+NEXT_PUBLIC_DOC_WS_URL=wss://opencallsync-production.up.railway.app/doc
 PORT=3000
 ```
 

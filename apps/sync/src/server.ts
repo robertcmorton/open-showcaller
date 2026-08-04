@@ -7,8 +7,8 @@ import {
   parseClientMsg,
   type Role,
   type ServerMsg,
-} from "@open-showcaller/protocol";
-import { createDb, ensureSchema, schema } from "@open-showcaller/db";
+} from "@opencall/protocol";
+import { createDb, ensureSchema, schema } from "@opencall/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { ulid } from "ulid";
 import { createDocServer } from "./doc-server";

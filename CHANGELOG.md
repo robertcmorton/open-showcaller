@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Changed — 2026-08-05 (rename: OpenCall)
+- The project is now **OpenCall**: repo `robertcmorton/opencall`, packages `@opencall/*`, app title and PWA metadata, Docker/compose service names, hosting service names and domains (`opencall-production` / `opencall-sync-production` on Railway), and all docs. No functional changes; existing data is unaffected.
+
 ### Changed — 2026-08-05 (milestone 2 · phase 1: design system & UI modernization)
 - **New design system** (`globals.css`): color/spacing/radius/elevation/motion tokens with semantic roles; dark theme as the primary show-surface theme and a light theme for the dashboard; Inter for UI text and JetBrains Mono with tabular figures for every timing readout (no width jitter while ticking); one shared component set (buttons, panels, menus, chips, inputs, badges, empty states, skeletons); 130–190 ms eased motion with `prefers-reduced-motion` respected; pulsing LIVE badge.
 - **Editor modernized and long-parked parity features landed**: floating formatting toolbar on the active cell (bold/italic/underline/strike/highlight/link/clear); duration popover with **Hide** and **Mute** (mute verified: excluded from cascade math with struck-through display); **multi-select** rows (shift/⌘-click) with a selection bar — duplicate (deep-copies cell content), group toggle, delete; per-user **Columns** show/hide menu persisted locally; ticking time-of-day clock in the header; **⋯ menu** collecting views, export, template, and share panels; connection status dots; sticky column headers; group rows restyled as section bars.
@@ -21,11 +24,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 - The import requirement in `BUILD_PROMPT.md` now covers **uploading existing run sheets as XLSX, XLS, CSV, or PDF** through a single extract → map-columns → preview pipeline, with tolerant parsing of real-world data (free-text durations, mixed time formats, milestone rows, section banners, stacked multi-cue cells, per-page repeated headers). Informed by analysis of real produced run sheets kept as local-only reference material; the print/PDF export spec gained key-times table, repeated per-page headers, and footers to match.
 
 ### Changed — 2026-08-04 (single-platform hosting)
-- **Everything now runs on Railway in one project**: the web app moved from Vercel to a Railway service at `open-showcaller-production.up.railway.app` (domain targets port 3000), alongside the existing sync server and PostgreSQL. The Vercel project was deleted. One platform, one dashboard, services reference each other's variables directly. `docs/DEPLOYMENT.md` rewritten for the consolidated topology.
+- **Everything now runs on Railway in one project**: the web app moved from Vercel to a Railway service at `opencall-production.up.railway.app` (domain targets port 3000), alongside the existing sync server and PostgreSQL. The Vercel project was deleted. One platform, one dashboard, services reference each other's variables directly. `docs/DEPLOYMENT.md` rewritten for the consolidated topology.
 - Verified post-move: the Railway-hosted web app serves the same database (existing event and rundown render), the editor connects on both realtime channels over `wss://`, and the in-progress show session carried across untouched.
 
 ### Added — 2026-08-04 (production deployment)
-- **The app is live**: web at `open-showcaller-web.vercel.app` (Vercel, auto-deploys from `main`, root directory `apps/web`) and the sync server + PostgreSQL on Railway at `open-showcallersync-production.up.railway.app`. Verified end to end in production: event and rundown created through the live UI, editor connected on both realtime channels over `wss://`.
+- **The app is live**: web at `opencall-web.vercel.app` (Vercel, auto-deploys from `main`, root directory `apps/web`) and the sync server + PostgreSQL on Railway at `opencallsync-production.up.railway.app`. Verified end to end in production: event and rundown created through the live UI, editor connected on both realtime channels over `wss://`.
 - **Single public port**: the sync server now serves the HTTP API, the show channel (ws `/`), and document sync (ws `/doc`) from one listener with path-routed upgrades; `PORT` is honored for PaaS hosts. Port 8788 is retired everywhere (dev, Docker, env examples).
 - Fresh databases self-initialize on server boot (idempotent DDL), so a new deployment needs no manual migration step.
 - ⚠️ Known gap, tracked as the top hardening item: the management API and document channel are not yet authenticated — the deployment is suitable for demo use until API gating lands.

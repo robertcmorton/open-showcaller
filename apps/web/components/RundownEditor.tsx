@@ -13,9 +13,9 @@ import {
   parseDurationShorthand,
   parseTimeOfDay,
   serializeCsv,
-} from "@open-showcaller/core";
+} from "@opencall/core";
 import { api } from "../lib/api";
-import { projectRundownDoc, type ColumnDef, type ProjectedRow } from "@open-showcaller/db/doc";
+import { projectRundownDoc, type ColumnDef, type ProjectedRow } from "@opencall/db/doc";
 import { CellEditor } from "./CellEditor";
 import { GuestPassPanel, HistoryPanel, JoinCodesPanel } from "./SharePanels";
 import { LiveReadouts, TransportBar } from "./TransportBar";
@@ -84,7 +84,7 @@ function cloneRow(source: Y.Map<unknown>, newId: string): Y.Map<unknown> {
   return copy;
 }
 
-const HIDDEN_COLS_KEY = (rundownId: string) => `osc:hiddencols:${rundownId}`;
+const HIDDEN_COLS_KEY = (rundownId: string) => `oc:hiddencols:${rundownId}`;
 
 export function RundownEditor({ rundownId }: { rundownId: string }) {
   const { doc, connected } = useRundownDoc(rundownId);

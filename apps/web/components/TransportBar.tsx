@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatDuration, formatTimeOfDay, type LiveShowTiming } from "@open-showcaller/core";
+import { formatDuration, formatTimeOfDay, type LiveShowTiming } from "@opencall/core";
 import type { ShowChannel } from "../lib/showChannel";
 import { Icon } from "./ui";
 

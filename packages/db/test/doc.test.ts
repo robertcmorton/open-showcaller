@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeTiming } from "@open-showcaller/core";
+import { computeTiming } from "@opencall/core";
 import { buildRundownDoc, decodeDoc, encodeDoc, projectRundownDoc } from "../src/doc";
 
 describe("rundown doc round-trip", () => {

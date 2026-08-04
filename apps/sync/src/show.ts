@@ -1,5 +1,5 @@
 import { ulid } from "ulid";
-import type { CmdAction, ShowStatePayload } from "@open-showcaller/protocol";
+import type { CmdAction, ShowStatePayload } from "@opencall/protocol";
 
 /**
  * In-memory show-state machine, one per rundown. The server is the single

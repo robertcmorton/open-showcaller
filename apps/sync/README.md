@@ -1,2 +1,2 @@
 
-# Deployed on Railway (build: pnpm --filter @open-showcaller/sync build, start: … start; PORT injected).
+# Deployed on Railway (build: pnpm --filter @opencall/sync build, start: … start; PORT injected).

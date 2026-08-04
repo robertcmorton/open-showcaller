@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { projectRundownDoc } from "@open-showcaller/db/doc";
+import { projectRundownDoc } from "@opencall/db/doc";
 import { useRundownDoc, useWakeLock } from "../lib/useRundownDoc";
 import { useShowChannel } from "../lib/showChannel";
 

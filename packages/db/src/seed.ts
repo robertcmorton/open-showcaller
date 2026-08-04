@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { ulid } from "ulid";
-import { computeTiming, formatDuration, formatTimeOfDay } from "@open-showcaller/core";
+import { computeTiming, formatDuration, formatTimeOfDay } from "@opencall/core";
 import { createDb } from "./client";
 import { ensureSchema } from "./migrate";
 import { buildRundownDoc, decodeDoc, encodeDoc, projectRundownDoc, type SeedRow } from "./doc";
@@ -87,7 +87,7 @@ async function main(): Promise<void> {
     .onConflictDoNothing();
   await db
     .insert(teams)
-    .values({ id: teamId, name: "Open Showcaller Demo", slug: `demo-${teamId.slice(-6).toLowerCase()}` })
+    .values({ id: teamId, name: "OpenCall Demo", slug: `demo-${teamId.slice(-6).toLowerCase()}` })
     .onConflictDoNothing();
   await db.insert(teamMembers).values({ teamId, userId, role: "owner" }).onConflictDoNothing();
   await db.insert(events).values({

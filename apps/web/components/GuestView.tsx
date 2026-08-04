@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { computeTiming, formatDuration, formatTimeOfDay, type PlanRow } from "@open-showcaller/core";
+import { computeTiming, formatDuration, formatTimeOfDay, type PlanRow } from "@opencall/core";
 import { API_URL } from "../lib/api";
 
 interface GuestProjection {

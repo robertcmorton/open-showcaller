@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, type SnapshotSummary } from "../lib/api";
-import type { ColumnDef } from "@open-showcaller/db/doc";
+import type { ColumnDef } from "@opencall/db/doc";
 
 const panelStyle: React.CSSProperties = {
   margin: "0 0 12px",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { formatTimeOfDay } from "@open-showcaller/core";
+import { formatTimeOfDay } from "@opencall/core";
 
 /** Close on outside pointerdown or Escape. */
 export function useDismiss(open: boolean, onClose: () => void) {

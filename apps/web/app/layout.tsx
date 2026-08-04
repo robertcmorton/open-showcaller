@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
 const jbmono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jbmono", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Open Showcaller",
+  title: "OpenCall",
   description: "Open-source rundown and show-calling for live events.",
 };
 

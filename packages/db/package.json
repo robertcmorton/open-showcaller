@@ -1,5 +1,5 @@
 {
-  "name": "@open-showcaller/db",
+  "name": "@opencall/db",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.15",
-    "@open-showcaller/core": "workspace:*",
+    "@opencall/core": "workspace:*",
     "drizzle-orm": "^0.38.3",
     "pg": "^8.13.1",
     "ulid": "^2.3.0",

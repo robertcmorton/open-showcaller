@@ -1,4 +1,4 @@
-# Open Showcaller — Project Rules
+# OpenCall — Project Rules
 
 Read this before doing anything in this repo. These rules are permanent.
 
@@ -29,6 +29,6 @@ Before every commit and push, verify nothing staged references the vendor (`git 
 
 ## Repo hygiene
 
-- Remote: `https://github.com/robertcmorton/open-showcaller.git` (HTTPS via `gh`; this machine has no SSH keys).
+- Remote: `https://github.com/robertcmorton/opencall.git` (HTTPS via `gh`; this machine has no SSH keys).
 - Commit and push after each completed unit of work so GitHub stays the backup.
 - The local working folder contains files that must never be committed (see above); never use `git add -A`/`git add .` without checking what it would stage.

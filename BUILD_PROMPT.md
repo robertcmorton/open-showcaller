@@ -1,10 +1,10 @@
-# Build Prompt — Open Showcaller
+# Build Prompt — OpenCall
 
 Copy everything below the line into a fresh Claude Code session to start building.
 
 ---
 
-I want to build **Open Showcaller**: an open-source, self-hostable rundown and show-calling platform for live event production. A showcaller (producer) creates an event, populates its details, and builds a minute-by-minute rundown. On show day they run the show from a console — and every crew member's device in the room or remote follows along in real time: current cue, timing, over/under, speaker timers, prompter. The closest open-source prior art is Ontime (github.com/cpvalente/ontime); we're building something closer to a collaborative spreadsheet with a timing engine and a broadcast layer. Reference screenshots and detailed product research live locally in `Images/` and `DEMO_NOTES.md` (never committed — see CLAUDE.md) — study them before writing code.
+I want to build **OpenCall**: an open-source, self-hostable rundown and show-calling platform for live event production. A showcaller (producer) creates an event, populates its details, and builds a minute-by-minute rundown. On show day they run the show from a console — and every crew member's device in the room or remote follows along in real time: current cue, timing, over/under, speaker timers, prompter. The closest open-source prior art is Ontime (github.com/cpvalente/ontime); we're building something closer to a collaborative spreadsheet with a timing engine and a broadcast layer. Reference screenshots and detailed product research live locally in `Images/` and `DEMO_NOTES.md` (never committed — see CLAUDE.md) — study them before writing code.
 
 ## Platform strategy — read this first, it shapes the architecture
 

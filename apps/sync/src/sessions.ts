@@ -1,7 +1,7 @@
 import { and, eq, ne } from "drizzle-orm";
 import { ulid } from "ulid";
-import type { CmdAction, ShowStatePayload } from "@open-showcaller/protocol";
-import { schema, type DbHandle } from "@open-showcaller/db";
+import type { CmdAction, ShowStatePayload } from "@opencall/protocol";
+import { schema, type DbHandle } from "@opencall/db";
 import { ShowStateMachine } from "./show";
 
 /**

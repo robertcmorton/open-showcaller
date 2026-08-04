@@ -49,7 +49,7 @@ services:
       dockerfile: apps/sync/Dockerfile
     environment:
       DATABASE_URL: postgres://showcaller:showcaller@postgres:5432/showcaller
-    command: ["pnpm", "--filter", "@open-showcaller/db", "seed"]
+    command: ["pnpm", "--filter", "@opencall/db", "seed"]
     depends_on:
       postgres:
         condition: service_healthy

@@ -1,7 +1,7 @@
 import { Server, type Hocuspocus } from "@hocuspocus/server";
 import * as Y from "yjs";
 import { eq } from "drizzle-orm";
-import { schema, type DbHandle } from "@open-showcaller/db";
+import { schema, type DbHandle } from "@opencall/db";
 
 /**
  * Yjs document sync with Postgres/PGlite write-through. Hocuspocus debounces

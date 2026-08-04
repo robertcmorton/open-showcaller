@@ -1,5 +1,5 @@
 {
-  "name": "@open-showcaller/sync",
+  "name": "@opencall/sync",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -12,9 +12,9 @@
   },
   "dependencies": {
     "@hocuspocus/server": "^2.15.2",
-    "@open-showcaller/core": "workspace:^",
-    "@open-showcaller/db": "workspace:*",
-    "@open-showcaller/protocol": "workspace:*",
+    "@opencall/core": "workspace:^",
+    "@opencall/db": "workspace:*",
+    "@opencall/protocol": "workspace:*",
     "drizzle-orm": "^0.38.3",
     "ulid": "^2.3.0",
     "ws": "^8.18.0",

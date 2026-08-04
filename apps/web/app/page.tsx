@@ -145,7 +145,7 @@ export default function Home() {
       <main style={{ maxWidth: 880, margin: "0 auto", padding: "3rem 1.5rem" }}>
         <header style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: "1.5rem" }}>
           <div style={{ flex: 1 }}>
-            <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em", margin: 0 }}>Open Showcaller</h1>
+            <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em", margin: 0 }}>OpenCall</h1>
             <p style={{ color: "var(--text-2)", margin: "2px 0 0", fontSize: "var(--fs-sm)" }}>
               Rundowns, show calling, and companion screens for live events.
             </p>

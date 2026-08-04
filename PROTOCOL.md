@@ -1,4 +1,4 @@
-# Open Showcaller Realtime Protocol — v1 (draft)
+# OpenCall Realtime Protocol — v1 (draft)
 
 Status: **proposal for review** (Phase 1 gate). This document is the contract native clients
 (future iOS/Android) will be written against; the web app has no privileged access.

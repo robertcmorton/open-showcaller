@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Open Showcaller",
+    name: "OpenCall",
     short_name: "Showcaller",
     description: "Open-source rundown and show-calling for live events.",
     start_url: "/",
