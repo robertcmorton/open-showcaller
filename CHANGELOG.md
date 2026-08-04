@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-04 (Phase 5: speaker timer + prompter)
+- **Speaker Timer** at `/timer/[id]`: fullscreen countdown for the active cue — green on time, amber inside the final stretch, red counting up on overrun, greyed while reconnecting; double-click for fullscreen; wake lock. Built for confidence monitors and speakers' phones.
+- **Prompter** at `/prompter/[id]`: script-column view with a fixed read-position caret, follow-the-caller (smooth-jumps to the active cue as the show advances), auto-scroll with adjustable speed (Space to toggle, arrows for speed), font-size controls, mirror mode, and a word-count/read-time bar.
+- PWA install metadata (web manifest + app icon) so companion surfaces can be added to home screens; shared document-connection and wake-lock hooks across all surfaces; per-rundown view links on the landing page and in the editor header.
+- Verified in-browser: timer counted down the live cue in the bordered display; the prompter opened on the active cue and smooth-scrolled to the next one when the console advanced the show.
+
 ### Added — 2026-08-04 (Phases 3–4: live mode + broadcast)
 - **Live timing math in core** (`computeLiveTiming`): pause-aware elapsed/remaining in the active row, per-row overrun, cumulative show drift (actual vs. planned start plus current overrun), and projected end time — all computed locally from timestamps and the measured clock offset, per the protocol's no-streamed-ticks rule; unit-tested with a pluggable timezone mapping.
 - **Show-channel client** for the web app: session establishment, median-of-five clock-offset sampling, sequence-guarded state updates, jittered reconnect backoff, and idempotent command ids.

@@ -1,49 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import * as Y from "yjs";
-import { HocuspocusProvider } from "@hocuspocus/provider";
 import { computeTiming, formatDuration, formatTimeOfDay } from "@open-showcaller/core";
 import { projectRundownDoc } from "@open-showcaller/db/doc";
 import { useShowChannel } from "../lib/showChannel";
 import { useLiveTiming } from "../lib/useLiveTiming";
-
-const DOC_WS_URL = process.env.NEXT_PUBLIC_DOC_WS_URL ?? "ws://localhost:8788";
+import { useRundownDoc, useWakeLock } from "../lib/useRundownDoc";
 
 /**
  * Companion follower surface: glanceable current/next cue, live countdown,
  * drift. Read-only; keeps the screen awake for show use.
  */
 export function FollowerView({ rundownId }: { rundownId: string }) {
-  const [doc] = useState(() => new Y.Doc());
-  const [, setTick] = useState(0);
-
-  useEffect(() => {
-    const provider = new HocuspocusProvider({ url: DOC_WS_URL, name: rundownId, document: doc });
-    const bump = () => setTick((n) => n + 1);
-    doc.on("update", bump);
-
-    // Wake lock: companion screens must not sleep mid-show.
-    let lock: { release: () => Promise<void> } | null = null;
-    const acquire = () =>
-      (navigator as Navigator & { wakeLock?: { request: (t: "screen") => Promise<never> } }).wakeLock
-        ?.request("screen")
-        .then((l: { release: () => Promise<void> }) => (lock = l))
-        .catch(() => undefined);
-    void acquire();
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void acquire();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-
-    return () => {
-      document.removeEventListener("visibilitychange", onVisible);
-      void lock?.release();
-      doc.off("update", bump);
-      provider.destroy();
-    };
-  }, [doc, rundownId]);
-
+  useWakeLock();
+  const { doc } = useRundownDoc(rundownId);
   const { meta, columns, rows } = projectRundownDoc(doc);
   const timing = computeTiming(rows, meta.plannedStartSec);
   const channel = useShowChannel(rundownId, "companion");

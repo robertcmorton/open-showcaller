@@ -40,15 +40,19 @@ export default function Home() {
       <ul style={{ listStyle: "none", padding: 0 }}>
         {rundowns?.map((r) => (
           <li key={r.id} style={{ borderTop: "1px solid #222" }}>
-            <Link
-              href={`/rundown/${r.id}`}
-              style={{ display: "block", padding: "12px 4px", color: "#e8e8e8", textDecoration: "none" }}
-            >
-              <strong>{r.name}</strong>
-              <span style={{ color: "#8a8a8a", marginLeft: 12, fontSize: "0.85rem" }}>
-                {r.description ?? ""} {r.showDate ? `· ${r.showDate}` : ""}
-              </span>
-            </Link>
+            <div style={{ display: "flex", alignItems: "baseline", padding: "12px 4px", gap: 12 }}>
+              <Link href={`/rundown/${r.id}`} style={{ color: "#e8e8e8", textDecoration: "none", flex: 1 }}>
+                <strong>{r.name}</strong>
+                <span style={{ color: "#8a8a8a", marginLeft: 12, fontSize: "0.85rem" }}>
+                  {r.description ?? ""} {r.showDate ? `· ${r.showDate}` : ""}
+                </span>
+              </Link>
+              {(["follow", "timer", "prompter"] as const).map((view) => (
+                <Link key={view} href={`/${view}/${r.id}`} style={{ color: "#8ab4f8", fontSize: "0.8rem", textDecoration: "none" }}>
+                  {view}
+                </Link>
+              ))}
+            </div>
           </li>
         ))}
       </ul>

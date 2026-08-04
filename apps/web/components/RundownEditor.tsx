@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import * as Y from "yjs";
 import { ulid } from "ulid";
-import { HocuspocusProvider } from "@hocuspocus/provider";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -19,35 +18,10 @@ import { CellEditor } from "./CellEditor";
 import { LiveReadouts, TransportBar } from "./TransportBar";
 import { useShowChannel } from "../lib/showChannel";
 import { useLiveTiming } from "../lib/useLiveTiming";
+import { useRundownDoc } from "../lib/useRundownDoc";
 import "./editor.css";
 
-const DOC_WS_URL = process.env.NEXT_PUBLIC_DOC_WS_URL ?? "ws://localhost:8788";
-
 type ActiveCell = { rowId: string; columnId: string } | null;
-
-function useRundownDoc(rundownId: string) {
-  const [doc] = useState(() => new Y.Doc());
-  const [connected, setConnected] = useState(false);
-  const [, setTick] = useState(0);
-
-  useEffect(() => {
-    const provider = new HocuspocusProvider({
-      url: DOC_WS_URL,
-      name: rundownId,
-      document: doc,
-      onConnect: () => setConnected(true),
-      onDisconnect: () => setConnected(false),
-    });
-    const bump = () => setTick((n) => n + 1);
-    doc.on("update", bump);
-    return () => {
-      doc.off("update", bump);
-      provider.destroy();
-    };
-  }, [doc, rundownId]);
-
-  return { doc, connected };
-}
 
 function SortableRow({
   row,
@@ -219,8 +193,21 @@ export function RundownEditor({ rundownId }: { rundownId: string }) {
           </div>
         </div>
         <LiveReadouts live={live} use24h={meta.use24h} />
-        <div style={{ marginLeft: "auto", color: connected ? "#3fb950" : "#f85149", fontSize: "0.75rem" }}>
-          {connected ? "● doc" : "○ doc…"}{" "}
+        <div style={{ marginLeft: "auto", display: "flex", gap: 14, alignItems: "baseline", fontSize: "0.75rem" }}>
+          <nav style={{ display: "flex", gap: 10 }}>
+            {(["follow", "timer", "prompter"] as const).map((view) => (
+              <a
+                key={view}
+                href={`/${view}/${rundownId}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: "#8ab4f8", textDecoration: "none" }}
+              >
+                {view}
+              </a>
+            ))}
+          </nav>
+          <span style={{ color: connected ? "#3fb950" : "#f85149" }}>{connected ? "● doc" : "○ doc…"}</span>
           <span style={{ color: channel.connected ? "#3fb950" : "#f85149" }}>
             {channel.connected ? "● show" : "○ show…"}
           </span>
