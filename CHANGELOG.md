@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-05 (event date editing & ordering rule)
+- **Event dates are now editable** from the dashboard (a "Dates…" inline editor on each event card) — previously they were fixed at creation.
+- **The end date can never precede the start date**, enforced in three layers: the date pickers themselves (the end input's minimum follows the start, and moving the start forward bumps the end along), the form guard, and the API — which validates the *merged* result on both create and edit, so moving just one side past the other is rejected with a clear error.
+
 ### Added — 2026-08-05 (left settings panel & navigation)
 - **A persistent left panel on the dashboard and every rundown screen** holds navigation (main page, dashboard) and all the settings features for the current screen — Views (Follow/Timer/Prompter), Output (Print/PDF, CSV export), and Show settings (template, guest pass, history, join codes) on rundown screens; archived toggle and credentials on the dashboard. Collapsible, state remembered per browser, hidden in print. The old ⋯ overflow menu is gone — settings now have a home. Everything in the panel respects the access hierarchy: a company credential sees only its own data; only admin sees all.
 

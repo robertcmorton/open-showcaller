@@ -55,11 +55,26 @@ function CreateEventForm({ onCreated }: { onCreated: () => void }) {
       </div>
       <div>
         <label className="field-label">Starts</label>
-        <input className="input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+        <input
+          className="input"
+          type="date"
+          value={startDate}
+          onChange={(e) => {
+            const v = e.target.value;
+            setStartDate(v);
+            if (endDate < v) setEndDate(v); // end date may never precede the start
+          }}
+        />
       </div>
       <div>
         <label className="field-label">Ends</label>
-        <input className="input" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+        <input
+          className="input"
+          type="date"
+          min={startDate}
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value < startDate ? startDate : e.target.value)}
+        />
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         <button className="btn btn-primary" type="submit">
@@ -170,6 +185,75 @@ function TokenGate({ onUnlocked }: { onUnlocked: () => void }) {
         Unlock
       </button>
     </form>
+  );
+}
+
+/** Inline start/end editor for an event card. End can never precede start. */
+function DatesEditor({
+  event,
+  onSaved,
+}: {
+  event: { id: string; startDate: string; endDate: string };
+  onSaved: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [start, setStart] = useState(event.startDate);
+  const [end, setEnd] = useState(event.endDate);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!open)
+    return (
+      <button className="btn btn-sm btn-ghost" onClick={() => setOpen(true)}>
+        Dates…
+      </button>
+    );
+
+  return (
+    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+      <input
+        className="input"
+        type="date"
+        value={start}
+        onChange={(e) => {
+          const v = e.target.value;
+          setStart(v);
+          if (end < v) setEnd(v);
+        }}
+        style={{ padding: "3px 6px" }}
+      />
+      <span style={{ color: "var(--text-3)" }}>→</span>
+      <input
+        className="input"
+        type="date"
+        min={start}
+        value={end}
+        onChange={(e) => setEnd(e.target.value < start ? start : e.target.value)}
+        style={{ padding: "3px 6px" }}
+      />
+      <button
+        className="btn btn-sm btn-primary"
+        onClick={() => {
+          if (end < start) {
+            setError("End date cannot be before the start date.");
+            return;
+          }
+          void api
+            .patchEvent(event.id, { startDate: start, endDate: end })
+            .then(() => {
+              setOpen(false);
+              setError(null);
+              onSaved();
+            })
+            .catch((err) => setError(String(err)));
+        }}
+      >
+        Save
+      </button>
+      <button className="btn btn-sm btn-ghost" onClick={() => setOpen(false)}>
+        ✕
+      </button>
+      {error && <span style={{ color: "var(--over)", fontSize: "var(--fs-xs)" }}>{error}</span>}
+    </span>
   );
 }
 
@@ -391,6 +475,7 @@ export default function AdminPage() {
                 <button className="btn btn-sm btn-ghost" onClick={() => rename("event", event.id, event.name)}>
                   Rename
                 </button>
+                <DatesEditor key={`${event.startDate}${event.endDate}`} event={event} onSaved={reload} />
                 <button
                   className="btn btn-sm btn-ghost"
                   title="The event's location decides its timezone — the primary time only changes when the location does"

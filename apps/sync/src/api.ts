@@ -247,6 +247,18 @@ export function createApiHandler(handle: DbHandle) {
         const patch: Record<string, unknown> = {};
         if (typeof body.name === "string" && body.name.trim()) patch.name = body.name.trim();
         if (typeof body.location === "string") patch.location = body.location.trim() || null;
+        const dateOk = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+        if (dateOk(body.startDate)) patch.startDate = body.startDate;
+        if (dateOk(body.endDate)) patch.endDate = body.endDate;
+        {
+          // The ordering rule holds on the MERGED result, whichever side changed.
+          const nextStart = (patch.startDate as string | undefined) ?? current.startDate;
+          const nextEnd = (patch.endDate as string | undefined) ?? current.endDate;
+          if (nextEnd < nextStart) {
+            json(res, 400, { error: "end date cannot be before the start date" });
+            return true;
+          }
+        }
         if (typeof body.timezone === "string" && body.timezone && body.timezone !== current.timezone) {
           // The event's primary time may only change when its LOCATION changes.
           const locationChanged =
@@ -370,6 +382,12 @@ export function createApiHandler(handle: DbHandle) {
           return true;
         }
         const body = await readJson(req);
+        const createStart = String(body.startDate ?? new Date().toISOString().slice(0, 10));
+        const createEnd = String(body.endDate ?? body.startDate ?? new Date().toISOString().slice(0, 10));
+        if (createEnd < createStart) {
+          json(res, 400, { error: "end date cannot be before the start date" });
+          return true;
+        }
         const id = ulid();
         const teamId =
           ctx.kind === "company"
@@ -382,8 +400,8 @@ export function createApiHandler(handle: DbHandle) {
           teamId,
           name: String(body.name ?? "Untitled Event"),
           location: body.location ? String(body.location) : null,
-          startDate: String(body.startDate ?? new Date().toISOString().slice(0, 10)),
-          endDate: String(body.endDate ?? body.startDate ?? new Date().toISOString().slice(0, 10)),
+          startDate: createStart,
+          endDate: createEnd,
           timezone: String(body.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone),
           use24h: Boolean(body.use24h ?? false),
         });
