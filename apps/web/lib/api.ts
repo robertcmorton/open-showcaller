@@ -96,6 +96,8 @@ export const api = {
   rotateCompanyToken: (id: string) =>
     request<{ id: string; companyToken: string }>(`/companies/${id}/rotate-token`, { method: "POST" }),
   deleteCompany: (id: string) => request<{ id: string }>(`/companies/${id}`, { method: "DELETE" }),
+  patchCompany: (id: string, body: { name?: string }) =>
+    request<{ id: string }>(`/companies/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   createGuestPass: (body: { rundownId: string; columns?: Record<string, boolean> }) =>
     request<{ token: string }>("/guest-passes", { method: "POST", body: JSON.stringify(body) }),
   joinCodes: (rundownId: string) => request<JoinCodeSummary[]>(`/rundowns/${rundownId}/join-codes`),
@@ -119,7 +121,7 @@ export const api = {
     plannedStartSec?: number | null;
     templateId?: string;
     rows?: SeedRow[];
-    columns?: { key: string; title: string }[];
+    columns?: { key: string; title: string; width?: number }[];
   }) => request<{ id: string }>("/rundowns", { method: "POST", body: JSON.stringify(body) }),
   templates: () => request<TemplateSummary[]>("/templates"),
   saveTemplate: (body: { rundownId: string; name: string }) =>

@@ -11,6 +11,8 @@ export interface ColumnDef {
   title: string;
   kind: ColumnKind;
   builtin?: boolean;
+  /** Optional display width hint in px (imported sheets keep their proportions). */
+  width?: number;
 }
 
 export interface SeedRow {
@@ -61,12 +63,16 @@ export interface KeyTime {
 
 /**
  * Build a rundown Y.Doc from seed data, per the shape in docs/DATA-MODEL.md §2.
- * `extraColumns` appends custom rich-text columns (importer: unknown headers).
+ * `extraColumns` adds rich-text columns; with `replaceDepartments` the doc gets
+ * ONLY those (plus the structural built-ins) in the given order — the importer
+ * uses this so a rundown mirrors its source sheet exactly, with no empty
+ * default columns and no duplicates.
  */
 export function buildRundownDoc(
   seedRows: SeedRow[],
   docMeta: DocMeta = {},
-  extraColumns: { key: string; title: string }[] = [],
+  extraColumns: { key: string; title: string; width?: number }[] = [],
+  replaceDepartments = false,
 ): Y.Doc {
   const doc = new Y.Doc();
   doc.transact(() => {
@@ -78,7 +84,8 @@ export function buildRundownDoc(
 
     const columns = doc.getArray<Y.Map<unknown>>("columns");
     const columnIdByKey = new Map<string, string>();
-    for (const def of DEFAULT_COLUMNS) {
+    const baseColumns = replaceDepartments ? DEFAULT_COLUMNS.filter((c) => c.kind !== "richtext") : DEFAULT_COLUMNS;
+    for (const def of baseColumns) {
       const col = new Y.Map();
       const colId = ulid();
       col.set("id", colId);
@@ -97,6 +104,7 @@ export function buildRundownDoc(
       col.set("key", extra.key);
       col.set("title", extra.title);
       col.set("kind", "richtext");
+      if (extra.width) col.set("width", Math.round(extra.width));
       columns.push([col]);
       columnIdByKey.set(extra.key, colId);
     }
@@ -172,6 +180,7 @@ export function projectRundownDoc(doc: Y.Doc): {
       title: col.get("title") as string,
       kind: col.get("kind") as ColumnKind,
       builtin: (col.get("builtin") as boolean | undefined) ?? false,
+      width: col.get("width") as number | undefined,
     }));
   const keyById = new Map(columns.map((c) => [c.id, c.key]));
 

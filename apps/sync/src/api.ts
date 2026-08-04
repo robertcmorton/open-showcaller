@@ -478,7 +478,12 @@ export function createApiHandler(handle: DbHandle) {
                 (c) => typeof c?.key === "string" && typeof c?.title === "string",
               )
             : [];
-          doc = buildRundownDoc(rows, { name, plannedStartSec, use24h: event.use24h }, extraColumns);
+          doc = buildRundownDoc(
+            rows,
+            { name, plannedStartSec, use24h: event.use24h },
+            extraColumns,
+            extraColumns.length > 0, // importer path: mirror the source sheet's columns exactly
+          );
         }
 
         await db.insert(schema.rundowns).values({

@@ -67,6 +67,7 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [widths, setWidths] = useState<(number | null)[]>([]);
 
   const rows = useMemo(
     () => (grid ? classifyRows(grid, headerIndex, mapping) : []),
@@ -79,9 +80,10 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
     setError(null);
     setBusy(true);
     try {
-      const extracted = await extractGrid(file);
+      const { grid: extracted, widths: extractedWidths } = await extractGrid(file);
       const plan = planImport(extracted);
       setGrid(extracted);
+      setWidths(extractedWidths);
       setHeaderIndex(plan.headerIndex);
       setHeaders(plan.headers);
       setMapping(plan.mapping);
@@ -117,13 +119,18 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
         cells: r.cells,
       };
     });
+    // The rundown mirrors the sheet: every department column with data, in
+    // source order, with the source's own name and a proportional width.
     const usedKeys = new Set(importable.flatMap((r) => Object.keys(r.cells)));
+    const clampWidth = (w: number | null | undefined): number | undefined =>
+      w ? Math.min(420, Math.max(80, w)) : undefined;
     const customColumns = mapping
+      .map((t, i) => ({ t, i }))
       .filter(
-        (t): t is Extract<ColumnTarget, { kind: "department" }> =>
-          t.kind === "department" && !DEFAULT_COLUMNS.some((c) => c.key === t.key) && usedKeys.has(t.key),
+        (x): x is { t: Extract<ColumnTarget, { kind: "department" }>; i: number } =>
+          x.t.kind === "department" && usedKeys.has(x.t.key),
       )
-      .map((t) => ({ key: t.key, title: t.title }));
+      .map(({ t, i }) => ({ key: t.key, title: t.title, width: clampWidth(widths[i]) }));
     setBusy(true);
     api
       .createRundown({ eventId, name: name.trim() || "Imported rundown", rows: seedRows, columns: customColumns })

@@ -10,24 +10,32 @@ import { parseCsv } from "@opencall/core";
  * created.
  */
 
-export async function extractGrid(file: File): Promise<string[][]> {
+export interface ExtractedSheet {
+  grid: string[][];
+  /** Per-source-column display width hints in px (when the file provides them). */
+  widths: (number | null)[];
+}
+
+export async function extractGrid(file: File): Promise<ExtractedSheet> {
   const name = file.name.toLowerCase();
-  if (name.endsWith(".csv")) return parseCsv(await file.text());
+  if (name.endsWith(".csv")) return { grid: parseCsv(await file.text()), widths: [] };
   if (name.endsWith(".xlsx") || name.endsWith(".xls")) return extractXlsx(await file.arrayBuffer());
   if (name.endsWith(".pdf")) return extractPdf(await file.arrayBuffer());
   throw new Error("Unsupported file type — use .xlsx, .xls, .csv, or .pdf");
 }
 
-async function extractXlsx(buffer: ArrayBuffer): Promise<string[][]> {
+async function extractXlsx(buffer: ArrayBuffer): Promise<ExtractedSheet> {
   const XLSX = await import("xlsx");
   const workbook = XLSX.read(buffer, { type: "array" });
   const sheetName = workbook.SheetNames[0];
-  if (!sheetName) return [];
+  if (!sheetName) return { grid: [], widths: [] };
   const sheet = workbook.Sheets[sheetName]!;
   // raw:false renders cells the way the spreadsheet displays them (durations,
   // times) — exactly the text the tolerant parsers are built for.
   const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, defval: "" });
-  return rows.map((row) => row.map((cell) => String(cell ?? "")));
+  // Column widths come as character counts; ~7.2 px per character.
+  const widths = (sheet["!cols"] ?? []).map((c) => (c?.wch ? Math.round(c.wch * 7.2) : null));
+  return { grid: rows.map((row) => row.map((cell) => String(cell ?? ""))), widths };
 }
 
 /**
@@ -36,7 +44,7 @@ async function extractXlsx(buffer: ArrayBuffer): Promise<string[][]> {
  * runs to bands. Works for text-based exports (spreadsheet "Save as PDF");
  * scanned documents have no text layer and produce a clear error upstream.
  */
-async function extractPdf(buffer: ArrayBuffer): Promise<string[][]> {
+async function extractPdf(buffer: ArrayBuffer): Promise<ExtractedSheet> {
   const pdfjs = await import("pdfjs-dist");
   pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
 
@@ -109,5 +117,10 @@ async function extractPdf(buffer: ArrayBuffer): Promise<string[][]> {
     }
     flush();
   }
-  return grid;
+  // Band spans (pt ≈ px) give each source column a proportional width hint.
+  const widths = bands.map((x, i) => {
+    const next = bands[i + 1];
+    return next != null ? Math.round((next - x) * 1.25) : null;
+  });
+  return { grid, widths };
 }

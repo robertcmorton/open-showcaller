@@ -84,8 +84,9 @@ describe("header detection & mapping", () => {
     expect(mapping[1]).toEqual({ kind: "start" });
     expect(mapping[2]).toEqual({ kind: "duration" });
     expect(mapping[3]).toEqual({ kind: "title" }); // ACTIVITY
-    expect(mapping[5]).toEqual({ kind: "department", key: "audio", title: "Audio" });
-    // Non-default headers keep the sheet's own format as new columns.
+    // Every header is kept VERBATIM — the rundown mirrors the sheet exactly.
+    expect(mapping[4]).toEqual({ kind: "department", key: "location", title: "LOCATION" });
+    expect(mapping[5]).toEqual({ kind: "department", key: "audio", title: "AUDIO" });
     expect(mapping[6]).toEqual({ kind: "department", key: "big-screen", title: "BIG SCREEN" });
   });
 });
@@ -156,5 +157,13 @@ describe("untitled columns", () => {
     const { mapping, rows } = planImport(grid);
     expect(mapping[2]).toEqual({ kind: "department", key: "column-3", title: "Column 3" });
     expect(rows[0]!.cells["column-3"]).toContain("escort");
+  });
+});
+
+describe("column fidelity", () => {
+  it("suffixes duplicate headers so no two columns share a name", () => {
+    const mapping = mapColumns(["ACTIVITY", "NOTES", "NOTES"]);
+    expect(mapping[1]).toEqual({ kind: "department", key: "notes", title: "NOTES" });
+    expect(mapping[2]).toEqual({ kind: "department", key: "notes-2", title: "NOTES (2)" });
   });
 });

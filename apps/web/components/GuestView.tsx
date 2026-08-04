@@ -69,7 +69,9 @@ export function GuestView({ token }: { token: string }) {
             <th>Start</th>
             <th>Duration</th>
             {richColumns.map((c) => (
-              <th key={c.id}>{c.title}</th>
+              <th key={c.id} style={(c as { width?: number }).width ? { width: (c as { width?: number }).width } : undefined}>
+                {c.title}
+              </th>
             ))}
           </tr>
         </thead>

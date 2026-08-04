@@ -694,7 +694,9 @@ export function RundownEditor({
               <th>Duration</th>
               {showZero && <th title="Countdown to the next anchored time">Zero</th>}
               {richColumns.map((c) => (
-                <th key={c.id}>{c.title}</th>
+                <th key={c.id} style={c.width ? { width: c.width, minWidth: Math.min(c.width, 140) } : undefined}>
+                  {c.title}
+                </th>
               ))}
             </tr>
           </thead>

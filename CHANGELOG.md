@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Changed — 2026-08-05 (import: full column fidelity; company rename)
+- **Imported rundowns now mirror the source sheet's columns exactly**: identical names (verbatim header text, original casing), no duplicates (repeated headers get a numbered suffix), the same left-to-right order, and **proportional column widths** taken from the spreadsheet's column sizes or the PDF's layout. Built-in department columns are no longer added on import — **a column with no data simply doesn't exist** in the imported rundown.
+- **Event companies can be renamed** from their band header on the dashboard.
+
 ### Fixed — 2026-08-05 (import: columns now mirror the source sheet)
 - **Importing a run sheet now auto-creates columns matching the sheet's own format.** Previously, headers like TRACK, BIG SCREEN, SIDE PANEL, LED, and NOTES were folded into the nearest built-in column, and columns with a **blank header** (the cue-type column on many presentation grids) were dropped entirely — losing most of a dense sheet's content. Now every non-structural column imports as itself; untitled columns are recognized by their data (a column of VTR/PA/GFX tokens becomes **Type** — which also activates the cue-type quick chips — anything else becomes "Column N"), and mirrored row-number columns are skipped as noise.
 - Milestone rows keep their department cells on import, and their banner title falls back to the first cell value when PDF extraction lands the title in a neighboring column band — pre-show schedule rows (arrivals, meetings, rehearsals) now import with their real names instead of "—".

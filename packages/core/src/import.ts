@@ -85,20 +85,15 @@ const DURATION_HEADERS = ["duration", "dur", "length", "run time", "runtime", "r
 const TYPE_HEADERS = ["type", "row type"];
 const NUMBER_HEADERS = ["#", "no", "no.", "item #", "item no"];
 
-/**
- * Only EXACT matches to our built-in column titles fold into the defaults —
- * every other header becomes its own column so the imported rundown matches
- * the source sheet's format (LOCATION, TRACK, BIG SCREEN, LED, NOTES… stay
- * themselves instead of being squeezed into the nearest default).
- */
-const DEFAULT_TITLE_TO_KEY = new Map<string, { key: string; title: string }>([
-  ["audio", { key: "audio", title: "Audio" }],
-  ["video", { key: "video", title: "Video" }],
-  ["lights", { key: "lights", title: "Lights" }],
-  ["graphics", { key: "graphics", title: "Graphics" }],
-  ["script", { key: "script", title: "Script" }],
-  ["production notes", { key: "prodNotes", title: "Production Notes" }],
-  ["prod notes", { key: "prodNotes", title: "Production Notes" }],
+/** Department headers used only to SCORE header rows during detection. */
+const DEFAULT_TITLE_TO_KEY = new Map<string, true>([
+  ["audio", true],
+  ["video", true],
+  ["lights", true],
+  ["graphics", true],
+  ["script", true],
+  ["production notes", true],
+  ["prod notes", true],
 ]);
 
 /** Common department headers — used only to SCORE header rows, never to fold columns. */
@@ -185,6 +180,14 @@ export function mapColumns(headers: string[], sampleRows: string[][] = []): Colu
     usedKeys.add(key);
     return key;
   };
+  const usedTitles = new Set<string>();
+  const uniqueTitle = (base: string): string => {
+    let title = base;
+    let n = 2;
+    while (usedTitles.has(title.toLowerCase())) title = `${base} (${n++})`;
+    usedTitles.add(title.toLowerCase());
+    return title;
+  };
 
   return headers.map((cell, i) => {
     const h = normalized[i]!;
@@ -202,14 +205,13 @@ export function mapColumns(headers: string[], sampleRows: string[][] = []): Colu
       if (values.filter((v) => /^\d+$/.test(v)).length / values.length >= 0.9) return { kind: "skip" };
       const typeish = values.filter((v) => CUE_TYPE_TOKENS.has(v)).length;
       if (typeish / values.length >= 0.5)
-        return { kind: "department", key: uniqueKey("type"), title: "Type" };
-      return { kind: "department", key: uniqueKey(`column-${i + 1}`), title: `Column ${i + 1}` };
+        return { kind: "department", key: uniqueKey("type"), title: uniqueTitle("Type") };
+      return { kind: "department", key: uniqueKey(`column-${i + 1}`), title: uniqueTitle(`Column ${i + 1}`) };
     }
 
-    const builtin = DEFAULT_TITLE_TO_KEY.get(h);
-    if (builtin) return { kind: "department", ...builtin, key: uniqueKey(builtin.key) };
-    // Everything else keeps its own header as a new column.
-    return { kind: "department", key: uniqueKey(h.replace(/\W+/g, "-")), title: cell.trim() };
+    // Every titled column keeps its header VERBATIM as the column name —
+    // the imported rundown mirrors the source sheet exactly.
+    return { kind: "department", key: uniqueKey(h.replace(/\W+/g, "-")), title: uniqueTitle(cell.trim()) };
   });
 }
 

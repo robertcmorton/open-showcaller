@@ -443,6 +443,16 @@ export default function AdminPage() {
                 <span style={{ flex: 1 }} />
                 {me?.role === "admin" && group.real && (
                   <>
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      onClick={() => {
+                        const name = window.prompt("Rename company", group.name);
+                        if (name?.trim() && name.trim() !== group.name)
+                          void api.patchCompany(group.id, { name: name.trim() }).then(reload);
+                      }}
+                    >
+                      Rename
+                    </button>
                     {group.companyToken && (
                       <button
                         className="btn btn-sm"
