@@ -336,3 +336,44 @@ export function planImport(grid: string[][]): {
   }
   return { headerIndex, headers, mapping, rows: classifyRows(grid, headerIndex, mapping) };
 }
+
+// ── Role detection ────────────────────────────────────────────────────────────
+
+/** Distinct, readable highlight colours assigned to detected roles in order. */
+export const ROLE_COLORS = [
+  "#2dd4bf", "#f59e0b", "#818cf8", "#f472b6", "#34d399", "#38bdf8",
+  "#fb923c", "#a78bfa", "#4ade80", "#facc15", "#f87171", "#22d3ee",
+];
+
+export interface DetectedRole {
+  name: string;
+  color: string;
+}
+
+/**
+ * Mines assigned roles (BGM, Camera 1, PA, VTR…) from classified rows: short
+ * cell lines that repeat across the sheet and aren't times or durations. Each
+ * role gets a stable colour from the palette, most frequent first.
+ */
+export function detectRoles(rows: ClassifiedRow[], max = 12): DetectedRole[] {
+  const counts = new Map<string, { name: string; count: number }>();
+  for (const row of rows) {
+    for (const value of Object.values(row.cells)) {
+      for (const line of value.split("\n")) {
+        const v = line.trim();
+        if (!v || v.length > 24) continue;
+        if (/^\d/.test(v)) continue; // numbering, times, "2 x wedges"…
+        if (parseTimeLoose(v) != null || parseDurationLoose(v) != null) continue;
+        const key = v.toLowerCase();
+        const entry = counts.get(key);
+        if (entry) entry.count += 1;
+        else counts.set(key, { name: v, count: 1 });
+      }
+    }
+  }
+  return [...counts.values()]
+    .filter((e) => e.count >= 3)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, max)
+    .map((e, i) => ({ name: e.name, color: ROLE_COLORS[i % ROLE_COLORS.length]! }));
+}

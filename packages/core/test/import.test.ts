@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyRows, detectHeaderRow, mapColumns, parseDurationLoose, parseTimeLoose, planImport } from "../src/import";
+import { classifyRows, detectHeaderRow, detectRoles, mapColumns, parseDurationLoose, parseTimeLoose, planImport } from "../src/import";
 
 describe("parseDurationLoose", () => {
   it("parses worded durations", () => {
@@ -165,5 +165,27 @@ describe("column fidelity", () => {
     const mapping = mapColumns(["ACTIVITY", "NOTES", "NOTES"]);
     expect(mapping[1]).toEqual({ kind: "department", key: "notes", title: "NOTES" });
     expect(mapping[2]).toEqual({ kind: "department", key: "notes-2", title: "NOTES (2)" });
+  });
+});
+
+describe("detectRoles", () => {
+  it("mines repeated role tokens with colours, skipping times and durations", () => {
+    const grid = [
+      ["ACTIVITY", "TYPE", "LOCATION"],
+      ["Open", "PA", "Ctrl Room"],
+      ["Read", "PA", "Ctrl Room"],
+      ["Reel", "VTR", "Ctrl Room"],
+      ["Read 2", "PA", "16:00:00"],
+      ["Reel 2", "VTR", "Ctrl Room"],
+      ["Sting", "VTR", ""],
+    ];
+    const { rows } = planImport(grid);
+    const roles = detectRoles(rows);
+    const names = roles.map((r) => r.name);
+    expect(names).toContain("PA");
+    expect(names).toContain("VTR");
+    expect(names).toContain("Ctrl Room");
+    expect(names).not.toContain("16:00:00");
+    expect(new Set(roles.map((r) => r.color)).size).toBe(roles.length); // distinct colours
   });
 });

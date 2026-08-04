@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   classifyRows,
+  detectRoles,
   formatDuration,
   formatTimeOfDay,
   mapColumns,
@@ -76,6 +77,7 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
   );
   const importable = rows.filter((r) => r.kind !== "spacer");
   const warnings = rows.filter((r) => r.startRaw || r.durationRaw).length;
+  const roles = useMemo(() => detectRoles(importable), [importable]);
 
   const onFile = async (file: File) => {
     setError(null);
@@ -134,7 +136,7 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
       .map(({ t, i }) => ({ key: t.key, title: t.title, width: clampWidth(widths[i]) }));
     setBusy(true);
     api
-      .createRundown({ eventId, name: name.trim() || "Imported rundown", rows: seedRows, columns: customColumns })
+      .createRundown({ eventId, name: name.trim() || "Imported rundown", rows: seedRows, columns: customColumns, roles })
       .then(({ id }) => onDone(id))
       .catch((err) => {
         setError(String(err));
@@ -239,6 +241,23 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
               </button>
             </div>
           </div>
+
+          {roles.length > 0 && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <span className="field-label" style={{ margin: 0 }}>
+                Detected roles
+              </span>
+              {roles.map((r) => (
+                <span
+                  key={r.name}
+                  className="chip"
+                  style={{ borderColor: r.color, color: r.color, background: `${r.color}1a` }}
+                >
+                  {r.name}
+                </span>
+              ))}
+            </div>
+          )}
 
           <div style={{ overflowX: "auto" }}>
             <table className="rundown-grid" style={{ fontSize: "0.78rem" }}>

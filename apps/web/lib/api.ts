@@ -128,6 +128,7 @@ export const api = {
     templateId?: string;
     rows?: SeedRow[];
     columns?: { key: string; title: string; width?: number }[];
+    roles?: { name: string; color: string }[];
   }) => request<{ id: string }>("/rundowns", { method: "POST", body: JSON.stringify(body) }),
   templates: () => request<TemplateSummary[]>("/templates"),
   saveTemplate: (body: { rundownId: string; name: string }) =>

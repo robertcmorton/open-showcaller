@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-05 (role detection on import · counter bar · Sync Cue)
+- **Importing a run sheet now detects the assigned roles automatically** (PA, VTR, GFX, DJ, LED, locations, brand loops — any short value that repeats across cells, excluding times and durations) and **assigns each a distinct colour**. The roles are stored on the rundown: every mention is colour-coded in the grid, the "My role" picker offers them one-click with their colours, and the personal row highlight and bottom bar adopt your role's colour. Detected roles are shown as coloured chips in the import preview.
+- **A counter bar now fills left-to-right under the big centre-top timer**, showing approximately how much of the active item has elapsed (amber in the final stretch, red on overrun).
+- **Scrolling is never hijacked during a live show**: scrolling the sheet by hand disengages auto-follow instead of fighting you, and a floating **"Sync Cue"** button appears — one press jumps back to the live cue and follows along again.
+
 ### Added — 2026-08-05 (my role: personal highlight & next-item bar)
 - **Every user can mark their assigned role** — BGM, Camera 1, PA, a presenter's name, anything the sheet says — regardless of their access level (admin, edit, or view-only). A "My role" picker in the toolbar suggests roles mined from the sheet itself; the choice is remembered per browser.
 - **Your items highlight in teal** across the rundown the moment a role is picked.

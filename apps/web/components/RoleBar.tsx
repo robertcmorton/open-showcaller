@@ -2,9 +2,30 @@
 
 import { useState } from "react";
 import { formatDuration, zoneSecondsOfDay, type LiveShowTiming, type PlanTiming } from "@opencall/core";
-import type { ProjectedRow } from "@opencall/db/doc";
+import type { ProjectedRow, RoleDef } from "@opencall/db/doc";
 import type { ShowChannel } from "../lib/showChannel";
 import { useDismiss } from "./ui";
+
+/** Colour-codes every mention of a known role inside plain cell text. */
+export function highlightRoles(text: string, roles: RoleDef[]): React.ReactNode {
+  if (!text || roles.length === 0) return text;
+  const escaped = [...roles]
+    .sort((a, b) => b.name.length - a.name.length)
+    .map((r) => r.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const regex = new RegExp(`(${escaped.join("|")})`, "gi");
+  const byName = new Map(roles.map((r) => [r.name.toLowerCase(), r.color]));
+  const parts = text.split(regex);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => {
+    const color = byName.get(part.toLowerCase());
+    if (!color) return part;
+    return (
+      <span key={i} style={{ background: `${color}22`, color, borderRadius: 3, padding: "0 3px", fontWeight: 600 }}>
+        {part}
+      </span>
+    );
+  });
+}
 
 /** Does this row involve the given role? Any cell (or the title) may name it. */
 export function rowMatchesRole(row: ProjectedRow, role: string): boolean {
@@ -21,10 +42,12 @@ export function rowMatchesRole(row: ProjectedRow, role: string): boolean {
  */
 export function RolePicker({
   rows,
+  roles = [],
   myRole,
   onChange,
 }: {
   rows: ProjectedRow[];
+  roles?: RoleDef[];
   myRole: string | null;
   onChange: (role: string | null) => void;
 }) {
@@ -52,7 +75,15 @@ export function RolePicker({
       <button
         type="button"
         className={`btn btn-sm ${myRole ? "is-on" : ""}`}
-        style={myRole ? { borderColor: "#2dd4bf", color: "#2dd4bf", background: "rgba(45,212,191,0.1)" } : undefined}
+        style={
+          myRole
+            ? {
+                borderColor: roles.find((r) => r.name.toLowerCase() === myRole.toLowerCase())?.color ?? "#2dd4bf",
+                color: roles.find((r) => r.name.toLowerCase() === myRole.toLowerCase())?.color ?? "#2dd4bf",
+                background: `${roles.find((r) => r.name.toLowerCase() === myRole.toLowerCase())?.color ?? "#2dd4bf"}1a`,
+              }
+            : undefined
+        }
         title="Pick your assigned role — your items highlight and the bar below tracks your next one"
         onClick={() => setOpen((o) => !o)}
       >
@@ -78,7 +109,25 @@ export function RolePicker({
               }
             }}
           />
-          {suggestions.length > 0 && (
+          {roles.length > 0 && (
+            <div className="chip-row" style={{ marginTop: 8, maxWidth: 320 }}>
+              {roles.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  style={{ borderColor: r.color, color: r.color, background: `${r.color}1a` }}
+                  onClick={() => {
+                    onChange(r.name);
+                    setOpen(false);
+                    setText("");
+                  }}
+                >
+                  {r.name}
+                </button>
+              ))}
+            </div>
+          )}
+          {suggestions.length > 0 && roles.length === 0 && (
             <div className="chip-row" style={{ marginTop: 8, maxWidth: 320 }}>
               {suggestions
                 .filter((sugg) => !text || sugg.toLowerCase().includes(text.toLowerCase()))
@@ -124,6 +173,7 @@ export function RolePicker({
  */
 export function RoleBar({
   myRole,
+  roleColor = "#2dd4bf",
   rows,
   timing,
   live,
@@ -131,6 +181,7 @@ export function RoleBar({
   activeRowId,
 }: {
   myRole: string;
+  roleColor?: string;
   rows: ProjectedRow[];
   timing: PlanTiming;
   live: LiveShowTiming | null;
@@ -154,7 +205,7 @@ export function RoleBar({
     return (
       <div className="role-bar on-air no-print">
         <span className="rb-onair">● YOU’RE ON</span>
-        <span className="rb-role">{myRole}</span>
+        <span className="rb-role" style={{ color: roleColor }}>{myRole}</span>
         <span className="rb-title">{activeRow!.title || "—"}</span>
         <span className="rb-count">{display}</span>
       </div>
@@ -173,7 +224,7 @@ export function RoleBar({
   if (!next) {
     return (
       <div className="role-bar no-print">
-        <span className="rb-role">{myRole}</span>
+        <span className="rb-role" style={{ color: roleColor }}>{myRole}</span>
         <span className="rb-done">No more items for you in this show.</span>
       </div>
     );
@@ -188,7 +239,7 @@ export function RoleBar({
 
   return (
     <div className={`role-bar no-print ${imminent ? "imminent" : ""}`}>
-      <span className="rb-role">{myRole} · next</span>
+      <span className="rb-role" style={{ color: roleColor }}>{myRole} · next</span>
       <span className="rb-title">{next.row.title || "—"}</span>
       <span className="rb-count">
         {countdown == null ? "—" : countdown <= 0 ? "any moment" : `in ${formatDuration(countdown)}`}

@@ -61,6 +61,13 @@ export interface KeyTime {
   sec: number;
 }
 
+/** An assigned role mined from the sheet (BGM, Camera 1…) with its colour. */
+export interface RoleDef {
+  id: string;
+  name: string;
+  color: string;
+}
+
 /**
  * Build a rundown Y.Doc from seed data, per the shape in docs/DATA-MODEL.md §2.
  * `extraColumns` adds rich-text columns; with `replaceDepartments` the doc gets
@@ -73,6 +80,7 @@ export function buildRundownDoc(
   docMeta: DocMeta = {},
   extraColumns: { key: string; title: string; width?: number }[] = [],
   replaceDepartments = false,
+  roles: { name: string; color: string }[] = [],
 ): Y.Doc {
   const doc = new Y.Doc();
   doc.transact(() => {
@@ -107,6 +115,15 @@ export function buildRundownDoc(
       if (extra.width) col.set("width", Math.round(extra.width));
       columns.push([col]);
       columnIdByKey.set(extra.key, colId);
+    }
+
+    const yRoles = doc.getArray<Y.Map<unknown>>("roles");
+    for (const role of roles) {
+      const r = new Y.Map();
+      r.set("id", ulid());
+      r.set("name", role.name);
+      r.set("color", role.color);
+      yRoles.push([r]);
     }
 
     const rowOrder = doc.getArray<string>("rowOrder");
@@ -152,6 +169,7 @@ export interface ProjectedRow extends PlanRow {
 export function projectRundownDoc(doc: Y.Doc): {
   meta: Required<DocMeta>;
   keyTimes: KeyTime[];
+  roles: RoleDef[];
   columns: ColumnDef[];
   rows: ProjectedRow[];
 } {
@@ -162,6 +180,14 @@ export function projectRundownDoc(doc: Y.Doc): {
     use24h: (metaMap.get("use24h") as boolean | undefined) ?? false,
     versionLabel: (metaMap.get("versionLabel") as string | undefined) ?? "",
   };
+  const roles: RoleDef[] = doc
+    .getArray<Y.Map<unknown>>("roles")
+    .toArray()
+    .map((r) => ({
+      id: r.get("id") as string,
+      name: (r.get("name") as string | undefined) ?? "",
+      color: (r.get("color") as string | undefined) ?? "#2dd4bf",
+    }));
   const keyTimes: KeyTime[] = doc
     .getArray<Y.Map<unknown>>("keyTimes")
     .toArray()
@@ -214,7 +240,7 @@ export function projectRundownDoc(doc: Y.Doc): {
       color: row.get("color") as string | undefined,
     });
   }
-  return { meta, keyTimes, columns, rows };
+  return { meta, keyTimes, roles, columns, rows };
 }
 
 export const encodeDoc = (doc: Y.Doc): Uint8Array => Y.encodeStateAsUpdate(doc);

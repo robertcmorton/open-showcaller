@@ -15,3 +15,4 @@ next-env.d.ts
 *.tsbuildinfo
 DEVLOG.md
 Example Cue Sheets/
+apps/web/public/_*

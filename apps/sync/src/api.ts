@@ -493,11 +493,17 @@ export function createApiHandler(handle: DbHandle) {
                 (c) => typeof c?.key === "string" && typeof c?.title === "string",
               )
             : [];
+          const importRoles = Array.isArray(body.roles)
+            ? (body.roles as { name: string; color: string }[]).filter(
+                (r) => typeof r?.name === "string" && typeof r?.color === "string",
+              )
+            : [];
           doc = buildRundownDoc(
             rows,
             { name, plannedStartSec, use24h: event.use24h },
             extraColumns,
             extraColumns.length > 0, // importer path: mirror the source sheet's columns exactly
+            importRoles,
           );
         }
 

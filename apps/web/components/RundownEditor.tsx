@@ -23,7 +23,7 @@ import { GuestPassPanel, HistoryPanel, JoinCodesPanel } from "./SharePanels";
 import { LiveReadouts, TransportBar } from "./TransportBar";
 import { Dropdown, HeaderClock, Icon } from "./ui";
 import { SideNavSection, WithSideNav } from "./SideNav";
-import { RoleBar, RolePicker, rowMatchesRole } from "./RoleBar";
+import { RoleBar, RolePicker, highlightRoles, rowMatchesRole } from "./RoleBar";
 import { useShowChannel } from "../lib/showChannel";
 import { useLiveTiming } from "../lib/useLiveTiming";
 import { useRundownDoc } from "../lib/useRundownDoc";
@@ -42,6 +42,7 @@ function SortableRow({
   next,
   paused,
   mine,
+  mineColor,
   disabled,
   onSelect,
 }: {
@@ -53,6 +54,7 @@ function SortableRow({
   next: boolean;
   paused: boolean;
   mine: boolean;
+  mineColor: string;
   disabled: boolean;
   onSelect: (e: React.MouseEvent) => void;
 }) {
@@ -65,7 +67,8 @@ function SortableRow({
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.5 : 1,
-        background: row.type !== "group" && row.color ? row.color : undefined,
+        background: mine ? `${mineColor}14` : row.type !== "group" && row.color ? row.color : undefined,
+        boxShadow: mine ? `inset 3px 0 0 ${mineColor}` : undefined,
       }}
     >
       <td className="row-number mono" onClick={onSelect} {...attributes} {...listeners}>
@@ -128,6 +131,8 @@ function BigTimer({
         ? `+${formatDuration(live.rowOverSec)}`
         : formatDuration(remaining);
   const stateClass = paused ? "paused-state" : over ? "over" : amber ? "amber" : "under";
+  const frac =
+    plannedSec != null && plannedSec > 0 ? Math.min(1, Math.max(0, live.elapsedInRowSec / plannedSec)) : 0;
   return (
     <div className={`big-timer no-print ${stateClass}`}>
       <div className="bt-label">
@@ -135,6 +140,9 @@ function BigTimer({
         {title || "—"}
       </div>
       <div className="bt-time">{display}</div>
+      <div className="bt-bar">
+        <div style={{ width: `${frac * 100}%` }} />
+      </div>
     </div>
   );
 }
@@ -154,7 +162,7 @@ export function RundownEditor({
   const canEditContent = mode !== "view";
   const { doc, connected } = useRundownDoc(rundownId, joinCode);
   // The hook re-renders on every doc update, so projecting during render stays fresh.
-  const { meta, keyTimes, columns, rows } = projectRundownDoc(doc);
+  const { meta, keyTimes, roles, columns, rows } = projectRundownDoc(doc);
   const timing = computeTiming(rows, meta.plannedStartSec);
   const channel = useShowChannel(rundownId, "console", joinCode);
   // Panel API calls (join codes, snapshots…) inherit this page's code.
@@ -204,12 +212,31 @@ export function RundownEditor({
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
-  // Auto-scroll keeps the active row centered — only when the active row
-  // CHANGES, so a user reading elsewhere is never yanked mid-scroll.
+  // Auto-scroll keeps the active row centered while following. A manual
+  // scroll (wheel/touch) disengages following instead of fighting the user;
+  // the floating "Sync Cue" button re-engages it.
+  const programmaticScroll = useRef(false);
   useEffect(() => {
     if (!activeRowId || !followScroll) return;
+    programmaticScroll.current = true;
     document.querySelector("tr.active-row")?.scrollIntoView({ block: "center", behavior: "smooth" });
+    const t = window.setTimeout(() => {
+      programmaticScroll.current = false;
+    }, 1000);
+    return () => window.clearTimeout(t);
   }, [activeRowId, followScroll]);
+  useEffect(() => {
+    if (!activeRowId) return;
+    const disengage = () => {
+      if (!programmaticScroll.current) setFollowScroll(false);
+    };
+    window.addEventListener("wheel", disengage, { passive: true });
+    window.addEventListener("touchmove", disengage, { passive: true });
+    return () => {
+      window.removeEventListener("wheel", disengage);
+      window.removeEventListener("touchmove", disengage);
+    };
+  }, [activeRowId]);
 
   // Next cue after the active row gets a subtle tint on every surface.
   const nextRowId = (() => {
@@ -220,6 +247,9 @@ export function RundownEditor({
   })();
   const isPaused = channel.show?.state === "paused";
   const myRoleRows = myRole ? new Set(rows.filter((r) => rowMatchesRole(r, myRole)).map((r) => r.id)) : null;
+  const myRoleColor = myRole
+    ? (roles.find((r) => r.name.toLowerCase() === myRole.toLowerCase())?.color ?? "#2dd4bf")
+    : "#2dd4bf";
 
   const yRows = doc.getMap<Y.Map<unknown>>("rows");
   const yOrder = doc.getArray<string>("rowOrder");
@@ -409,7 +439,7 @@ export function RundownEditor({
         key={column.id}
         onDoubleClick={canEditContent ? () => setActiveCell({ rowId: rowRecord.id, columnId: column.id }) : undefined}
       >
-        {rowRecord.cells[column.key] ?? ""}
+        {highlightRoles(rowRecord.cells[column.key] ?? "", roles)}
       </td>
     );
   };
@@ -644,6 +674,7 @@ export function RundownEditor({
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
           <RolePicker
             rows={rows}
+            roles={roles}
             myRole={myRole}
             onChange={(role) => {
               setMyRole(role);
@@ -651,15 +682,7 @@ export function RundownEditor({
               else localStorage.removeItem(`oc:myrole:${rundownId}`);
             }}
           />
-          {activeRowId && (
-            <button
-              className={`btn btn-sm ${followScroll ? "is-on" : ""}`}
-              title="Keep the active row in view as the show advances"
-              onClick={() => setFollowScroll((f) => !f)}
-            >
-              Follow
-            </button>
-          )}
+
           {canEditContent && selected.size > 0 && (
             <div className="selection-bar">
               <span className="count">{selected.size} selected</span>
@@ -783,6 +806,7 @@ export function RundownEditor({
                     next={nextRowId === rowRecord.id}
                     paused={isPaused ?? false}
                     mine={myRoleRows?.has(rowRecord.id) ?? false}
+                    mineColor={myRoleColor}
                     disabled={!canEditContent}
                     onSelect={(e) => canEditContent && selectRow(rowRecord.id, e)}
                   >
@@ -867,9 +891,27 @@ export function RundownEditor({
 
       <CuePool doc={doc} mode={mode} channel={channel} />
       {myRole && activeRowId && <div style={{ height: 72 }} />}
+      {activeRowId && !followScroll && (
+        <button
+          className="btn btn-primary sync-cue"
+          style={{ bottom: myRole ? 86 : 18 }}
+          title="Jump back to the live cue and follow along again"
+          onClick={() => {
+            setFollowScroll(true);
+            programmaticScroll.current = true;
+            document.querySelector("tr.active-row")?.scrollIntoView({ block: "center", behavior: "smooth" });
+            window.setTimeout(() => {
+              programmaticScroll.current = false;
+            }, 1000);
+          }}
+        >
+          ⇣ Sync Cue
+        </button>
+      )}
       {myRole && (
         <RoleBar
           myRole={myRole}
+          roleColor={myRoleColor}
           rows={rows}
           timing={timing}
           live={live}

@@ -1059,3 +1059,39 @@ kbd {
     display: none;
   }
 }
+
+/* ---------- Big-timer progress + Sync Cue ---------- */
+
+.bt-bar {
+  width: 100%;
+  min-width: 190px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border-subtle);
+  overflow: hidden;
+  margin-top: 5px;
+}
+.bt-bar > div {
+  height: 100%;
+  background: var(--under);
+  transition: width 900ms linear;
+}
+.big-timer.amber .bt-bar > div {
+  background: var(--warn);
+}
+.big-timer.over .bt-bar > div {
+  background: var(--over);
+}
+
+.sync-cue {
+  position: fixed;
+  right: 18px;
+  z-index: 68;
+  box-shadow: var(--shadow-overlay);
+  animation: menu-in var(--t-med) var(--ease);
+}
+@media print {
+  .sync-cue {
+    display: none;
+  }
+}
