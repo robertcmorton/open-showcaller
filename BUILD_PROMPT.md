@@ -21,7 +21,7 @@ I want to build **Open Showcaller**: an open-source, self-hostable rundown and s
 
 **Event setup (the showcaller's flow):** create an event — name, location, start/end dates, timezone, 12/24-hour preference, labels, branding image, owner. Inside it, create rundowns (one per day/stage) from a template or blank, each with name, description, date, and planned start time. An event also holds folders, uploaded files, and CSV imports, with Dashboard / Archived tabs and a template library at team level.
 
-**Rundown editor** — a spreadsheet-like grid that mirrors Excel/Sheets muscle memory. Default columns: Title, Start Time, Duration, Production Notes, Audio, Video, Lights, Graphics, Script; users add/rename/reorder/hide custom columns. Rows are drag-and-drop cues; group-header rows divide the show into segments and can carry hard start times. Cells are rich text (TipTap): bold/italic/underline, size, colors, highlights, lists, links, inline images. Spreadsheet-grade selection (cell, row, multi-row) with a selection chip.
+**Rundown editor** — a spreadsheet-like grid that mirrors Excel/Sheets muscle memory. Default columns: Title, Start Time, Duration, Production Notes, Audio, Video, Lights, Graphics, Script; users add/rename/reorder/hide custom columns. Rows are drag-and-drop cues; group-header rows divide the show into segments, can carry hard start times, and convert to/from normal rows. Cells are rich text (TipTap): bold/italic/underline, size, colors, highlights, lists, links, inline images. Spreadsheet-grade selection (cell, row, multi-row) with a selection chip. **Per-user personalization on the shared document:** each user can hide/reorder columns for their own view, keep private notes invisible to others, and set *personal* highlights — alongside *global* highlights everyone sees. Per-user light/dark theme.
 
 **Timing engine** — the crown jewel, built as a pure, exhaustively unit-tested module in `packages/core`:
 - Durations cascade: a row's start = previous row's end, recalculated on any change.
@@ -29,12 +29,12 @@ I want to build **Open Showcaller**: an open-source, self-hostable rundown and s
 - Header always shows Planned (start / total duration / end); live, it adds per-item over/under (green under, red over), cumulative show drift (e.g. `Show +00:57`), and projected end time.
 
 **Show day — run & broadcast:**
-- The showcaller hits **Start** → LIVE. Transport: Pause, Previous, Next, Stop (with confirm). Active row highlighted; all timing readouts run live.
+- The showcaller hits **Start** → LIVE. Transport: Pause, Previous, Next, Stop (with confirm), with keyboard shortcuts on the console (Space = next, Shift+Space = previous). Active row highlighted on every device; follower views auto-scroll to it. Each item shows a runtime clock counting down its planned duration — green, then red counting up once it overruns; all timing readouts run live.
 - **Broadcast:** every connected device follows the caller's position in real time. Crew join via a short code or QR shown on the console. Roles: **Caller** (transport + edits), **Editor** (edits, no transport), **Follower** (read-only live view), **Guest** (tokenized read-only link with per-column visibility).
 - **Clock discipline:** show state is server-authoritative and tiny — active row id, state (idle/running/paused), and timestamped transitions. Clients compute every countdown locally from a measured server-clock offset; ticks are never streamed. Cue changes propagate in <300 ms; reconnects resync in one round trip; offline companions keep showing last-known state flagged as stale.
 - **Companion surfaces** (each shareable to any device by link/QR): **Follow** (current + next cue, my columns), **Speaker Timer** (fullscreen countdown, green → amber → red as time runs out), **Prompter** (the active cue's script, auto-scroll with speed/size controls, mirror mode, read-position marker; edits in the rundown sync into it instantly).
 
-**Sharing & data:** simultaneous multi-editor collaboration with cell-level sync; version history; CSV import/export and print/PDF export; rundown templates; guest-pass links with column visibility toggles.
+**Sharing & data:** simultaneous multi-editor collaboration with cell-level sync; version history plus a live activity feed and per-cell change history (who changed this cell, when); CSV import/export, unformatted spreadsheet export, and formatted print/PDF export; rundown and event templates, plus one-click event duplication (copies rundowns and files); guest-pass links with column visibility toggles.
 
 ## Tech stack (all open-source, self-hostable)
 
