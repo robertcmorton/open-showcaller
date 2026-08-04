@@ -736,3 +736,127 @@ kbd {
 .pool-item:first-of-type {
   border-top: none;
 }
+
+/* ---------- Live polish: active row, next-up, paused ---------- */
+
+.rundown-grid tr.active-row td {
+  position: relative;
+}
+.row-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2.5px;
+  background: var(--accent);
+  transition: width 900ms linear;
+  pointer-events: none;
+}
+.row-progress.over {
+  background: var(--over);
+}
+.rundown-grid tr.next-row td {
+  background: rgba(76, 141, 255, 0.045);
+}
+.rundown-grid tr.next-row td:first-child {
+  box-shadow: inset 4px 0 0 rgba(76, 141, 255, 0.35);
+}
+.rundown-grid tr.active-row.paused td {
+  background: rgba(76, 141, 255, 0.05);
+}
+.rundown-grid tr.active-row.paused td:first-child {
+  box-shadow: inset 4px 0 0 var(--warn);
+}
+
+/* ---------- Print (formatted export via the browser's PDF printer) ---------- */
+
+.print-only {
+  display: none;
+}
+
+@media print {
+  :root {
+    --bg: #fff;
+    --surface: #fff;
+    --raised: #f3f4f6;
+    --overlay: #fff;
+    --border: #999;
+    --border-subtle: #ccc;
+    --text: #111;
+    --text-2: #333;
+    --text-3: #555;
+  }
+  body {
+    background: #fff !important;
+    color: #111 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .no-print,
+  .toast-stack,
+  .pool-section .btn,
+  .selection-bar {
+    display: none !important;
+  }
+  .print-only {
+    display: block;
+  }
+  .rundown-grid {
+    border: 1px solid #999;
+    font-size: 8.5pt;
+  }
+  .rundown-grid th {
+    position: static;
+    background: #eee !important;
+    color: #111 !important;
+  }
+  .rundown-grid td {
+    border-bottom: 1px solid #ccc;
+  }
+  .rundown-grid tr.group-row td {
+    background: #e5e7eb !important;
+    color: #111 !important;
+  }
+  .rundown-grid tr.milestone-row td {
+    background: #fef3c7 !important;
+    color: #92400e !important;
+    border-top: 1px solid #d97706;
+    border-bottom: 1px solid #d97706;
+  }
+  .rundown-grid tr.active-row td,
+  .rundown-grid tr.next-row td {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  .row-progress {
+    display: none;
+  }
+  thead {
+    display: table-header-group; /* repeat column headers on every page */
+  }
+  tr {
+    break-inside: avoid;
+  }
+  .print-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    border-bottom: 2px solid #111;
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+  }
+  .print-footer {
+    margin-top: 10px;
+    padding-top: 6px;
+    border-top: 1px solid #999;
+    font-size: 8pt;
+    color: #555;
+    display: flex;
+    justify-content: space-between;
+  }
+}
+
+@page {
+  size: A4 landscape;
+  margin: 12mm;
+}

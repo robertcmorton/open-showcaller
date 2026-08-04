@@ -37,6 +37,8 @@ function SortableRow({
   children,
   selected,
   active,
+  next,
+  paused,
   disabled,
   onSelect,
 }: {
@@ -45,6 +47,8 @@ function SortableRow({
   children: React.ReactNode;
   selected: boolean;
   active: boolean;
+  next: boolean;
+  paused: boolean;
   disabled: boolean;
   onSelect: (e: React.MouseEvent) => void;
 }) {
@@ -52,7 +56,7 @@ function SortableRow({
   return (
     <tr
       ref={setNodeRef}
-      className={`${row.type === "group" ? "group-row" : ""} ${row.type === "milestone" ? "milestone-row" : ""} ${selected ? "selected" : ""} ${active ? "active-row" : ""}`}
+      className={`${row.type === "group" ? "group-row" : ""} ${row.type === "milestone" ? "milestone-row" : ""} ${selected ? "selected" : ""} ${active ? "active-row" : ""} ${next ? "next-row" : ""} ${active && paused ? "paused" : ""}`}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
@@ -126,6 +130,7 @@ export function RundownEditor({
   const [panel, setPanel] = useState<"guest" | "history" | "join" | null>(null);
   const [hiddenCols, setHiddenCols] = useState<ReadonlySet<string>>(new Set());
   const [showZero, setShowZero] = useState(false);
+  const [followScroll, setFollowScroll] = useState(true);
   const timeInputRef = useRef<HTMLInputElement>(null);
 
   // Per-user column visibility, loaded after mount to avoid hydration mismatch.
@@ -148,6 +153,22 @@ export function RundownEditor({
   };
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  // Auto-scroll keeps the active row centered — only when the active row
+  // CHANGES, so a user reading elsewhere is never yanked mid-scroll.
+  useEffect(() => {
+    if (!activeRowId || !followScroll) return;
+    document.querySelector("tr.active-row")?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [activeRowId, followScroll]);
+
+  // Next cue after the active row gets a subtle tint on every surface.
+  const nextRowId = (() => {
+    if (!activeRowId) return null;
+    const at = rows.findIndex((r) => r.id === activeRowId);
+    if (at < 0) return null;
+    return rows.slice(at + 1).find((r) => r.type === "cue")?.id ?? null;
+  })();
+  const isPaused = channel.show?.state === "paused";
 
   const yRows = doc.getMap<Y.Map<unknown>>("rows");
   const yOrder = doc.getArray<string>("rowOrder");
@@ -431,7 +452,7 @@ export function RundownEditor({
 
   return (
     <div style={{ padding: "1.25rem 1.5rem" }}>
-      <header style={{ display: "flex", alignItems: "center", gap: "1.75rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+      <header className="no-print" style={{ display: "flex", alignItems: "center", gap: "1.75rem", marginBottom: "1rem", flexWrap: "wrap" }}>
         <h1 style={{ fontSize: "1.15rem", fontWeight: 650, margin: 0, letterSpacing: "-0.01em" }}>{meta.name}</h1>
         {mode !== "show" && <span className="chip">{mode === "edit" ? "EDIT — no transport" : "VIEW ONLY"}</span>}
         <button
@@ -463,7 +484,7 @@ export function RundownEditor({
         </div>
       </header>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+      <div className="no-print" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
         {isShow && <TransportBar channel={channel} orderedRowIds={rows.map((r) => r.id)} />}
         {canEditContent && (
           <>
@@ -510,6 +531,15 @@ export function RundownEditor({
           )}
         </Dropdown>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+          {activeRowId && (
+            <button
+              className={`btn btn-sm ${followScroll ? "is-on" : ""}`}
+              title="Keep the active row in view as the show advances"
+              onClick={() => setFollowScroll((f) => !f)}
+            >
+              Follow
+            </button>
+          )}
           {canEditContent && selected.size > 0 && (
             <div className="selection-bar">
               <span className="count">{selected.size} selected</span>
@@ -606,9 +636,47 @@ export function RundownEditor({
         </div>
       </div>
 
-      {panel === "guest" && <GuestPassPanel rundownId={rundownId} columns={columns} onClose={() => setPanel(null)} />}
-      {panel === "history" && <HistoryPanel rundownId={rundownId} onClose={() => setPanel(null)} />}
-      {panel === "join" && <JoinCodesPanel rundownId={rundownId} onClose={() => setPanel(null)} />}
+      <div className="print-only print-header">
+        <div>
+          <div style={{ fontSize: "14pt", fontWeight: 700 }}>
+            {meta.name}
+            {meta.versionLabel ? `  ·  ${meta.versionLabel}` : ""}
+          </div>
+          <div style={{ fontSize: "9pt" }}>
+            Planned {timing.startSec != null ? formatTimeOfDay(timing.startSec, meta.use24h) : "—"} · duration{" "}
+            {formatDuration(timing.totalDurationSec)} · end{" "}
+            {timing.endSec != null ? formatTimeOfDay(timing.endSec, meta.use24h) : "—"}
+          </div>
+        </div>
+        {keyTimes.length > 0 && (
+          <table style={{ fontSize: "8.5pt", borderCollapse: "collapse" }}>
+            <tbody>
+              {keyTimes.map((kt) => (
+                <tr key={kt.id}>
+                  <td style={{ paddingRight: 10, fontWeight: 600 }}>{kt.label}</td>
+                  <td className="mono">{formatTimeOfDay(kt.sec, meta.use24h)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {panel === "guest" && (
+        <div className="no-print">
+          <GuestPassPanel rundownId={rundownId} columns={columns} onClose={() => setPanel(null)} />
+        </div>
+      )}
+      {panel === "history" && (
+        <div className="no-print">
+          <HistoryPanel rundownId={rundownId} onClose={() => setPanel(null)} />
+        </div>
+      )}
+      {panel === "join" && (
+        <div className="no-print">
+          <JoinCodesPanel rundownId={rundownId} onClose={() => setPanel(null)} />
+        </div>
+      )}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <table className="rundown-grid">
@@ -635,10 +703,32 @@ export function RundownEditor({
                     index={i}
                     selected={selected.has(rowRecord.id)}
                     active={activeRowId === rowRecord.id}
+                    next={nextRowId === rowRecord.id}
+                    paused={isPaused ?? false}
                     disabled={!canEditContent}
                     onSelect={(e) => canEditContent && selectRow(rowRecord.id, e)}
                   >
-                    {titleColumn ? renderRichCell(rowRecord, titleColumn) : <td />}
+                    {titleColumn ? (
+                      (() => {
+                        const cell = renderRichCell(rowRecord, titleColumn);
+                        if (activeRowId !== rowRecord.id || !live || rowRecord.durationSec == null || rowRecord.durationSec <= 0)
+                          return cell;
+                        const over = live.remainingInRowSec != null && live.remainingInRowSec < 0;
+                        const frac = over
+                          ? 1
+                          : live.remainingInRowSec != null
+                            ? Math.min(1, Math.max(0, 1 - live.remainingInRowSec / rowRecord.durationSec))
+                            : 0;
+                        return (
+                          <td key="title-live" className="mono-progress" style={{ position: "relative" }}>
+                            {rowRecord.cells[titleColumn.key] ?? ""}
+                            <div className={`row-progress ${over ? "over" : ""}`} style={{ width: `${frac * 100}%` }} />
+                          </td>
+                        );
+                      })()
+                    ) : (
+                      <td />
+                    )}
                     <td className="mono" onDoubleClick={canEditContent ? () => setEditingTime(rowRecord.id) : undefined}>
                       {rowRecord.hardStartSec != null && (
                         <span
@@ -706,7 +796,15 @@ export function RundownEditor({
         </div>
       )}
 
-      <p style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", marginTop: "1rem" }}>
+      <div className="print-only print-footer">
+        <span>
+          {meta.name}
+          {meta.versionLabel ? ` · ${meta.versionLabel}` : ""}
+        </span>
+        <span>Generated {new Date().toLocaleString()} · OpenCall</span>
+      </div>
+
+      <p className="no-print" style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", marginTop: "1rem" }}>
         {canEditContent ? (
           <>
             Double-click a cell to edit · double-click Duration for hide/mute · double-click Start to anchor (⚑ resets)

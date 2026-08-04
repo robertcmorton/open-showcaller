@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-05 (milestone 2 · phase 5: live polish & print)
+- **The active row is unmistakable on every surface while the timer runs**: accent bar + tinted row, an inline **progress bar that drains in real time** under the active title and turns the over-color on overrun, a subtle tint + soft bar on the **next** cue, and a dimmed amber state while **paused**. Auto-scroll keeps the active row centered as the show advances, with a **Follow** toggle so a user reading elsewhere is never yanked — verified live in-browser (bar draining at the correct rate, next-up tint, paused dim).
+- **Formatted print/PDF export straight from the browser** on Showcaller/Edit/View (⋯ → Print): landscape A4 with a title block (name · version label · planned/duration/end · key-times table), column headers repeated on every page, group/milestone banners and row colors preserved, screen chrome stripped, and a generated-stamp footer. The Columns menu acts as the per-user print preset — hidden columns stay hidden in print.
+
 ### Added — 2026-08-05 (milestone 2 · phase 4: rundown fidelity)
 - **Milestone rows**: a first-class row type for timed markers with no duration (doors, kick-off, "team list due") rendered as a full-width amber banner; excluded from duration math; produced by the importer and the new **+ Milestone** button.
 - **Row highlight colors**: multi-select rows and pick from a curated palette (or clear) in the selection bar; colors follow the row onto every surface including the guest view.
