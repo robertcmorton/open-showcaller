@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Changed — 2026-08-04 (spec: real-world run sheet import)
+- The import requirement in `BUILD_PROMPT.md` now covers **uploading existing run sheets as XLSX, XLS, CSV, or PDF** through a single extract → map-columns → preview pipeline, with tolerant parsing of real-world data (free-text durations, mixed time formats, milestone rows, section banners, stacked multi-cue cells, per-page repeated headers). Informed by analysis of real produced run sheets kept as local-only reference material; the print/PDF export spec gained key-times table, repeated per-page headers, and footers to match.
+
 ### Changed — 2026-08-04 (single-platform hosting)
 - **Everything now runs on Railway in one project**: the web app moved from Vercel to a Railway service at `open-showcaller-production.up.railway.app` (domain targets port 3000), alongside the existing sync server and PostgreSQL. The Vercel project was deleted. One platform, one dashboard, services reference each other's variables directly. `docs/DEPLOYMENT.md` rewritten for the consolidated topology.
 - Verified post-move: the Railway-hosted web app serves the same database (existing event and rundown render), the editor connects on both realtime channels over `wss://`, and the in-progress show session carried across untouched.
