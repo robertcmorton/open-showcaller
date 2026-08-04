@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-04 (production deployment)
+- **The app is live**: web at `open-showcaller-web.vercel.app` (Vercel, auto-deploys from `main`, root directory `apps/web`) and the sync server + PostgreSQL on Railway at `open-showcallersync-production.up.railway.app`. Verified end to end in production: event and rundown created through the live UI, editor connected on both realtime channels over `wss://`.
+- **Single public port**: the sync server now serves the HTTP API, the show channel (ws `/`), and document sync (ws `/doc`) from one listener with path-routed upgrades; `PORT` is honored for PaaS hosts. Port 8788 is retired everywhere (dev, Docker, env examples).
+- Fresh databases self-initialize on server boot (idempotent DDL), so a new deployment needs no manual migration step.
+- ⚠️ Known gap, tracked as the top hardening item: the management API and document channel are not yet authenticated — the deployment is suitable for demo use until API gating lands.
+
 ### Added — 2026-08-04 (hardening: durable sessions, join codes, as-run report)
 - **Show sessions are now durable**: every transport command writes through to the database (session state plus a transition log), and a restarted sync server hydrates any live session back — a show in progress survives a server crash, verified by killing and restarting the server mid-show.
 - **Real join codes**: generate role-scoped six-character codes (no confusable characters) per rundown from the editor's Join Codes panel; companion URLs carry `?code=`; the show channel validates codes and guest tokens against the database and rejects invalid credentials. A development fallback code remains available and can be disabled by environment variable.

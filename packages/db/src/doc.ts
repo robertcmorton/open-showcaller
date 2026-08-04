@@ -158,6 +158,7 @@ export function projectRundownDoc(doc: Y.Doc): { meta: Required<DocMeta>; column
       hardStartSec: (row.get("hardStartSec") as number | null) ?? null,
       backtime: (row.get("backtime") as boolean | undefined) ?? false,
       durationMuted: (row.get("durationMuted") as boolean | undefined) ?? false,
+      durationHidden: (row.get("durationHidden") as boolean | undefined) ?? false,
       title: cells["title"] ?? "",
       cells,
       color: row.get("color") as string | undefined,
