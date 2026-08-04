@@ -85,7 +85,8 @@ describe("header detection & mapping", () => {
     expect(mapping[2]).toEqual({ kind: "duration" });
     expect(mapping[3]).toEqual({ kind: "title" }); // ACTIVITY
     expect(mapping[5]).toEqual({ kind: "department", key: "audio", title: "Audio" });
-    expect(mapping[6]).toEqual({ kind: "department", key: "video", title: "Video" }); // BIG SCREEN
+    // Non-default headers keep the sheet's own format as new columns.
+    expect(mapping[6]).toEqual({ kind: "department", key: "big-screen", title: "BIG SCREEN" });
   });
 });
 
@@ -97,8 +98,9 @@ describe("row classification", () => {
     expect(rows[1]!.durationSec).toBe(20);
     expect(rows[2]!.kind).toBe("milestone"); // TEAM LIST DUE: time, no duration
     expect(rows[3]!.kind).toBe("spacer");
-    // WHO + WHAT columns stack into production notes, preserving both lines.
-    expect(rows[4]!.cells.prodNotes).toBe("AUDIO\nDJ tracks");
+    // WHO and WHAT import as their own columns, mirroring the sheet.
+    expect(rows[4]!.cells.who).toBe("AUDIO");
+    expect(rows[4]!.cells.what).toBe("DJ tracks");
   });
   it("flags unparseable cells instead of dropping them (style B)", () => {
     const { rows } = planImport(styleB);
@@ -131,5 +133,28 @@ describe("classifyRows direct", () => {
     ];
     const rows = classifyRows(grid, 0, mapColumns(grid[0]!));
     expect(rows[0]!.kind).toBe("banner");
+  });
+});
+
+describe("untitled columns", () => {
+  it("recognizes a header-less cue-type column by its data", () => {
+    const grid = [
+      ["#", "TIME", "", "ACTIVITY", "AUDIO"],
+      ["1", "16:00:00", "VTR", "Opening Reel", ""],
+      ["2", "", "PA", "Welcome Read", "PA"],
+      ["3", "", "GFX", "Sponsor Graphic", ""],
+    ];
+    const { mapping, rows } = planImport(grid);
+    expect(mapping[2]).toEqual({ kind: "department", key: "type", title: "Type" });
+    expect(rows[0]!.cells.type).toBe("VTR");
+  });
+  it("imports other header-less columns as Column N instead of dropping them", () => {
+    const grid = [
+      ["TIME", "ACTIVITY", ""],
+      ["16:00:00", "Doors", "escort VIPs via north gate"],
+    ];
+    const { mapping, rows } = planImport(grid);
+    expect(mapping[2]).toEqual({ kind: "department", key: "column-3", title: "Column 3" });
+    expect(rows[0]!.cells["column-3"]).toContain("escort");
   });
 });

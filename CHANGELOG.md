@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Fixed — 2026-08-05 (import: columns now mirror the source sheet)
+- **Importing a run sheet now auto-creates columns matching the sheet's own format.** Previously, headers like TRACK, BIG SCREEN, SIDE PANEL, LED, and NOTES were folded into the nearest built-in column, and columns with a **blank header** (the cue-type column on many presentation grids) were dropped entirely — losing most of a dense sheet's content. Now every non-structural column imports as itself; untitled columns are recognized by their data (a column of VTR/PA/GFX tokens becomes **Type** — which also activates the cue-type quick chips — anything else becomes "Column N"), and mirrored row-number columns are skipped as noise.
+- Milestone rows keep their department cells on import, and their banner title falls back to the first cell value when PDF extraction lands the title in a neighboring column band — pre-show schedule rows (arrivals, meetings, rehearsals) now import with their real names instead of "—".
+- Verified against a 12-page real production PDF: 517 rows with every source column (Type, LOCATION, TRACK, BIG SCREEN, SIDE PANEL, LED, NOTES) present and populated, versus most of that content missing before.
+
 ### Added — 2026-08-05 (dashboard: companies own their events; drag-and-drop import)
 - **Events now appear underneath their event company** on the dashboard: each company is a band with its event count, showcaller-token actions, and its own "+ New event" (events created there belong to that company). A company credential sees exactly one band — its own.
 - **Companies can be deleted** (armed two-click confirm) — deletion cascades through the company's events, rundowns, sessions, tokens, snapshots, templates, and memberships.

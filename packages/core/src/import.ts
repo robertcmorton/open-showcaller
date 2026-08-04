@@ -85,15 +85,35 @@ const DURATION_HEADERS = ["duration", "dur", "length", "run time", "runtime", "r
 const TYPE_HEADERS = ["type", "row type"];
 const NUMBER_HEADERS = ["#", "no", "no.", "item #", "item no"];
 
-/** Department synonyms → canonical column {key, title}. First match wins. */
-const DEPARTMENT_SYNONYMS: [string[], { key: string; title: string }][] = [
-  [["audio", "sound", "sfx", "a1", "music", "track"], { key: "audio", title: "Audio" }],
-  [["video", "vtr", "screens", "screen", "playback", "vision", "big screen"], { key: "video", title: "Video" }],
-  [["lights", "lighting", "lx", "led"], { key: "lights", title: "Lights" }],
-  [["graphics", "gfx", "super", "supers", "slides"], { key: "graphics", title: "Graphics" }],
-  [["script", "read", "va", "vo", "announce"], { key: "script", title: "Script" }],
-  [["notes", "production notes", "note", "who", "what", "crew", "location", "cameras", "camera"], { key: "prodNotes", title: "Production Notes" }],
+/**
+ * Only EXACT matches to our built-in column titles fold into the defaults —
+ * every other header becomes its own column so the imported rundown matches
+ * the source sheet's format (LOCATION, TRACK, BIG SCREEN, LED, NOTES… stay
+ * themselves instead of being squeezed into the nearest default).
+ */
+const DEFAULT_TITLE_TO_KEY = new Map<string, { key: string; title: string }>([
+  ["audio", { key: "audio", title: "Audio" }],
+  ["video", { key: "video", title: "Video" }],
+  ["lights", { key: "lights", title: "Lights" }],
+  ["graphics", { key: "graphics", title: "Graphics" }],
+  ["script", { key: "script", title: "Script" }],
+  ["production notes", { key: "prodNotes", title: "Production Notes" }],
+  ["prod notes", { key: "prodNotes", title: "Production Notes" }],
+]);
+
+/** Common department headers — used only to SCORE header rows, never to fold columns. */
+const DEPARTMENT_DETECTION_HEADERS = [
+  "audio", "video", "lights", "graphics", "script", "notes", "location",
+  "track", "big screen", "side panel", "led", "screen", "who", "what",
+  "vtr", "gfx", "cameras", "camera", "crew", "read",
 ];
+
+/** Values that identify an untitled column as the cue-type column. */
+const CUE_TYPE_TOKENS = new Set([
+  "audio", "gfx", "vtr", "led", "pa", "mc", "ga", "dj", "hk", "crew", "pyro",
+  "lighting", "super", "takeover", "score", "note", "cam", "live vision",
+  "live vsn", "gfx and led", "vtr and led", "gfx & led", "dj booth", "sting",
+]);
 
 function normalizeHeader(cell: string): string {
   return cell.trim().toLowerCase().replace(/\s+/g, " ");
@@ -111,7 +131,8 @@ function headerScore(row: string[]): number {
       DURATION_HEADERS.includes(h) ||
       TYPE_HEADERS.includes(h) ||
       NUMBER_HEADERS.includes(h) ||
-      DEPARTMENT_SYNONYMS.some(([names]) => names.includes(h))
+      DEFAULT_TITLE_TO_KEY.has(h) ||
+      DEPARTMENT_DETECTION_HEADERS.includes(h)
     )
       score += 1;
   }
@@ -133,12 +154,17 @@ export function detectHeaderRow(grid: string[][]): number {
 }
 
 /**
- * Maps each source column to a rundown target based on its header text. The
- * title goes to the STRONGEST candidate — "ITEM" is a row-number column on
- * many real sheets, so it only wins when nothing better (ACTION, ACTIVITY,
- * TITLE…) exists; losing title-synonyms are skipped as numbering.
+ * Maps each source column to a rundown target. The title goes to the
+ * STRONGEST candidate — "ITEM" is a row-number column on many real sheets, so
+ * it only wins when nothing better (ACTION, ACTIVITY, TITLE…) exists; losing
+ * title-synonyms are skipped as numbering. Every non-structural column
+ * becomes a column in the rundown, mirroring the source sheet's format;
+ * `sampleRows` lets untitled columns be recognized by their DATA (a header-
+ * less column full of VTR/PA/GFX tokens is the cue-type column, and a
+ * header-less column with any other content still imports as "Column N"
+ * instead of being dropped).
  */
-export function mapColumns(headers: string[]): ColumnTarget[] {
+export function mapColumns(headers: string[], sampleRows: string[][] = []): ColumnTarget[] {
   const normalized = headers.map(normalizeHeader);
   // Priority: earlier entries in TITLE_HEADERS beat later ones; "item" is last.
   const priority = ["title", "name", "activity", "action", "segment", "cue", "description", "item"];
@@ -151,17 +177,39 @@ export function mapColumns(headers: string[]): ColumnTarget[] {
     }
   }
 
+  const usedKeys = new Set<string>();
+  const uniqueKey = (base: string): string => {
+    let key = base;
+    let n = 2;
+    while (usedKeys.has(key)) key = `${base}-${n++}`;
+    usedKeys.add(key);
+    return key;
+  };
+
   return headers.map((cell, i) => {
     const h = normalized[i]!;
     if (i === titleIndex) return { kind: "title" };
-    if (!h || NUMBER_HEADERS.includes(h) || TITLE_HEADERS.includes(h)) return { kind: "skip" };
+    if (NUMBER_HEADERS.includes(h) || /^\d+$/.test(h) || TITLE_HEADERS.includes(h)) return { kind: "skip" };
     if (START_HEADERS.includes(h)) return { kind: "start" };
     if (DURATION_HEADERS.includes(h)) return { kind: "duration" };
-    if (TYPE_HEADERS.includes(h)) return { kind: "type" };
-    for (const [names, target] of DEPARTMENT_SYNONYMS)
-      if (names.includes(h)) return { kind: "department", ...target };
-    // Unknown headers become custom department columns rather than data loss.
-    return { kind: "department", key: h.replace(/\W+/g, "-"), title: cell.trim() };
+    if (TYPE_HEADERS.includes(h)) return { kind: "department", key: uniqueKey("type"), title: "Type" };
+
+    if (!h) {
+      // Untitled column: recognize it by what it contains.
+      const values = sampleRows.map((row) => (row[i] ?? "").trim().toLowerCase()).filter(Boolean);
+      if (values.length === 0) return { kind: "skip" };
+      // Pure row numbering (sheets often mirror # on the right edge) → skip.
+      if (values.filter((v) => /^\d+$/.test(v)).length / values.length >= 0.9) return { kind: "skip" };
+      const typeish = values.filter((v) => CUE_TYPE_TOKENS.has(v)).length;
+      if (typeish / values.length >= 0.5)
+        return { kind: "department", key: uniqueKey("type"), title: "Type" };
+      return { kind: "department", key: uniqueKey(`column-${i + 1}`), title: `Column ${i + 1}` };
+    }
+
+    const builtin = DEFAULT_TITLE_TO_KEY.get(h);
+    if (builtin) return { kind: "department", ...builtin, key: uniqueKey(builtin.key) };
+    // Everything else keeps its own header as a new column.
+    return { kind: "department", key: uniqueKey(h.replace(/\W+/g, "-")), title: cell.trim() };
   });
 }
 
@@ -253,6 +301,7 @@ export function planImport(grid: string[][]): {
 } {
   const headerIndex = detectHeaderRow(grid);
   const headers = grid[headerIndex] ?? [];
-  const mapping = mapColumns(headers);
+  // A data sample lets untitled columns be identified by their contents.
+  const mapping = mapColumns(headers, grid.slice(headerIndex + 1, headerIndex + 60));
   return { headerIndex, headers, mapping, rows: classifyRows(grid, headerIndex, mapping) };
 }

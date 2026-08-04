@@ -29,15 +29,15 @@ const targetToValue = (t: ColumnTarget): string => {
   return t.kind;
 };
 
-const valueToTarget = (value: string, header: string): ColumnTarget => {
+const valueToTarget = (value: string, header: string, index: number): ColumnTarget => {
   if (value === "title") return { kind: "title" };
   if (value === "start") return { kind: "start" };
   if (value === "duration") return { kind: "duration" };
   if (value === "custom")
     return {
       kind: "department",
-      key: header.trim().toLowerCase().replace(/\W+/g, "-") || "column",
-      title: header.trim() || "Column",
+      key: header.trim().toLowerCase().replace(/\W+/g, "-") || `column-${index + 1}`,
+      title: header.trim() || `Column ${index + 1}`,
     };
   if (value.startsWith("dept:")) {
     const key = value.slice(5);
@@ -97,8 +97,18 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
   const doImport = () => {
     const seedRows: SeedRow[] = importable.map((r) => {
       if (r.kind === "banner") return { type: "group", title: r.title };
-      if (r.kind === "milestone")
-        return { type: "milestone", title: r.title || "—", durationSec: null, hardStartSec: r.startSec };
+      if (r.kind === "milestone") {
+        // Keep the cells, and let the banner title fall back to the first cell
+        // value — PDF extraction sometimes lands a title in a neighboring band.
+        const fallback = Object.values(r.cells).find((v) => v.trim());
+        return {
+          type: "milestone",
+          title: r.title || fallback || "—",
+          durationSec: null,
+          hardStartSec: r.startSec,
+          cells: r.cells,
+        };
+      }
       return {
         type: "cue",
         title: r.title,
@@ -107,10 +117,11 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
         cells: r.cells,
       };
     });
+    const usedKeys = new Set(importable.flatMap((r) => Object.keys(r.cells)));
     const customColumns = mapping
       .filter(
         (t): t is Extract<ColumnTarget, { kind: "department" }> =>
-          t.kind === "department" && !DEFAULT_COLUMNS.some((c) => c.key === t.key),
+          t.kind === "department" && !DEFAULT_COLUMNS.some((c) => c.key === t.key) && usedKeys.has(t.key),
       )
       .map((t) => ({ key: t.key, title: t.title }));
     setBusy(true);
@@ -215,7 +226,7 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
                         value={targetToValue(mapping[i] ?? { kind: "skip" })}
                         onChange={(e) => {
                           const next = [...mapping];
-                          next[i] = valueToTarget(e.target.value, h);
+                          next[i] = valueToTarget(e.target.value, h, i);
                           setMapping(next);
                         }}
                       >
