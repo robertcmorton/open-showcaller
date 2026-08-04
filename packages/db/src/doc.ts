@@ -51,8 +51,15 @@ export interface DocMeta {
   use24h?: boolean;
 }
 
-/** Build a rundown Y.Doc from seed data, per the shape in docs/DATA-MODEL.md §2. */
-export function buildRundownDoc(seedRows: SeedRow[], docMeta: DocMeta = {}): Y.Doc {
+/**
+ * Build a rundown Y.Doc from seed data, per the shape in docs/DATA-MODEL.md §2.
+ * `extraColumns` appends custom rich-text columns (importer: unknown headers).
+ */
+export function buildRundownDoc(
+  seedRows: SeedRow[],
+  docMeta: DocMeta = {},
+  extraColumns: { key: string; title: string }[] = [],
+): Y.Doc {
   const doc = new Y.Doc();
   doc.transact(() => {
     const meta = doc.getMap("meta");
@@ -73,6 +80,17 @@ export function buildRundownDoc(seedRows: SeedRow[], docMeta: DocMeta = {}): Y.D
       if (def.builtin) col.set("builtin", true);
       columns.push([col]);
       columnIdByKey.set(def.key, colId);
+    }
+    for (const extra of extraColumns) {
+      if (columnIdByKey.has(extra.key)) continue;
+      const col = new Y.Map();
+      const colId = ulid();
+      col.set("id", colId);
+      col.set("key", extra.key);
+      col.set("title", extra.title);
+      col.set("kind", "richtext");
+      columns.push([col]);
+      columnIdByKey.set(extra.key, colId);
     }
 
     const rowOrder = doc.getArray<string>("rowOrder");

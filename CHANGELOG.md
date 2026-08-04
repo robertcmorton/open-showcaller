@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-05 (milestone 2 · phase 3: run-sheet import)
+- **Upload an existing run sheet — XLSX, XLS, CSV, or PDF — from the admin dashboard** ("Import run sheet…" per event). Extraction is fully client-side: spreadsheets read as displayed text; PDFs go through text-run clustering (lines by Y, column bands by X, repeated page headers dropped) with a clear error for scanned files that have no text layer.
+- **Mapping preview before anything is created**: auto-detected header row and column mapping (title/start/duration/departments, with synonym matching — VTR→Video, LX→Lights, WHO/WHAT→Production Notes…), retargetable per column, unknown headers become new custom columns; rows classified as cue / **milestone** (time, no duration) / **section** (title-only banner) / spacer; unparseable cells highlighted in red and imported empty rather than silently dropped.
+- **Tolerant parsing in core** (30 unit tests, fixtures modeled on three real production house styles): durations like "3 mins", "1min 27 secs", "0:90:00" (90-minute spreadsheet leak), "08:00"; times like "5:00:00PM", "16:00:00", "4:30pm", "0900". Verified end-to-end in-browser: a synthetic spreadsheet imports with anchors, milestone rows, cascade and department cells intact; a real 8-page production PDF extracts 450+ rows with start/duration/title auto-mapped and 21 unparseable cells flagged.
+
 ### Added — 2026-08-05 (milestone 2 · phase 2: role screens & gated access)
 - **Four ways into the app, each a real screen**: `/admin` (cross-show control room: every event and rundown, create/rename/delete/duplicate, live-now badges, one-click jump into any screen), `/show/[id]` (full showcaller console), `/edit/[id]` (content editing, **no transport and no share/admin panels**), `/view/[id]` (read-only grid with live position, personal column visibility, print). The old `/rundown/[id]` URL redirects to `/show`.
 - **Landing page**: crew enter a join code and are routed to the screen their role allows — caller → Showcaller, editor → Edit, follower → View — with the code carried in the URL and reused by every panel and channel.

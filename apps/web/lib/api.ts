@@ -104,6 +104,7 @@ export const api = {
     plannedStartSec?: number | null;
     templateId?: string;
     rows?: SeedRow[];
+    columns?: { key: string; title: string }[];
   }) => request<{ id: string }>("/rundowns", { method: "POST", body: JSON.stringify(body) }),
   templates: () => request<TemplateSummary[]>("/templates"),
   saveTemplate: (body: { rundownId: string; name: string }) =>

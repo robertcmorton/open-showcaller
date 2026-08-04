@@ -12,6 +12,7 @@ import {
   type TemplateSummary,
 } from "../../lib/api";
 import { Icon } from "../../components/ui";
+import { ImportPanel } from "../../components/ImportPanel";
 
 function CreateEventForm({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
@@ -198,6 +199,7 @@ export default function AdminPage() {
   const [live, setLive] = useState<Map<string, string>>(new Map());
   const [error, setError] = useState(false);
   const [locked, setLocked] = useState(false);
+  const [importFor, setImportFor] = useState<string | null>(null); // eventId
 
   const reload = useCallback(() => {
     api
@@ -359,6 +361,23 @@ export default function AdminPage() {
                   </li>
                 )}
               </ul>
+              {importFor === event.id ? (
+                <ImportPanel
+                  eventId={event.id}
+                  onClose={() => setImportFor(null)}
+                  onDone={(rundownId) => {
+                    setImportFor(null);
+                    reload();
+                    window.open(`/show/${rundownId}`, "_blank");
+                  }}
+                />
+              ) : (
+                <div style={{ padding: "0 16px 4px" }}>
+                  <button className="btn btn-sm" onClick={() => setImportFor(event.id)}>
+                    ⤒ Import run sheet…
+                  </button>
+                </div>
+              )}
               <CreateRundownForm eventId={event.id} templates={templates} onCreated={reload} />
             </section>
           ))}

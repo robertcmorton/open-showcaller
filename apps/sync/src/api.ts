@@ -268,7 +268,12 @@ export function createApiHandler(handle: DbHandle) {
           const rows = Array.isArray(body.rows) && body.rows.length > 0
             ? (body.rows as SeedRow[])
             : ([{ type: "cue", title: "New item", durationSec: 60 }] as SeedRow[]);
-          doc = buildRundownDoc(rows, { name, plannedStartSec, use24h: event.use24h });
+          const extraColumns = Array.isArray(body.columns)
+            ? (body.columns as { key: string; title: string }[]).filter(
+                (c) => typeof c?.key === "string" && typeof c?.title === "string",
+              )
+            : [];
+          doc = buildRundownDoc(rows, { name, plannedStartSec, use24h: event.use24h }, extraColumns);
         }
 
         await db.insert(schema.rundowns).values({
