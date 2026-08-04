@@ -8,7 +8,7 @@ import {
   type Role,
   type ServerMsg,
 } from "@open-showcaller/protocol";
-import { createDb, schema } from "@open-showcaller/db";
+import { createDb, ensureSchema, schema } from "@open-showcaller/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { ulid } from "ulid";
 import { createDocServer } from "./doc-server";
@@ -23,6 +23,8 @@ const HEARTBEAT_MS = 15000;
 
 // PGlite lives at the repo root so seed + sync share one database in dev.
 const dbHandle = await createDb(process.env.DATABASE_URL, fileURLToPath(new URL("../../../.pglite", import.meta.url)));
+// Fresh databases self-initialize (idempotent DDL).
+await ensureSchema(dbHandle.db);
 
 interface ClientCtx {
   role: Role;
