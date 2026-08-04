@@ -8,5 +8,5 @@ COPY apps/sync ./apps/sync
 RUN pnpm install --frozen-lockfile --filter @open-showcaller/sync...
 
 ENV NODE_ENV=production
-EXPOSE 8787 8788
+EXPOSE 8787
 CMD ["pnpm", "--filter", "@open-showcaller/sync", "start"]

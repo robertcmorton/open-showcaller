@@ -21,11 +21,9 @@ services:
       dockerfile: apps/sync/Dockerfile
     environment:
       DATABASE_URL: postgres://showcaller:showcaller@postgres:5432/showcaller
-      SYNC_PORT: 8787
-      DOC_PORT: 8788
+      PORT: 8787
     ports:
       - "8787:8787"
-      - "8788:8788"
     depends_on:
       postgres:
         condition: service_healthy
@@ -38,7 +36,7 @@ services:
         # Point these at the host/domain browsers will reach the sync server on.
         NEXT_PUBLIC_SYNC_HTTP_URL: http://localhost:8787
         NEXT_PUBLIC_SYNC_WS_URL: ws://localhost:8787
-        NEXT_PUBLIC_DOC_WS_URL: ws://localhost:8788
+        NEXT_PUBLIC_DOC_WS_URL: ws://localhost:8787/doc
     ports:
       - "3000:3000"
     depends_on:

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import * as Y from "yjs";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 
-const DOC_WS_URL = process.env.NEXT_PUBLIC_DOC_WS_URL ?? "ws://localhost:8788";
+const DOC_WS_URL = process.env.NEXT_PUBLIC_DOC_WS_URL ?? "ws://localhost:8787/doc";
 
 /** Shared rundown document connection; re-renders the consumer on every doc update. */
 export function useRundownDoc(rundownId: string): { doc: Y.Doc; connected: boolean } {

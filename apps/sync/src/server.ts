@@ -15,8 +15,9 @@ import { createDocServer } from "./doc-server";
 import { createApiHandler } from "./api";
 import { PersistentShowStore } from "./sessions";
 
-const PORT = Number(process.env.SYNC_PORT ?? 8787);
-const DOC_PORT = Number(process.env.DOC_PORT ?? 8788);
+// One public port for everything: HTTP API, the show channel (default ws
+// path), and Yjs doc sync (ws path /doc). PORT is what PaaS hosts inject.
+const PORT = Number(process.env.PORT ?? process.env.SYNC_PORT ?? 8787);
 const HELLO_TIMEOUT_MS = 5000;
 const HEARTBEAT_MS = 15000;
 
@@ -92,7 +93,22 @@ const httpServer = createServer(async (req, res) => {
   }
 });
 
-const wss = new WebSocketServer({ server: httpServer });
+const docServer = createDocServer(dbHandle);
+const wss = new WebSocketServer({ noServer: true });
+const docWss = new WebSocketServer({ noServer: true });
+
+httpServer.on("upgrade", (req, socket, head) => {
+  const { pathname } = new URL(req.url ?? "/", "http://localhost");
+  if (pathname === "/doc" || pathname.startsWith("/doc/")) {
+    docWss.handleUpgrade(req, socket, head, (ws) => {
+      docServer.handleConnection(ws, req);
+    });
+  } else {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit("connection", ws, req);
+    });
+  }
+});
 
 wss.on("connection", (ws, req) => {
   const url = new URL(req.url ?? "/", "http://localhost");
@@ -191,10 +207,5 @@ const heartbeat = setInterval(() => {
 heartbeat.unref();
 
 httpServer.listen(PORT, () => {
-  console.log(`[sync] show channel + api on ws://localhost:${PORT}  (protocol v${PROTOCOL_VERSION})`);
-});
-
-const docServer = createDocServer(dbHandle, DOC_PORT);
-void docServer.listen().then(() => {
-  console.log(`[sync] doc channel on ws://localhost:${DOC_PORT}`);
+  console.log(`[sync] api + show channel + /doc channel on :${PORT}  (protocol v${PROTOCOL_VERSION})`);
 });

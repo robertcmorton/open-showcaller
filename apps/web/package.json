@@ -18,6 +18,8 @@
     "@open-showcaller/db": "workspace:*",
     "@open-showcaller/protocol": "workspace:*",
     "@tiptap/extension-collaboration": "^2.11.2",
+    "@tiptap/extension-highlight": "^2.11.2",
+    "@tiptap/extension-underline": "^2.11.2",
     "@tiptap/pm": "^2.11.2",
     "@tiptap/react": "^2.11.2",
     "@tiptap/starter-kit": "^2.11.2",
