@@ -1,3 +1,5 @@
+import { createServer } from "node:http";
+import { fileURLToPath } from "node:url";
 import { WebSocketServer, WebSocket } from "ws";
 import {
   CloseCodes,
@@ -6,11 +8,17 @@ import {
   type Role,
   type ServerMsg,
 } from "@open-showcaller/protocol";
+import { createDb, schema } from "@open-showcaller/db";
 import { ShowStateMachine } from "./show";
+import { createDocServer } from "./doc-server";
 
 const PORT = Number(process.env.SYNC_PORT ?? 8787);
+const DOC_PORT = Number(process.env.DOC_PORT ?? 8788);
 const HELLO_TIMEOUT_MS = 5000;
 const HEARTBEAT_MS = 15000;
+
+// PGlite lives at the repo root so seed + sync share one database in dev.
+const dbHandle = await createDb(process.env.DATABASE_URL, fileURLToPath(new URL("../../../.pglite", import.meta.url)));
 
 interface ClientCtx {
   role: Role;
@@ -62,7 +70,27 @@ function resolveRole(auth: { kind: string }): { role: Role; label: string } {
   }
 }
 
-const wss = new WebSocketServer({ port: PORT });
+// HTTP: minimal read API for the web app (Phase 4 moves this behind real auth).
+const httpServer = createServer(async (req, res) => {
+  res.setHeader("access-control-allow-origin", "*");
+  if (req.method === "GET" && req.url === "/rundowns") {
+    const rows = await dbHandle.db
+      .select({
+        id: schema.rundowns.id,
+        name: schema.rundowns.name,
+        description: schema.rundowns.description,
+        showDate: schema.rundowns.showDate,
+      })
+      .from(schema.rundowns);
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify(rows));
+    return;
+  }
+  res.statusCode = 404;
+  res.end("not found");
+});
+
+const wss = new WebSocketServer({ server: httpServer });
 
 wss.on("connection", (ws, req) => {
   const url = new URL(req.url ?? "/", "http://localhost");
@@ -138,4 +166,11 @@ const heartbeat = setInterval(() => {
 }, HEARTBEAT_MS);
 heartbeat.unref();
 
-console.log(`[sync] listening on ws://localhost:${PORT}  (protocol v${PROTOCOL_VERSION})`);
+httpServer.listen(PORT, () => {
+  console.log(`[sync] show channel + api on ws://localhost:${PORT}  (protocol v${PROTOCOL_VERSION})`);
+});
+
+const docServer = createDocServer(dbHandle, DOC_PORT);
+void docServer.listen().then(() => {
+  console.log(`[sync] doc channel on ws://localhost:${DOC_PORT}`);
+});

@@ -113,4 +113,16 @@ describe("format helpers", () => {
     expect(formatTimeOfDay(9 * 3600)).toBe("9:00:00 AM");
     expect(formatTimeOfDay(21 * 3600 + 61, true)).toBe("21:01:01");
   });
+
+  it("parses wall-clock times", async () => {
+    const { parseTimeOfDay } = await import("../src/index");
+    expect(parseTimeOfDay("9")).toBe(9 * 3600);
+    expect(parseTimeOfDay("9:30")).toBe(9 * 3600 + 1800);
+    expect(parseTimeOfDay("9:30 pm")).toBe(21 * 3600 + 1800);
+    expect(parseTimeOfDay("12am")).toBe(0);
+    expect(parseTimeOfDay("12pm")).toBe(12 * 3600);
+    expect(parseTimeOfDay("21:05:10")).toBe(21 * 3600 + 310);
+    expect(parseTimeOfDay("25:00")).toBeNull();
+    expect(parseTimeOfDay("13pm")).toBeNull();
+  });
 });

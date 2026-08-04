@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { ulid } from "ulid";
 import { computeTiming, formatDuration, formatTimeOfDay } from "@open-showcaller/core";
 import { createDb } from "./client";
@@ -69,7 +70,8 @@ const DEMO_ROWS: SeedRow[] = [
 ];
 
 async function main(): Promise<void> {
-  const handle = await createDb();
+  // PGlite lives at the repo root so seed + sync share one database in dev.
+  const handle = await createDb(process.env.DATABASE_URL, fileURLToPath(new URL("../../../.pglite", import.meta.url)));
   const { db } = handle;
   console.log(`Seeding via ${handle.driver}…`);
   await ensureSchema(db);
@@ -103,7 +105,10 @@ async function main(): Promise<void> {
     ownerUserId: userId,
   });
 
-  const doc = buildRundownDoc(DEMO_ROWS);
+  const doc = buildRundownDoc(DEMO_ROWS, {
+    name: "Sales Kick-Off | Day 1",
+    plannedStartSec: NINE_AM,
+  });
   await db.insert(rundowns).values({
     id: rundownId,
     eventId,

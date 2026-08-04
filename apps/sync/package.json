@@ -11,9 +11,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@hocuspocus/server": "^2.15.2",
+    "@open-showcaller/db": "workspace:*",
     "@open-showcaller/protocol": "workspace:*",
+    "drizzle-orm": "^0.38.3",
     "ulid": "^2.3.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "yjs": "^13.6.21"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

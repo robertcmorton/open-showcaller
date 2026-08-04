@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-04 (Phase 2 editor core)
+- **Collaborative rundown editor** ([apps/web](apps/web)): spreadsheet-style grid over the Yjs document — TipTap rich-text cells (mounted per active cell, bound to each cell's shared fragment), inline Start/Duration editing with shorthand parsing, visible anchor flags with one-click reset-to-auto, drag-and-drop row reordering (dnd-kit), group-header rows with toggle, add/delete rows, add columns, row selection, and a live planned start/duration/end header driven by the timing engine. Landing page lists rundowns from the sync server's read API.
+- **Document sync with persistence** ([apps/sync](apps/sync)): Hocuspocus server backed by the database — documents load from the rundown's stored state and debounce-write back on change; minimal HTTP read API for rundown listings. (Doc channel runs on its own port for now; folding onto the single-socket protocol is tracked for Phase 4.)
+- Wall-clock time parsing in core (`parseTimeOfDay`), rundown metadata (name, planned start) carried inside the document, and a unified dev database location shared by seed and sync.
+- Verified end to end in a real browser: seeded grid renders; a duration edit recascaded every subsequent start time and the header totals; the same edit propagated live to a second browser tab; and after stopping the servers the edit was read back from the database intact.
+
 ### Added — 2026-08-04 (Phase 1 scaffold)
 - Monorepo scaffold (pnpm + Turborepo, strict TypeScript): `packages/core`, `packages/protocol`, `packages/db`, `apps/web`, `apps/sync`, plus root Docker Compose (Postgres) and `.env.example`.
 - **Timing engine** (`packages/core`): cascade with anchor flags (last-anchor-wins), back-timing, muted/hidden durations, duration-shorthand parsing, time formatting — pure functions, unit-tested.

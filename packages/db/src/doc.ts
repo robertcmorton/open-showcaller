@@ -45,12 +45,21 @@ function fillFragment(fragment: Y.XmlFragment, text: string): void {
   fragment.insert(0, [paragraph]);
 }
 
+export interface DocMeta {
+  name?: string;
+  plannedStartSec?: number | null;
+  use24h?: boolean;
+}
+
 /** Build a rundown Y.Doc from seed data, per the shape in docs/DATA-MODEL.md §2. */
-export function buildRundownDoc(seedRows: SeedRow[]): Y.Doc {
+export function buildRundownDoc(seedRows: SeedRow[], docMeta: DocMeta = {}): Y.Doc {
   const doc = new Y.Doc();
   doc.transact(() => {
     const meta = doc.getMap("meta");
     meta.set("schemaVersion", 1);
+    if (docMeta.name != null) meta.set("name", docMeta.name);
+    if (docMeta.plannedStartSec != null) meta.set("plannedStartSec", docMeta.plannedStartSec);
+    if (docMeta.use24h != null) meta.set("use24h", docMeta.use24h);
 
     const columns = doc.getArray<Y.Map<unknown>>("columns");
     const columnIdByKey = new Map<string, string>();
@@ -106,7 +115,13 @@ export interface ProjectedRow extends PlanRow {
 }
 
 /** Project a rundown Y.Doc into plain rows for the timing engine and renderers. */
-export function projectRundownDoc(doc: Y.Doc): { columns: ColumnDef[]; rows: ProjectedRow[] } {
+export function projectRundownDoc(doc: Y.Doc): { meta: Required<DocMeta>; columns: ColumnDef[]; rows: ProjectedRow[] } {
+  const metaMap = doc.getMap("meta");
+  const meta: Required<DocMeta> = {
+    name: (metaMap.get("name") as string | undefined) ?? "Untitled Rundown",
+    plannedStartSec: (metaMap.get("plannedStartSec") as number | undefined) ?? null,
+    use24h: (metaMap.get("use24h") as boolean | undefined) ?? false,
+  };
   const columns: ColumnDef[] = doc
     .getArray<Y.Map<unknown>>("columns")
     .toArray()
@@ -148,7 +163,7 @@ export function projectRundownDoc(doc: Y.Doc): { columns: ColumnDef[]; rows: Pro
       color: row.get("color") as string | undefined,
     });
   }
-  return { columns, rows };
+  return { meta, columns, rows };
 }
 
 export const encodeDoc = (doc: Y.Doc): Uint8Array => Y.encodeStateAsUpdate(doc);
