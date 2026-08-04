@@ -6,8 +6,27 @@ Producers build a minute-by-minute rundown of a show (corporate keynotes, confer
 
 ## Status
 
-Pre-build. The full product spec and kickoff prompt live in [BUILD_PROMPT.md](BUILD_PROMPT.md). Project history is tracked in [CHANGELOG.md](CHANGELOG.md).
+**Phase 1 scaffold complete.** The monorepo builds, tests pass, the seed round-trips a rundown document through the database and timing engine, and the sync server passes a two-client protocol smoke test. The full product spec lives in [BUILD_PROMPT.md](BUILD_PROMPT.md); the realtime protocol in [PROTOCOL.md](PROTOCOL.md); the data model in [docs/DATA-MODEL.md](docs/DATA-MODEL.md); history in [CHANGELOG.md](CHANGELOG.md).
 
-## Planned stack
+## Layout
 
-TypeScript monorepo (pnpm + Turborepo) · Next.js + React + Tailwind · Yjs + Hocuspocus for real-time sync · TipTap rich text · PostgreSQL + Drizzle · Docker Compose for one-command self-hosting · MIT license.
+- `packages/core` — pure timing engine (cascade, anchor flags, back-timing, mute) + format helpers. Zero dependencies.
+- `packages/protocol` — Zod schemas for the versioned WebSocket protocol.
+- `packages/db` — Drizzle schema, Postgres/PGlite client, Yjs rundown document builder/projector, seed script.
+- `apps/sync` — WebSocket show-state server (authoritative state machine, roles, idempotent commands, presence, heartbeats).
+- `apps/web` — Next.js app (console + companion surfaces; Phase 2 builds the grid editor).
+
+## Quickstart
+
+```bash
+pnpm install
+pnpm test          # timing engine, protocol, doc round-trip, show state machine
+pnpm seed          # seeds a demo rundown (embedded PGlite; set DATABASE_URL for Postgres)
+pnpm dev           # web on :3000, sync on :8787
+```
+
+`docker compose up postgres` starts a real Postgres for development; the full self-host bundle lands in Phase 7.
+
+## Stack
+
+TypeScript monorepo (pnpm + Turborepo) · Next.js + React · Yjs (+ Hocuspocus, Phase 2) for real-time sync · TipTap rich text · PostgreSQL + Drizzle (PGlite for dev) · Docker Compose self-hosting · MIT license.

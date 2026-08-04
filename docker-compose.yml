@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: showcaller
+      POSTGRES_PASSWORD: showcaller
+      POSTGRES_DB: showcaller
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U showcaller"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # web and sync services are added in the packaging phase (Phase 7).
+
+volumes:
+  pgdata:

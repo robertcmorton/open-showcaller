@@ -10,3 +10,6 @@ Images/
 DEMO_NOTES.md
 CLAUDE.local.md
 Research/
+.pglite/
+next-env.d.ts
+*.tsbuildinfo
