@@ -11,12 +11,14 @@ export interface RundownSummary {
   name: string;
   description: string | null;
   showDate: string | null;
+  archivedAt: string | null;
 }
 
 export interface EventSummary {
   id: string;
   name: string;
   location: string | null;
+  archivedAt: string | null;
   startDate: string;
   endDate: string;
   timezone: string;
@@ -80,7 +82,18 @@ export interface JoinCodeSummary {
 }
 
 export const api = {
-  events: () => request<EventSummary[]>("/events"),
+  events: (includeArchived = false) => request<EventSummary[]>(`/events${includeArchived ? "?archived=1" : ""}`),
+  me: () => request<{ role: "admin" | "company" | null; devOpen?: boolean; teamId?: string; teamName?: string }>("/me"),
+  archiveEvent: (id: string, archived: boolean) =>
+    request<{ id: string }>(`/events/${id}/archive`, { method: "POST", body: JSON.stringify({ archived }) }),
+  archiveRundown: (id: string, archived: boolean) =>
+    request<{ id: string }>(`/rundowns/${id}/archive`, { method: "POST", body: JSON.stringify({ archived }) }),
+  companies: () =>
+    request<{ id: string; name: string; companyToken: string | null; eventCount: number }[]>("/companies"),
+  createCompany: (name: string) =>
+    request<{ id: string; companyToken: string }>("/companies", { method: "POST", body: JSON.stringify({ name }) }),
+  rotateCompanyToken: (id: string) =>
+    request<{ id: string; companyToken: string }>(`/companies/${id}/rotate-token`, { method: "POST" }),
   createGuestPass: (body: { rundownId: string; columns?: Record<string, boolean> }) =>
     request<{ token: string }>("/guest-passes", { method: "POST", body: JSON.stringify(body) }),
   joinCodes: (rundownId: string) => request<JoinCodeSummary[]>(`/rundowns/${rundownId}/join-codes`),

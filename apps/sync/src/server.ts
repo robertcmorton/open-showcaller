@@ -66,6 +66,10 @@ async function resolveAuth(
   if (auth.kind === "session") {
     if (auth.token && auth.token === authMod.adminToken()) return { role: "admin", label: "Admin" };
     if (authMod.isOpenAccess()) return { role: "caller", label: "Caller" };
+    // Company (showcaller) tokens call shows within their own company only.
+    const bearer = await authMod.resolveBearer(dbHandle, auth.token);
+    if (bearer?.kind === "company" && (await authMod.teamIdForRundown(dbHandle, rundownId)) === bearer.teamId)
+      return { role: "caller", label: bearer.teamName };
     return null;
   }
   if (auth.kind === "join") {

@@ -200,10 +200,13 @@ export default function AdminPage() {
   const [error, setError] = useState(false);
   const [locked, setLocked] = useState(false);
   const [importFor, setImportFor] = useState<string | null>(null); // eventId
+  const [me, setMe] = useState<{ role: "admin" | "company" | null; teamName?: string } | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [companies, setCompanies] = useState<{ id: string; name: string; companyToken: string | null; eventCount: number }[]>([]);
 
   const reload = useCallback(() => {
     api
-      .events()
+      .events(showArchived)
       .then((data) => {
         setEvents(data);
         setLocked(false);
@@ -213,7 +216,9 @@ export default function AdminPage() {
         else setError(true);
       });
     api.templates().then(setTemplates).catch(() => undefined);
-  }, []);
+    api.me().then(setMe).catch(() => undefined);
+    api.companies().then(setCompanies).catch(() => setCompanies([]));
+  }, [showArchived]);
   useEffect(reload, [reload]);
 
   // Live-now poller: which rundowns have a running/paused session.
@@ -253,12 +258,20 @@ export default function AdminPage() {
         <header style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: "1.5rem" }}>
           <div style={{ flex: 1 }}>
             <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em", margin: 0 }}>
-              OpenCall <span style={{ color: "var(--text-3)", fontWeight: 500 }}>admin</span>
+              OpenCall{" "}
+              <span style={{ color: "var(--text-3)", fontWeight: 500 }}>
+                {me?.role === "company" ? me.teamName : "admin"}
+              </span>
             </h1>
             <p style={{ color: "var(--text-2)", margin: "2px 0 0", fontSize: "var(--fs-sm)" }}>
-              Every event and show in one place. Changes here affect all shows.
+              {me?.role === "company"
+                ? "Your company's events and shows. Only your own data is visible here."
+                : "Every event company, event, and show. Admin sees everything."}
             </p>
           </div>
+          <button className={`btn ${showArchived ? "is-on" : ""}`} onClick={() => setShowArchived((a) => !a)}>
+            {showArchived ? "Hide archived" : "Show archived"}
+          </button>
           {getAdminToken() && (
             <button
               className="btn btn-ghost"
@@ -286,17 +299,85 @@ export default function AdminPage() {
           </div>
         )}
 
+        {me?.role === "admin" && (
+          <section className="card" style={{ marginBottom: 14, padding: "14px 16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <h2 style={{ fontSize: "1.02rem", fontWeight: 650, margin: 0, flex: 1 }}>
+                Event companies{" "}
+                <span style={{ color: "var(--text-3)", fontWeight: 400, fontSize: "var(--fs-sm)" }}>
+                  — each company's showcaller credential manages only its own events
+                </span>
+              </h2>
+              <button
+                className="btn btn-sm"
+                onClick={() => {
+                  const name = window.prompt("Company name");
+                  if (name?.trim())
+                    void api.createCompany(name.trim()).then(({ companyToken }) => {
+                      window.alert(`Company created. Showcaller token (share it securely):\n\n${companyToken}`);
+                      reload();
+                    });
+                }}
+              >
+                {Icon.plus} Company
+              </button>
+            </div>
+            <ul style={{ listStyle: "none", margin: "8px 0 0", padding: 0 }}>
+              {companies.map((c) => (
+                <li key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderTop: "1px solid var(--border-subtle)" }}>
+                  <strong style={{ minWidth: 160 }}>{c.name}</strong>
+                  <span style={{ color: "var(--text-3)", fontSize: "var(--fs-sm)", flex: 1 }}>
+                    {c.eventCount} event{c.eventCount === 1 ? "" : "s"}
+                  </span>
+                  {c.companyToken && (
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => void navigator.clipboard.writeText(c.companyToken!)}
+                      title="Copy the showcaller credential for this company"
+                    >
+                      Copy token
+                    </button>
+                  )}
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    onClick={() =>
+                      void api.rotateCompanyToken(c.id).then(({ companyToken }) => {
+                        window.alert(`New token (the old one stops working):\n\n${companyToken}`);
+                        reload();
+                      })
+                    }
+                  >
+                    Rotate
+                  </button>
+                </li>
+              ))}
+              {companies.length === 0 && (
+                <li style={{ color: "var(--text-3)", fontSize: "var(--fs-sm)", padding: "6px 0" }}>
+                  No companies yet — create one to hand out scoped showcaller credentials.
+                </li>
+              )}
+            </ul>
+          </section>
+        )}
+
         <div style={{ display: "grid", gap: 14 }}>
           {events?.map((event) => (
             <section key={event.id} className="card">
-              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px 4px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px 4px", opacity: event.archivedAt ? 0.55 : 1 }}>
                 <h2 style={{ fontSize: "1.02rem", fontWeight: 650, margin: 0 }}>{event.name}</h2>
+                {event.archivedAt && <span className="chip">archived</span>}
                 <span style={{ color: "var(--text-3)", fontSize: "var(--fs-sm)", flex: 1 }}>
                   {event.location ? `${event.location} · ` : ""}
                   {event.startDate} → {event.endDate}
                 </span>
                 <button className="btn btn-sm btn-ghost" onClick={() => rename("event", event.id, event.name)}>
                   Rename
+                </button>
+                <button
+                  className="btn btn-sm btn-ghost"
+                  onClick={() => void api.archiveEvent(event.id, !event.archivedAt).then(reload)}
+                >
+                  {event.archivedAt ? "Unarchive" : "Archive"}
                 </button>
                 <DangerButton
                   label="Delete"
@@ -315,10 +396,12 @@ export default function AdminPage() {
                       padding: "9px 10px",
                       borderTop: "1px solid var(--border-subtle)",
                       flexWrap: "wrap",
+                      opacity: r.archivedAt ? 0.55 : 1,
                     }}
                   >
                     <span style={{ flex: 1, minWidth: 180 }}>
                       <strong style={{ fontWeight: 600 }}>{r.name}</strong>
+                      {r.archivedAt && <span className="chip" style={{ marginLeft: 8 }}>archived</span>}
                       {live.has(r.id) && (
                         <span className="live-badge" style={{ marginLeft: 10 }}>
                           {live.get(r.id) === "paused" ? "PAUSED" : "LIVE"}
@@ -344,6 +427,12 @@ export default function AdminPage() {
                     ))}
                     <button className="btn btn-sm btn-ghost" onClick={() => rename("rundown", r.id, r.name)}>
                       Rename
+                    </button>
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      onClick={() => void api.archiveRundown(r.id, !r.archivedAt).then(reload)}
+                    >
+                      {r.archivedAt ? "Unarchive" : "Archive"}
                     </button>
                     <button className="btn btn-sm btn-ghost" onClick={() => void api.duplicateRundown(r.id).then(reload)}>
                       Duplicate

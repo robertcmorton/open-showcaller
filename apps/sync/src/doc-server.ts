@@ -2,7 +2,7 @@ import { Server, type Hocuspocus } from "@hocuspocus/server";
 import * as Y from "yjs";
 import { eq } from "drizzle-orm";
 import { schema, type DbHandle } from "@opencall/db";
-import { adminToken, isOpenAccess, resolveJoinCode } from "./auth";
+import { adminToken, isOpenAccess, resolveBearer, resolveJoinCode, teamIdForRundown } from "./auth";
 
 /**
  * Yjs document sync with Postgres/PGlite write-through. Hocuspocus debounces
@@ -22,6 +22,8 @@ export function createDocServer(handle: DbHandle): Hocuspocus {
       if (isOpenAccess()) return; // dev-open deployment
       if (token && token === adminToken()) return;
       if (token) {
+        const bearer = await resolveBearer(handle, token);
+        if (bearer?.kind === "company" && (await teamIdForRundown(handle, documentName)) === bearer.teamId) return;
         const resolved = await resolveJoinCode(handle, token, documentName);
         if (resolved) {
           if (resolved.role === "follower") connection.readOnly = true;

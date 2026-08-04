@@ -36,6 +36,7 @@ export const teams = pgTable("teams", {
   id: id().primaryKey(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
+  companyToken: text("company_token").unique(),
   createdAt: createdAt(),
 });
 

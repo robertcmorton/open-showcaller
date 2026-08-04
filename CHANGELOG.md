@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-05 (access hierarchy: event companies & archive)
+- **Three-tier access**: **Admin** (top level, sees and changes everything) → **Event company** (showcaller credentials: change event details and everything below, strictly scoped to the company's own events) → **Editor** (assigned per rundown via join code: changes rundown content, never events). Admin creates companies from the dashboard and hands out per-company showcaller tokens (rotatable); company tokens also drive the show and document channels as caller-level within their own company only. Verified against a locked server: a company sees only its own events, cannot touch another company's event (401), and cannot list companies (401); admin sees all.
+- **Archive** for events and rundowns (in addition to delete): archive/unarchive from the dashboard, archived items hidden by default with a "Show archived" toggle, shown dimmed with an archived chip.
+- The dashboard header now reflects who you are — "admin" or your company name — and `GET /me` drives visibility.
+
 ### Added — 2026-08-05 (milestone 2 · phase 5: live polish & print)
 - **The active row is unmistakable on every surface while the timer runs**: accent bar + tinted row, an inline **progress bar that drains in real time** under the active title and turns the over-color on overrun, a subtle tint + soft bar on the **next** cue, and a dimmed amber state while **paused**. Auto-scroll keeps the active row centered as the show advances, with a **Follow** toggle so a user reading elsewhere is never yanked — verified live in-browser (bar draining at the correct rate, next-up tint, paused dim).
 - **Formatted print/PDF export straight from the browser** on Showcaller/Edit/View (⋯ → Print): landscape A4 with a title block (name · version label · planned/duration/end · key-times table), column headers repeated on every page, group/milestone banners and row colors preserved, screen chrome stripped, and a generated-stamp footer. The Columns menu acts as the per-user print preset — hidden columns stay hidden in print.
