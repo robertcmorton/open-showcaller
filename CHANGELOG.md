@@ -7,6 +7,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-04 (Phases 3–4: live mode + broadcast)
+- **Live timing math in core** (`computeLiveTiming`): pause-aware elapsed/remaining in the active row, per-row overrun, cumulative show drift (actual vs. planned start plus current overrun), and projected end time — all computed locally from timestamps and the measured clock offset, per the protocol's no-streamed-ticks rule; unit-tested with a pluggable timezone mapping.
+- **Show-channel client** for the web app: session establishment, median-of-five clock-offset sampling, sequence-guarded state updates, jittered reconnect backoff, and idempotent command ids.
+- **Console live mode**: caller transport bar (Start / Pause / Resume / Prev / Next / Stop-with-confirm) with Space and Shift+Space shortcuts suppressed while typing; LIVE/PAUSED badge; active-row highlight; header readouts for item countdown (green, red count-up on overrun), cumulative show drift, and projected end.
+- **Companion follower surface** at `/follow/[id]`: glanceable current cue with giant countdown, script card, next-cue strip, drift/projected-end line, and a screen wake lock — follows the caller's position live.
+- Verified end to end in a real browser: console started the show, a phone-width follower ticked the countdown locally, advancing on the console moved the follower instantly, and stop returned both to idle.
+
+### Fixed — 2026-08-04
+- Render loop in the live-timing hook (effect depended on per-render objects); inputs now flow through refs with a mount-once interval.
+
 ### Added — 2026-08-04 (Phase 2 editor core)
 - **Collaborative rundown editor** ([apps/web](apps/web)): spreadsheet-style grid over the Yjs document — TipTap rich-text cells (mounted per active cell, bound to each cell's shared fragment), inline Start/Duration editing with shorthand parsing, visible anchor flags with one-click reset-to-auto, drag-and-drop row reordering (dnd-kit), group-header rows with toggle, add/delete rows, add columns, row selection, and a live planned start/duration/end header driven by the timing engine. Landing page lists rundowns from the sync server's read API.
 - **Document sync with persistence** ([apps/sync](apps/sync)): Hocuspocus server backed by the database — documents load from the rundown's stored state and debounce-write back on change; minimal HTTP read API for rundown listings. (Doc channel runs on its own port for now; folding onto the single-socket protocol is tracked for Phase 4.)

@@ -82,6 +82,21 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
+.live-badge {
+  background: #7f1d1d;
+  color: #ffb3b3;
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.rundown-grid tr.active-row td:first-child {
+  box-shadow: inset 4px 0 0 #2f81f7;
+}
+.rundown-grid tr.active-row td {
+  background: #10233d;
+}
 input.inline-edit {
   background: #101010;
   color: #eee;

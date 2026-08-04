@@ -16,6 +16,9 @@ import {
 } from "@open-showcaller/core";
 import { projectRundownDoc, type ColumnDef, type ProjectedRow } from "@open-showcaller/db/doc";
 import { CellEditor } from "./CellEditor";
+import { LiveReadouts, TransportBar } from "./TransportBar";
+import { useShowChannel } from "../lib/showChannel";
+import { useLiveTiming } from "../lib/useLiveTiming";
 import "./editor.css";
 
 const DOC_WS_URL = process.env.NEXT_PUBLIC_DOC_WS_URL ?? "ws://localhost:8788";
@@ -51,19 +54,21 @@ function SortableRow({
   index,
   children,
   selected,
+  active,
   onSelect,
 }: {
   row: ProjectedRow;
   index: number;
   children: React.ReactNode;
   selected: boolean;
+  active: boolean;
   onSelect: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id });
   return (
     <tr
       ref={setNodeRef}
-      className={`${row.type === "group" ? "group-row" : ""} ${selected ? "selected" : ""}`}
+      className={`${row.type === "group" ? "group-row" : ""} ${selected ? "selected" : ""} ${active ? "active-row" : ""}`}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
@@ -84,6 +89,9 @@ export function RundownEditor({ rundownId }: { rundownId: string }) {
   // The hook re-renders on every doc update, so projecting during render stays fresh.
   const { meta, columns, rows } = projectRundownDoc(doc);
   const timing = computeTiming(rows, meta.plannedStartSec);
+  const channel = useShowChannel(rundownId, "console");
+  const live = useLiveTiming(channel, timing);
+  const activeRowId = channel.show?.state === "running" || channel.show?.state === "paused" ? channel.show.activeRowId : null;
   const [activeCell, setActiveCell] = useState<ActiveCell>(null);
   const [selectedRow, setSelectedRow] = useState<string | null>(null);
   const [editingTime, setEditingTime] = useState<string | null>(null); // rowId
@@ -210,12 +218,17 @@ export function RundownEditor({ rundownId }: { rundownId: string }) {
             {timing.endSec != null ? formatTimeOfDay(timing.endSec, meta.use24h) : "—"}
           </div>
         </div>
+        <LiveReadouts live={live} use24h={meta.use24h} />
         <div style={{ marginLeft: "auto", color: connected ? "#3fb950" : "#f85149", fontSize: "0.75rem" }}>
-          {connected ? "● live" : "○ connecting…"}
+          {connected ? "● doc" : "○ doc…"}{" "}
+          <span style={{ color: channel.connected ? "#3fb950" : "#f85149" }}>
+            {channel.connected ? "● show" : "○ show…"}
+          </span>
         </div>
       </header>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+        <TransportBar channel={channel} orderedRowIds={rows.map((r) => r.id)} />
         <button className="toolbar-btn" onClick={() => addRow("cue", selectedRow ?? undefined)}>
           + Row
         </button>
@@ -266,6 +279,7 @@ export function RundownEditor({ rundownId }: { rundownId: string }) {
                     row={rowRecord}
                     index={i}
                     selected={selectedRow === rowRecord.id}
+                    active={activeRowId === rowRecord.id}
                     onSelect={() => setSelectedRow(selectedRow === rowRecord.id ? null : rowRecord.id)}
                   >
                     {titleColumn ? renderRichCell(rowRecord, titleColumn) : <td />}
