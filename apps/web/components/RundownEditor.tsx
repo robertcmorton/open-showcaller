@@ -12,7 +12,9 @@ import {
   formatTimeOfDay,
   parseDurationShorthand,
   parseTimeOfDay,
+  serializeCsv,
 } from "@open-showcaller/core";
+import { api } from "../lib/api";
 import { projectRundownDoc, type ColumnDef, type ProjectedRow } from "@open-showcaller/db/doc";
 import { CellEditor } from "./CellEditor";
 import { LiveReadouts, TransportBar } from "./TransportBar";
@@ -134,6 +136,29 @@ export function RundownEditor({ rundownId }: { rundownId: string }) {
     });
   };
 
+  const exportCsv = (): void => {
+    const header = ["Type", "Title", "Start", "Duration", ...richColumns.map((c) => c.title)];
+    const body = rows.map((r, i) => [
+      r.type,
+      r.title,
+      timing.rows[i]!.startSec != null ? formatTimeOfDay(timing.rows[i]!.startSec!, true) : "",
+      r.durationSec != null ? formatDuration(r.durationSec) : "",
+      ...richColumns.map((c) => r.cells[c.key] ?? ""),
+    ]);
+    const blob = new Blob([serializeCsv([header, ...body])], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${meta.name.replace(/[^\w-]+/g, "_")}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const saveAsTemplate = (): void => {
+    const name = window.prompt("Template name", `${meta.name} template`);
+    if (!name) return;
+    void api.saveTemplate({ rundownId, name }).then(() => window.alert(`Saved template "${name}".`));
+  };
+
   const onDragEnd = (event: DragEndEvent): void => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -224,6 +249,12 @@ export function RundownEditor({ rundownId }: { rundownId: string }) {
         </button>
         <button className="toolbar-btn" onClick={addColumn}>
           + Column
+        </button>
+        <button className="toolbar-btn" onClick={exportCsv}>
+          Export CSV
+        </button>
+        <button className="toolbar-btn" onClick={saveAsTemplate}>
+          Save as template
         </button>
         {selectedRow && (
           <>

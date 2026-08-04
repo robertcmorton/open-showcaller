@@ -8,9 +8,10 @@ import {
   type Role,
   type ServerMsg,
 } from "@open-showcaller/protocol";
-import { createDb, schema } from "@open-showcaller/db";
+import { createDb } from "@open-showcaller/db";
 import { ShowStateMachine } from "./show";
 import { createDocServer } from "./doc-server";
+import { createApiHandler } from "./api";
 
 const PORT = Number(process.env.SYNC_PORT ?? 8787);
 const DOC_PORT = Number(process.env.DOC_PORT ?? 8788);
@@ -70,24 +71,14 @@ function resolveRole(auth: { kind: string }): { role: Role; label: string } {
   }
 }
 
-// HTTP: minimal read API for the web app (Phase 4 moves this behind real auth).
+// HTTP: JSON API for the web app (dev-open; real auth in the hardening pass).
+const handleApi = createApiHandler(dbHandle);
 const httpServer = createServer(async (req, res) => {
-  res.setHeader("access-control-allow-origin", "*");
-  if (req.method === "GET" && req.url === "/rundowns") {
-    const rows = await dbHandle.db
-      .select({
-        id: schema.rundowns.id,
-        name: schema.rundowns.name,
-        description: schema.rundowns.description,
-        showDate: schema.rundowns.showDate,
-      })
-      .from(schema.rundowns);
-    res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify(rows));
-    return;
+  const handled = await handleApi(req, res);
+  if (!handled) {
+    res.statusCode = 404;
+    res.end("not found");
   }
-  res.statusCode = 404;
-  res.end("not found");
 });
 
 const wss = new WebSocketServer({ server: httpServer });

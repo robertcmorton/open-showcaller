@@ -7,6 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-04 (Phase 6: events, templates, CSV)
+- **Events dashboard**: the landing page now lists events with their rundowns, creates events (name, location, dates), and creates rundowns per event — blank, from a saved template, or by pasting CSV.
+- **Templates**: save any rundown as a reusable template from the editor; new rundowns created from a template carry its full content.
+- **CSV import/export**: paste-CSV import maps Title/Duration/Start/Type plus department columns by header name (Start values become timing anchors; `Type=group` creates section headers); one-click CSV export from the editor with computed start times. CSV parser/serializer lives in core with unit tests.
+- **JSON management API** on the sync server for events, rundowns, and templates (development-open; authentication arrives with the accounts hardening pass).
+- Verified in-browser end to end: created an event, pasted a four-row CSV that rendered with a 7:00 PM anchor and correct cascade, exported it back to CSV, saved it as a template, and created a second rundown from that template.
+
 ### Added — 2026-08-04 (Phase 5: speaker timer + prompter)
 - **Speaker Timer** at `/timer/[id]`: fullscreen countdown for the active cue — green on time, amber inside the final stretch, red counting up on overrun, greyed while reconnecting; double-click for fullscreen; wake lock. Built for confidence monitors and speakers' phones.
 - **Prompter** at `/prompter/[id]`: script-column view with a fixed read-position caret, follow-the-caller (smooth-jumps to the active cue as the show advances), auto-scroll with adjustable speed (Space to toggle, arrows for speed), font-size controls, mirror mode, and a word-count/read-time bar.
