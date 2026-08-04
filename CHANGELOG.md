@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-05 (my role: personal highlight & next-item bar)
+- **Every user can mark their assigned role** — BGM, Camera 1, PA, a presenter's name, anything the sheet says — regardless of their access level (admin, edit, or view-only). A "My role" picker in the toolbar suggests roles mined from the sheet itself; the choice is remembered per browser.
+- **Your items highlight in teal** across the rundown the moment a role is picked.
+- **A bottom bar appears while the show runs**: it names your next item and counts down to its start (planned time shifted by the live drift, amber inside the final minute). When your item goes live the bar grows into a **full-width ON-AIR banner** — "YOU'RE ON" with the item's remaining time — and when your item finishes it moves on to the next one, ending with "no more items for you" after your last cue.
+
 ### Added — 2026-08-05 (event images, company logos, big live timer)
 - **Images on events**: add one image — or two for sporting fixtures (home and away team) — from the event card's Images menu; they display beside the event name. **Event companies get a logo** shown on their band. Images are picked from disk, downscaled client-side, and stored inline (no external storage needed yet).
 - **A big, unmissable timer sits centre-top of every rundown screen while the show runs**: the active item countdown in large tabular figures — green on time, amber in the final stretch, red counting up on overrun, dimmed amber while paused — with the active item's name above it.

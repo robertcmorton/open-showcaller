@@ -23,6 +23,7 @@ import { GuestPassPanel, HistoryPanel, JoinCodesPanel } from "./SharePanels";
 import { LiveReadouts, TransportBar } from "./TransportBar";
 import { Dropdown, HeaderClock, Icon } from "./ui";
 import { SideNavSection, WithSideNav } from "./SideNav";
+import { RoleBar, RolePicker, rowMatchesRole } from "./RoleBar";
 import { useShowChannel } from "../lib/showChannel";
 import { useLiveTiming } from "../lib/useLiveTiming";
 import { useRundownDoc } from "../lib/useRundownDoc";
@@ -40,6 +41,7 @@ function SortableRow({
   active,
   next,
   paused,
+  mine,
   disabled,
   onSelect,
 }: {
@@ -50,6 +52,7 @@ function SortableRow({
   active: boolean;
   next: boolean;
   paused: boolean;
+  mine: boolean;
   disabled: boolean;
   onSelect: (e: React.MouseEvent) => void;
 }) {
@@ -57,7 +60,7 @@ function SortableRow({
   return (
     <tr
       ref={setNodeRef}
-      className={`${row.type === "group" ? "group-row" : ""} ${row.type === "milestone" ? "milestone-row" : ""} ${selected ? "selected" : ""} ${active ? "active-row" : ""} ${next ? "next-row" : ""} ${active && paused ? "paused" : ""}`}
+      className={`${row.type === "group" ? "group-row" : ""} ${row.type === "milestone" ? "milestone-row" : ""} ${selected ? "selected" : ""} ${active ? "active-row" : ""} ${next ? "next-row" : ""} ${active && paused ? "paused" : ""} ${mine ? "my-role-row" : ""}`}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
@@ -170,6 +173,7 @@ export function RundownEditor({
   const [hiddenCols, setHiddenCols] = useState<ReadonlySet<string>>(new Set());
   const [showZero, setShowZero] = useState(false);
   const [followScroll, setFollowScroll] = useState(true);
+  const [myRole, setMyRole] = useState<string | null>(null);
   // Set after mount: locale-formatted dates differ between server and client,
   // and rendering one during SSR causes a hydration mismatch.
   const [printedAt, setPrintedAt] = useState("");
@@ -184,6 +188,7 @@ export function RundownEditor({
       const raw = localStorage.getItem(HIDDEN_COLS_KEY(rundownId));
       if (raw) setHiddenCols(new Set(JSON.parse(raw) as string[]));
       setShowZero(localStorage.getItem(`oc:zerocol:${rundownId}`) === "1");
+      setMyRole(localStorage.getItem(`oc:myrole:${rundownId}`));
     } catch {
       /* ignore */
     }
@@ -214,6 +219,7 @@ export function RundownEditor({
     return rows.slice(at + 1).find((r) => r.type === "cue")?.id ?? null;
   })();
   const isPaused = channel.show?.state === "paused";
+  const myRoleRows = myRole ? new Set(rows.filter((r) => rowMatchesRole(r, myRole)).map((r) => r.id)) : null;
 
   const yRows = doc.getMap<Y.Map<unknown>>("rows");
   const yOrder = doc.getArray<string>("rowOrder");
@@ -636,6 +642,15 @@ export function RundownEditor({
           )}
         </Dropdown>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+          <RolePicker
+            rows={rows}
+            myRole={myRole}
+            onChange={(role) => {
+              setMyRole(role);
+              if (role) localStorage.setItem(`oc:myrole:${rundownId}`, role);
+              else localStorage.removeItem(`oc:myrole:${rundownId}`);
+            }}
+          />
           {activeRowId && (
             <button
               className={`btn btn-sm ${followScroll ? "is-on" : ""}`}
@@ -767,6 +782,7 @@ export function RundownEditor({
                     active={activeRowId === rowRecord.id}
                     next={nextRowId === rowRecord.id}
                     paused={isPaused ?? false}
+                    mine={myRoleRows?.has(rowRecord.id) ?? false}
                     disabled={!canEditContent}
                     onSelect={(e) => canEditContent && selectRow(rowRecord.id, e)}
                   >
@@ -850,6 +866,17 @@ export function RundownEditor({
       </DndContext>
 
       <CuePool doc={doc} mode={mode} channel={channel} />
+      {myRole && activeRowId && <div style={{ height: 72 }} />}
+      {myRole && (
+        <RoleBar
+          myRole={myRole}
+          rows={rows}
+          timing={timing}
+          live={live}
+          channel={channel}
+          activeRowId={activeRowId}
+        />
+      )}
 
       {rows.length === 0 && (
         <div className="empty">
