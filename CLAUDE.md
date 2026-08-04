@@ -19,6 +19,10 @@ Before every commit and push, verify nothing staged references the vendor (`git 
 - **[BUILD_PROMPT.md](BUILD_PROMPT.md)** — the product spec and kickoff prompt. Update it when the product direction changes.
 - **`DEMO_NOTES.md`** (local-only) — ongoing feature research and UX details for the product we're building toward. Add to it whenever new product behavior is learned; it is the design reference during implementation.
 
+## Development log — keep it current
+
+**`DEVLOG.md`** (local-only, gitignored) is the running development journal. Append an entry for every unit of work **as you go** — what was built, decisions made, gotchas hit, verification results, and current dev workflow. Future sessions rely on it for context the public repo can't carry. Candid notes and vendor names are fine there; never commit it.
+
 ## Changelog discipline
 
 **[CHANGELOG.md](CHANGELOG.md)** must be updated in the same commit as any meaningful change (spec updates, new features, structural changes, tooling). Keep a Changelog format, newest first, under an `[Unreleased]` heading until versions exist. Entries are written generically — no vendor references.

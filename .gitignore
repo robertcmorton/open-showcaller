@@ -13,3 +13,4 @@ Research/
 .pglite/
 next-env.d.ts
 *.tsbuildinfo
+DEVLOG.md
