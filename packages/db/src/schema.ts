@@ -37,6 +37,7 @@ export const teams = pgTable("teams", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   companyToken: text("company_token").unique(),
+  logo: text("logo"),
   createdAt: createdAt(),
 });
 
@@ -63,6 +64,8 @@ export const events = pgTable("events", {
   endDate: text("end_date").notNull(),
   timezone: text("timezone").notNull(),
   use24h: boolean("use_24h").notNull().default(false),
+  image1: text("image1"),
+  image2: text("image2"),
   labels: jsonb("labels").$type<{ text: string; color: string }[]>().notNull().default([]),
   brandingImageKey: text("branding_image_key"),
   ownerUserId: text("owner_user_id").references(() => users.id),

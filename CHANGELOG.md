@@ -7,6 +7,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-05 (event images, company logos, big live timer)
+- **Images on events**: add one image — or two for sporting fixtures (home and away team) — from the event card's Images menu; they display beside the event name. **Event companies get a logo** shown on their band. Images are picked from disk, downscaled client-side, and stored inline (no external storage needed yet).
+- **A big, unmissable timer sits centre-top of every rundown screen while the show runs**: the active item countdown in large tabular figures — green on time, amber in the final stretch, red counting up on overrun, dimmed amber while paused — with the active item's name above it.
+
+### Fixed — 2026-08-05 (import header detection & centered-header titles)
+- **Header-row detection scans much deeper** (30 rows) — sheets with multi-line title blocks above the real header no longer import with the page title as column names — and the preview gains a **Header row** override so any sheet can be rescued manually.
+- **Centered headers no longer orphan the title column**: when a PDF's header text sits in a different layout band than the left-aligned data below it, the data-rich neighbouring band is mapped into Title as well — a real 6-page sheet went from 37 to 411 titled rows.
+- Fixed an SSR crash on the dashboard under Node's experimental localStorage, and a hydration warning from locale date formatting in the print footer. The create-rundown template picker now reads "Start blank" and hides entirely until templates exist.
+
 ### Changed — 2026-08-05 (import: full column fidelity; company rename)
 - **Imported rundowns now mirror the source sheet's columns exactly**: identical names (verbatim header text, original casing), no duplicates (repeated headers get a numbered suffix), the same left-to-right order, and **proportional column widths** taken from the spreadsheet's column sizes or the PDF's layout. Built-in department columns are no longer added on import — **a column with no data simply doesn't exist** in the imported rundown.
 - **Event companies can be renamed** from their band header on the dashboard.

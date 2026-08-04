@@ -98,6 +98,44 @@ function cloneRow(source: Y.Map<unknown>, newId: string): Y.Map<unknown> {
 
 const HIDDEN_COLS_KEY = (rundownId: string) => `oc:hiddencols:${rundownId}`;
 
+/**
+ * The unmissable clock: fixed centre-top while the show runs. Counts down the
+ * active item (green → amber in the final stretch → red counting up on
+ * overrun), dims amber while paused.
+ */
+function BigTimer({
+  live,
+  paused,
+  title,
+  plannedSec,
+}: {
+  live: import("@opencall/core").LiveShowTiming;
+  paused: boolean;
+  title: string;
+  plannedSec: number | null;
+}) {
+  const remaining = live.remainingInRowSec;
+  const over = remaining != null && remaining < 0;
+  const amber =
+    !over && remaining != null && plannedSec != null && plannedSec > 0 && remaining <= Math.min(60, plannedSec * 0.2);
+  const display =
+    remaining == null
+      ? formatDuration(Math.round(live.elapsedInRowSec))
+      : over
+        ? `+${formatDuration(live.rowOverSec)}`
+        : formatDuration(remaining);
+  const stateClass = paused ? "paused-state" : over ? "over" : amber ? "amber" : "under";
+  return (
+    <div className={`big-timer no-print ${stateClass}`}>
+      <div className="bt-label">
+        {paused ? "PAUSED · " : ""}
+        {title || "—"}
+      </div>
+      <div className="bt-time">{display}</div>
+    </div>
+  );
+}
+
 export type EditorMode = "show" | "edit" | "view";
 
 export function RundownEditor({
@@ -132,6 +170,12 @@ export function RundownEditor({
   const [hiddenCols, setHiddenCols] = useState<ReadonlySet<string>>(new Set());
   const [showZero, setShowZero] = useState(false);
   const [followScroll, setFollowScroll] = useState(true);
+  // Set after mount: locale-formatted dates differ between server and client,
+  // and rendering one during SSR causes a hydration mismatch.
+  const [printedAt, setPrintedAt] = useState("");
+  useEffect(() => {
+    setPrintedAt(new Date().toLocaleString());
+  }, []);
   const timeInputRef = useRef<HTMLInputElement>(null);
 
   // Per-user column visibility, loaded after mount to avoid hydration mismatch.
@@ -500,9 +544,19 @@ export function RundownEditor({
     </>
   );
 
+  const activeRow = activeRowId ? rows.find((r) => r.id === activeRowId) : null;
+
   return (
     <WithSideNav title={meta.name} settings={settings}>
     <div style={{ padding: "1.25rem 1.5rem" }}>
+      {live && activeRow && (
+        <BigTimer
+          live={live}
+          paused={isPaused ?? false}
+          title={activeRow.title}
+          plannedSec={activeRow.durationSec}
+        />
+      )}
       <header className="no-print" style={{ display: "flex", alignItems: "center", gap: "1.75rem", marginBottom: "1rem", flexWrap: "wrap" }}>
         <h1 style={{ fontSize: "1.15rem", fontWeight: 650, margin: 0, letterSpacing: "-0.01em" }}>{meta.name}</h1>
         {mode !== "show" && <span className="chip">{mode === "edit" ? "EDIT — no transport" : "VIEW ONLY"}</span>}
@@ -809,7 +863,7 @@ export function RundownEditor({
           {meta.name}
           {meta.versionLabel ? ` · ${meta.versionLabel}` : ""}
         </span>
-        <span>Generated {new Date().toLocaleString()} · OpenCall</span>
+        <span>Generated {printedAt} · OpenCall</span>
       </div>
 
       <p className="no-print" style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", marginTop: "1rem" }}>

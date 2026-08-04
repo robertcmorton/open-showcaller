@@ -11,9 +11,10 @@ import {
   type EventSummary,
   type TemplateSummary,
 } from "../../lib/api";
-import { Icon } from "../../components/ui";
+import { Dropdown, Icon } from "../../components/ui";
 import { ImportPanel } from "../../components/ImportPanel";
 import { SideNavSection, WithSideNav } from "../../components/SideNav";
+import { pickImage } from "../../lib/pickImage";
 
 function CreateEventForm({ onCreated, teamId }: { onCreated: () => void; teamId?: string }) {
   const [open, setOpen] = useState(false);
@@ -127,14 +128,21 @@ function CreateRundownForm({
       }}
     >
       <input className="input" placeholder="New rundown name" value={name} onChange={(e) => setName(e.target.value)} />
-      <select className="input" value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
-        <option value="">Blank</option>
-        {templates.map((t) => (
-          <option key={t.id} value={t.id}>
-            From template: {t.name}
-          </option>
-        ))}
-      </select>
+      {templates.length > 0 && (
+        <select
+          className="input"
+          title="Start the new rundown empty, or copy a saved template"
+          value={templateId}
+          onChange={(e) => setTemplateId(e.target.value)}
+        >
+          <option value="">Start blank</option>
+          {templates.map((t) => (
+            <option key={t.id} value={t.id}>
+              From template: {t.name}
+            </option>
+          ))}
+        </select>
+      )}
       <button className={`btn ${showCsv ? "is-on" : ""}`} type="button" onClick={() => setShowCsv((s) => !s)}>
         Paste CSV
       </button>
@@ -287,7 +295,7 @@ export default function AdminPage() {
   const [importFor, setImportFor] = useState<string | null>(null); // eventId
   const [me, setMe] = useState<{ role: "admin" | "company" | null; teamName?: string } | null>(null);
   const [showArchived, setShowArchived] = useState(false);
-  const [companies, setCompanies] = useState<{ id: string; name: string; companyToken: string | null; eventCount: number }[]>([]);
+  const [companies, setCompanies] = useState<{ id: string; name: string; companyToken: string | null; logo: string | null; eventCount: number }[]>([]);
 
   const reload = useCallback(() => {
     api
@@ -344,10 +352,11 @@ export default function AdminPage() {
           id: c.id,
           name: c.name,
           companyToken: c.companyToken,
+          logo: c.logo,
           real: true,
           events: eventsByTeam.get(c.id) ?? [],
         }))
-      : [{ id: "own", name: me?.teamName ?? "Events", companyToken: null, real: false, events: events ?? [] }];
+      : [{ id: "own", name: me?.teamName ?? "Events", companyToken: null, logo: null, real: false, events: events ?? [] }];
 
   if (locked)
     return (
@@ -438,6 +447,13 @@ export default function AdminPage() {
           {groups.map((group) => (
             <section key={group.id}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "2px 2px 8px" }}>
+                {"logo" in group && (group as { logo?: string | null }).logo && (
+                  <img
+                    src={(group as { logo?: string | null }).logo!}
+                    alt=""
+                    style={{ height: 30, width: 30, objectFit: "contain", borderRadius: 6 }}
+                  />
+                )}
                 <h2 style={{ fontSize: "1.1rem", fontWeight: 700, margin: 0, letterSpacing: "-0.01em" }}>{group.name}</h2>
                 <span className="chip">{group.events.length} event{group.events.length === 1 ? "" : "s"}</span>
                 <span style={{ flex: 1 }} />
@@ -452,6 +468,17 @@ export default function AdminPage() {
                       }}
                     >
                       Rename
+                    </button>
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      title="Company logo — shown beside the company and on its events"
+                      onClick={() =>
+                        void pickImage().then((logo) => {
+                          if (logo) void api.patchCompany(group.id, { logo }).then(reload);
+                        })
+                      }
+                    >
+                      Logo
                     </button>
                     {group.companyToken && (
                       <button
@@ -485,6 +512,12 @@ export default function AdminPage() {
                 {group.events.map((event) => (
             <section key={event.id} className="card">
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px 4px", opacity: event.archivedAt ? 0.55 : 1 }}>
+                {event.image1 && (
+                  <img src={event.image1} alt="" style={{ height: 36, width: 36, objectFit: "contain" }} />
+                )}
+                {event.image2 && (
+                  <img src={event.image2} alt="" style={{ height: 36, width: 36, objectFit: "contain" }} />
+                )}
                 <h2 style={{ fontSize: "1.02rem", fontWeight: 650, margin: 0 }}>{event.name}</h2>
                 {event.archivedAt && <span className="chip">archived</span>}
                 <span style={{ color: "var(--text-3)", fontSize: "var(--fs-sm)", flex: 1 }}>
@@ -495,6 +528,45 @@ export default function AdminPage() {
                   Rename
                 </button>
                 <DatesEditor key={`${event.startDate}${event.endDate}`} event={event} onSaved={reload} />
+                <Dropdown label="Images" className="btn btn-sm btn-ghost">
+                  <button
+                    type="button"
+                    className="menu-item"
+                    onClick={() =>
+                      void pickImage().then((img) => {
+                        if (img) void api.patchEvent(event.id, { image1: img }).then(reload);
+                      })
+                    }
+                  >
+                    <span className="check" />
+                    {event.image1 ? "Replace image / home team" : "Add image (or home team)"}
+                  </button>
+                  <button
+                    type="button"
+                    className="menu-item"
+                    onClick={() =>
+                      void pickImage().then((img) => {
+                        if (img) void api.patchEvent(event.id, { image2: img }).then(reload);
+                      })
+                    }
+                  >
+                    <span className="check" />
+                    {event.image2 ? "Replace away team image" : "Add away team image (sport)"}
+                  </button>
+                  {(event.image1 || event.image2) && (
+                    <>
+                      <div className="menu-sep" />
+                      <button
+                        type="button"
+                        className="menu-item"
+                        onClick={() => void api.patchEvent(event.id, { image1: null, image2: null }).then(reload)}
+                      >
+                        <span className="check" />
+                        Remove images
+                      </button>
+                    </>
+                  )}
+                </Dropdown>
                 <button
                   className="btn btn-sm btn-ghost"
                   title="The event's location decides its timezone — the primary time only changes when the location does"

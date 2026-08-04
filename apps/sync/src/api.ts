@@ -90,6 +90,13 @@ export function createApiHandler(handle: DbHandle) {
       return false;
     };
 
+    /** Small inline image (data URL) or null to clear; anything else is rejected. */
+    const imageValue = (v: unknown): string | null | undefined => {
+      if (v === null) return null;
+      if (typeof v === "string" && v.startsWith("data:image/") && v.length < 900_000) return v;
+      return undefined;
+    };
+
     /** Deletes a rundown and every row that references it. */
     const deleteRundown = async (rundownId: string): Promise<void> => {
       const sessions = await db.query.showSessions.findMany({
@@ -190,6 +197,7 @@ export function createApiHandler(handle: DbHandle) {
             id: t.id,
             name: t.name,
             companyToken: t.companyToken,
+            logo: t.logo ?? null,
             eventCount: events.filter((e) => e.teamId === t.id).length,
           })),
         );
@@ -253,8 +261,11 @@ export function createApiHandler(handle: DbHandle) {
         if (!(await requireAdmin())) return true;
         const id = pathname.split("/")[2]!;
         const body = await readJson(req);
-        if (typeof body.name === "string" && body.name.trim())
-          await db.update(schema.teams).set({ name: body.name.trim() }).where(eq(schema.teams.id, id));
+        const patch: Record<string, unknown> = {};
+        if (typeof body.name === "string" && body.name.trim()) patch.name = body.name.trim();
+        const logo = imageValue(body.logo);
+        if (logo !== undefined) patch.logo = logo;
+        if (Object.keys(patch).length > 0) await db.update(schema.teams).set(patch).where(eq(schema.teams.id, id));
         json(res, 200, { id });
         return true;
       }
@@ -271,6 +282,10 @@ export function createApiHandler(handle: DbHandle) {
         const patch: Record<string, unknown> = {};
         if (typeof body.name === "string" && body.name.trim()) patch.name = body.name.trim();
         if (typeof body.location === "string") patch.location = body.location.trim() || null;
+        const image1 = imageValue(body.image1);
+        if (image1 !== undefined) patch.image1 = image1;
+        const image2 = imageValue(body.image2);
+        if (image2 !== undefined) patch.image2 = image2;
         const dateOk = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
         if (dateOk(body.startDate)) patch.startDate = body.startDate;
         if (dateOk(body.endDate)) patch.endDate = body.endDate;

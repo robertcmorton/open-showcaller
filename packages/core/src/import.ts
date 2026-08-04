@@ -134,11 +134,15 @@ function headerScore(row: string[]): number {
   return score;
 }
 
-/** Finds the most header-like row near the top of the grid (first 8 rows). */
+/**
+ * Finds the most header-like row near the top of the grid. Real sheets bury
+ * the header under multi-line title blocks, so the scan window is generous
+ * (30 rows); the preview also lets the user override the pick.
+ */
 export function detectHeaderRow(grid: string[][]): number {
   let best = 0;
   let bestScore = -1;
-  for (let i = 0; i < Math.min(grid.length, 8); i++) {
+  for (let i = 0; i < Math.min(grid.length, 30); i++) {
     const score = headerScore(grid[i]!);
     if (score > bestScore) {
       bestScore = score;
@@ -258,7 +262,7 @@ export function classifyRows(grid: string[][], headerIndex: number, mapping: Col
     mapping.forEach((target, col) => {
       const value = (row[col] ?? "").trim();
       if (!value) return;
-      if (target.kind === "title") title = value;
+      if (target.kind === "title") title = title ? `${title} ${value}` : value;
       else if (target.kind === "start") startRaw = value;
       else if (target.kind === "duration") durationRaw = value;
       else if (target.kind === "department") {
@@ -303,7 +307,32 @@ export function planImport(grid: string[][]): {
 } {
   const headerIndex = detectHeaderRow(grid);
   const headers = grid[headerIndex] ?? [];
+  const dataRows = grid.slice(headerIndex + 1);
   // A data sample lets untitled columns be identified by their contents.
-  const mapping = mapColumns(headers, grid.slice(headerIndex + 1, headerIndex + 60));
+  const mapping = mapColumns(headers, dataRows.slice(0, 60));
+
+  // Centered headers (common in PDFs) put the header text in a different
+  // x-band than the left-aligned data below it, leaving the title column
+  // nearly empty. When that happens and a nearby untitled column is rich in
+  // text, treat that column as title too — titles accumulate across both.
+  const titleAt = mapping.findIndex((t) => t.kind === "title");
+  if (titleAt >= 0 && dataRows.length > 0) {
+    const coverage = (col: number): number => dataRows.filter((r) => (r[col] ?? "").trim()).length;
+    const titleCoverage = coverage(titleAt);
+    if (titleCoverage / dataRows.length < 0.3) {
+      let bestCol = -1;
+      let bestCoverage = 0;
+      mapping.forEach((t, i) => {
+        if (t.kind !== "department" || !t.key.startsWith("column-")) return;
+        if (Math.abs(i - titleAt) > 2) return;
+        const c = coverage(i);
+        if (c > bestCoverage) {
+          bestCoverage = c;
+          bestCol = i;
+        }
+      });
+      if (bestCol >= 0 && bestCoverage > titleCoverage * 2) mapping[bestCol] = { kind: "title" };
+    }
+  }
   return { headerIndex, headers, mapping, rows: classifyRows(grid, headerIndex, mapping) };
 }

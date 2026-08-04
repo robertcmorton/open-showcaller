@@ -5,6 +5,7 @@ import {
   classifyRows,
   formatDuration,
   formatTimeOfDay,
+  mapColumns,
   planImport,
   type ClassifiedRow,
   type ColumnTarget,
@@ -201,6 +202,26 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
             <div>
               <label className="field-label">Rundown name</label>
               <input className="input" value={name} onChange={(e) => setName(e.target.value)} style={{ minWidth: 240 }} />
+            </div>
+            <div>
+              <label className="field-label" title="Which source row holds the column headers — adjust if detection picked the wrong one">
+                Header row
+              </label>
+              <input
+                className="input mono"
+                type="number"
+                min={1}
+                max={grid.length}
+                value={headerIndex + 1}
+                style={{ width: 74 }}
+                onChange={(e) => {
+                  const idx = Math.min(grid.length - 1, Math.max(0, Number(e.target.value) - 1));
+                  setHeaderIndex(idx);
+                  const hdrs = grid[idx] ?? [];
+                  setHeaders(hdrs);
+                  setMapping(mapColumns(hdrs, grid.slice(idx + 1, idx + 60)));
+                }}
+              />
             </div>
             <span style={{ color: "var(--text-2)", fontSize: "var(--fs-sm)", paddingBottom: 7 }}>
               {importable.length} rows ({importable.filter((r) => r.kind === "milestone").length} milestones,{" "}

@@ -19,6 +19,8 @@ export interface EventSummary {
   teamId: string;
   name: string;
   location: string | null;
+  image1: string | null;
+  image2: string | null;
   archivedAt: string | null;
   startDate: string;
   endDate: string;
@@ -40,8 +42,10 @@ export interface TemplateSummary {
 const ADMIN_TOKEN_KEY = "oc:admintoken";
 let activeJoinCode: string | null = null;
 
+// window-guarded: Node's experimental localStorage global exists during SSR
+// but is not usable, so feature-detecting localStorage alone is not enough.
 export const getAdminToken = (): string | null =>
-  typeof localStorage === "undefined" ? null : localStorage.getItem(ADMIN_TOKEN_KEY);
+  typeof window === "undefined" ? null : window.localStorage.getItem(ADMIN_TOKEN_KEY);
 export const setAdminToken = (token: string | null): void => {
   if (token) localStorage.setItem(ADMIN_TOKEN_KEY, token);
   else localStorage.removeItem(ADMIN_TOKEN_KEY);
@@ -90,13 +94,15 @@ export const api = {
   archiveRundown: (id: string, archived: boolean) =>
     request<{ id: string }>(`/rundowns/${id}/archive`, { method: "POST", body: JSON.stringify({ archived }) }),
   companies: () =>
-    request<{ id: string; name: string; companyToken: string | null; eventCount: number }[]>("/companies"),
+    request<{ id: string; name: string; companyToken: string | null; logo: string | null; eventCount: number }[]>(
+      "/companies",
+    ),
   createCompany: (name: string) =>
     request<{ id: string; companyToken: string }>("/companies", { method: "POST", body: JSON.stringify({ name }) }),
   rotateCompanyToken: (id: string) =>
     request<{ id: string; companyToken: string }>(`/companies/${id}/rotate-token`, { method: "POST" }),
   deleteCompany: (id: string) => request<{ id: string }>(`/companies/${id}`, { method: "DELETE" }),
-  patchCompany: (id: string, body: { name?: string }) =>
+  patchCompany: (id: string, body: { name?: string; logo?: string | null }) =>
     request<{ id: string }>(`/companies/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   createGuestPass: (body: { rundownId: string; columns?: Record<string, boolean> }) =>
     request<{ token: string }>("/guest-passes", { method: "POST", body: JSON.stringify(body) }),
@@ -130,7 +136,7 @@ export const api = {
   resolveCode: (code: string) =>
     request<{ role: "caller" | "editor" | "follower"; rundownId: string }>(`/codes/${encodeURIComponent(code)}`),
   live: () => request<{ rundownId: string; state: string; startedAt: string }[]>("/live"),
-  patchEvent: (id: string, body: { name?: string; location?: string; timezone?: string; startDate?: string; endDate?: string }) =>
+  patchEvent: (id: string, body: { name?: string; location?: string; timezone?: string; startDate?: string; endDate?: string; image1?: string | null; image2?: string | null }) =>
     request<{ id: string }>(`/events/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteEvent: (id: string) => request<{ id: string }>(`/events/${id}`, { method: "DELETE" }),
   patchRundown: (id: string, body: { name?: string }) =>
