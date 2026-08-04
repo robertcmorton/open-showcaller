@@ -9,11 +9,11 @@ import {
   type ServerMsg,
 } from "@open-showcaller/protocol";
 import { createDb, schema } from "@open-showcaller/db";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { ulid } from "ulid";
-import { ShowStateMachine } from "./show";
 import { createDocServer } from "./doc-server";
 import { createApiHandler } from "./api";
+import { PersistentShowStore } from "./sessions";
 
 const PORT = Number(process.env.SYNC_PORT ?? 8787);
 const DOC_PORT = Number(process.env.DOC_PORT ?? 8788);
@@ -29,18 +29,9 @@ interface ClientCtx {
   device: "console" | "companion";
 }
 
-const shows = new Map<string, ShowStateMachine>();
+const showStore = new PersistentShowStore(dbHandle);
 const clients = new Map<WebSocket, ClientCtx>();
 const seenCmdIds = new Map<string, string[]>(); // rundownId → last 100 command ids
-
-const showFor = (rundownId: string): ShowStateMachine => {
-  let machine = shows.get(rundownId);
-  if (!machine) {
-    machine = new ShowStateMachine();
-    shows.set(rundownId, machine);
-  }
-  return machine;
-};
 
 const send = (ws: WebSocket, msg: ServerMsg): void => {
   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
@@ -58,19 +49,37 @@ const broadcastPresence = (rundownId: string): void => {
 };
 
 /**
- * Phase-1 auth stub: session tokens → caller, join codes → follower, guest
- * tokens → guest. Phase 4 replaces this with real token/share-code lookup
- * against Postgres and per-rundown routing.
+ * Auth: join codes and guest tokens validate against share_tokens. Session
+ * tokens remain a dev stub (→ caller) until Auth.js accounts land. The
+ * literal join code DEV123 stays as a local-dev fallback unless disabled
+ * via ALLOW_DEV_JOIN=0.
  */
-function resolveRole(auth: { kind: string }): { role: Role; label: string } {
-  switch (auth.kind) {
-    case "session":
-      return { role: "caller", label: "Caller" };
-    case "join":
-      return { role: "follower", label: "Crew" };
-    default:
-      return { role: "guest", label: "Guest" };
+async function resolveAuth(
+  auth: { kind: "session"; token: string } | { kind: "join"; code: string } | { kind: "guest"; token: string },
+  rundownId: string,
+): Promise<{ role: Role; label: string } | null> {
+  if (auth.kind === "session") return { role: "caller", label: "Caller" };
+  if (auth.kind === "join") {
+    const row = await dbHandle.db.query.shareTokens.findFirst({
+      where: and(
+        eq(schema.shareTokens.joinCode, auth.code.toUpperCase()),
+        eq(schema.shareTokens.rundownId, rundownId),
+        eq(schema.shareTokens.kind, "join"),
+        isNull(schema.shareTokens.revokedAt),
+      ),
+    });
+    if (row) return { role: row.role as Role, label: row.role === "caller" ? "Caller" : "Crew" };
+    if (auth.code === "DEV123" && process.env.ALLOW_DEV_JOIN !== "0") return { role: "follower", label: "Crew (dev)" };
+    return null;
   }
+  const row = await dbHandle.db.query.shareTokens.findFirst({
+    where: and(
+      eq(schema.shareTokens.token, auth.token),
+      eq(schema.shareTokens.kind, "guest"),
+      isNull(schema.shareTokens.revokedAt),
+    ),
+  });
+  return row && row.rundownId === rundownId ? { role: "guest", label: "Guest" } : null;
 }
 
 // HTTP: JSON API for the web app (dev-open; real auth in the hardening pass).
@@ -91,7 +100,7 @@ wss.on("connection", (ws, req) => {
 
   const helloTimer = setTimeout(() => ws.close(CloseCodes.AUTH_FAILED, "hello timeout"), HELLO_TIMEOUT_MS);
 
-  ws.on("message", (raw) => {
+  ws.on("message", async (raw) => {
     const msg = parseClientMsg(String(raw));
     if (!msg) return; // unknown/invalid frames are ignored (forward compatibility)
 
@@ -104,16 +113,20 @@ wss.on("connection", (ws, req) => {
         ws.close(CloseCodes.UNKNOWN_RUNDOWN, "missing rundown");
         return;
       }
-      const { role, label } = resolveRole(msg.auth);
-      clients.set(ws, { role, rundownId, device: msg.device });
+      const resolved = await resolveAuth(msg.auth, rundownId);
+      if (!resolved) {
+        ws.close(CloseCodes.AUTH_FAILED, "invalid credentials");
+        return;
+      }
+      clients.set(ws, { role: resolved.role, rundownId, device: msg.device });
       send(ws, {
         v: PROTOCOL_VERSION,
         t: "welcome",
-        role,
-        userLabel: label,
+        role: resolved.role,
+        userLabel: resolved.label,
         serverTimeMs: Date.now(),
-        show: showFor(rundownId).current,
-        doc: { mode: role === "guest" ? "projection" : "sync" },
+        show: (await showStore.get(rundownId)).current,
+        doc: { mode: resolved.role === "guest" ? "projection" : "sync" },
       });
       broadcastPresence(rundownId);
       return;
@@ -137,13 +150,14 @@ wss.on("connection", (ws, req) => {
       if (seen.length > 100) seen.shift();
       seenCmdIds.set(ctx.rundownId, seen);
 
-      const result = showFor(ctx.rundownId).apply(msg.action, msg.rowId);
+      const result = (await showStore.get(ctx.rundownId)).apply(msg.action, msg.rowId);
       if (typeof result === "string") {
         send(ws, { v: PROTOCOL_VERSION, t: "cmd_error", id: msg.id, code: 400, msg: result });
         return;
       }
       // No fast path for the caller: everyone (including the sender) gets the broadcast.
       broadcast(ctx.rundownId, { v: PROTOCOL_VERSION, t: "show_state", ...result });
+      showStore.persist(ctx.rundownId, result, msg.action, msg.rowId);
 
       // Automatic safety snapshot the moment a show goes live.
       if (msg.action === "start") {

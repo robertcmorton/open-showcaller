@@ -45,10 +45,22 @@ export interface SnapshotSummary {
   createdAt: string;
 }
 
+export interface JoinCodeSummary {
+  id: string;
+  joinCode: string | null;
+  role: string;
+}
+
 export const api = {
   events: () => request<EventSummary[]>("/events"),
   createGuestPass: (body: { rundownId: string; columns?: Record<string, boolean> }) =>
     request<{ token: string }>("/guest-passes", { method: "POST", body: JSON.stringify(body) }),
+  joinCodes: (rundownId: string) => request<JoinCodeSummary[]>(`/rundowns/${rundownId}/join-codes`),
+  createJoinCode: (rundownId: string, role: "caller" | "editor" | "follower") =>
+    request<{ code: string; role: string }>(`/rundowns/${rundownId}/join-codes`, {
+      method: "POST",
+      body: JSON.stringify({ role }),
+    }),
   snapshots: (rundownId: string) => request<SnapshotSummary[]>(`/rundowns/${rundownId}/snapshots`),
   createSnapshot: (rundownId: string, label?: string) =>
     request<{ id: string }>(`/rundowns/${rundownId}/snapshots`, { method: "POST", body: JSON.stringify({ label }) }),

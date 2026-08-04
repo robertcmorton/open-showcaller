@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { ulid } from "ulid";
+import { serializeCsv } from "@open-showcaller/core";
 import {
   buildRundownDoc,
   decodeDoc,
@@ -139,6 +140,73 @@ export function createApiHandler(handle: DbHandle) {
           docUpdatedAt: new Date(),
         });
         json(res, 201, { id });
+        return true;
+      }
+
+      if (req.method === "GET" && /^\/rundowns\/[^/]+\/join-codes$/.test(pathname)) {
+        const rundownId = pathname.split("/")[2]!;
+        const rows = await db.query.shareTokens.findMany({
+          where: and(eq(schema.shareTokens.rundownId, rundownId), eq(schema.shareTokens.kind, "join")),
+          columns: { id: true, joinCode: true, role: true, revokedAt: true },
+        });
+        json(res, 200, rows.filter((r) => !r.revokedAt).map(({ revokedAt: _r, ...rest }) => rest));
+        return true;
+      }
+
+      if (req.method === "POST" && /^\/rundowns\/[^/]+\/join-codes$/.test(pathname)) {
+        const rundownId = pathname.split("/")[2]!;
+        const body = await readJson(req);
+        const role = ["caller", "editor", "follower"].includes(String(body.role)) ? String(body.role) : "follower";
+        // Readable code: no confusable characters.
+        const alphabet = "ABCDEFGHJKMNPQRSTVWXYZ23456789";
+        const code = Array.from(
+          { length: 6 },
+          () => alphabet[Math.floor(Math.random() * alphabet.length)]!,
+        ).join("");
+        await db.insert(schema.shareTokens).values({
+          id: ulid(),
+          rundownId,
+          kind: "join",
+          token: ulid(),
+          joinCode: code,
+          role: role as (typeof schema.shareRoles)[number],
+        });
+        json(res, 201, { code, role });
+        return true;
+      }
+
+      // As-run show report: sessions + transitions for a rundown (JSON or CSV).
+      if (req.method === "GET" && /^\/rundowns\/[^/]+\/report/.test(pathname)) {
+        const rundownId = pathname.split("/")[2]!.split("?")[0]!;
+        const sessions = await db.query.showSessions.findMany({
+          where: eq(schema.showSessions.rundownId, rundownId),
+        });
+        const report = [] as { session: string; startedAt: string; at: string; type: string; rowId: string | null }[];
+        for (const session of sessions) {
+          const transitions = await db.query.showTransitions.findMany({
+            where: eq(schema.showTransitions.sessionId, session.id),
+          });
+          for (const t of transitions)
+            report.push({
+              session: session.id,
+              startedAt: session.startedAt.toISOString(),
+              at: t.at.toISOString(),
+              type: t.type,
+              rowId: t.rowId,
+            });
+        }
+        report.sort((a, b) => a.at.localeCompare(b.at));
+        if (url.searchParams.get("format") === "csv") {
+          res.setHeader("content-type", "text/csv");
+          res.end(
+            serializeCsv([
+              ["Session", "Session started", "At", "Action", "Row"],
+              ...report.map((r) => [r.session, r.startedAt, r.at, r.type, r.rowId ?? ""]),
+            ]),
+          );
+          return true;
+        }
+        json(res, 200, report);
         return true;
       }
 

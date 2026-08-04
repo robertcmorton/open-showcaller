@@ -70,6 +70,46 @@ export function GuestPassPanel({ rundownId, columns, onClose }: { rundownId: str
   );
 }
 
+export function JoinCodesPanel({ rundownId, onClose }: { rundownId: string; onClose: () => void }) {
+  const [codes, setCodes] = useState<{ joinCode: string | null; role: string }[]>([]);
+  const reload = () => void api.joinCodes(rundownId).then(setCodes);
+  useEffect(reload, [rundownId]);
+
+  const companionUrl = (code: string) => `${window.location.origin}/follow/${rundownId}?code=${code}`;
+
+  return (
+    <div style={panelStyle}>
+      <strong>Join codes — crew devices enter with these (QR-able URLs)</strong>
+      <div style={{ display: "flex", gap: 8 }}>
+        {(["follower", "caller"] as const).map((role) => (
+          <button key={role} className="toolbar-btn" onClick={() => void api.createJoinCode(rundownId, role).then(reload)}>
+            + {role} code
+          </button>
+        ))}
+      </div>
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+        {codes.map((c) => (
+          <li key={c.joinCode} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+            <code style={{ background: "#0d0d0d", padding: "3px 8px", borderRadius: 4, fontSize: "1rem", letterSpacing: "0.15em" }}>
+              {c.joinCode}
+            </code>
+            <span style={{ color: "#8a8a8a" }}>{c.role}</span>
+            {c.joinCode && (
+              <button className="toolbar-btn" onClick={() => void navigator.clipboard.writeText(companionUrl(c.joinCode!))}>
+                Copy follow URL
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {codes.length === 0 && <span style={{ color: "#8a8a8a" }}>No codes yet.</span>}
+      <button className="toolbar-btn" style={{ alignSelf: "flex-start" }} onClick={onClose}>
+        Close
+      </button>
+    </div>
+  );
+}
+
 export function HistoryPanel({ rundownId, onClose }: { rundownId: string; onClose: () => void }) {
   const [snapshots, setSnapshots] = useState<SnapshotSummary[]>([]);
   const reload = () => void api.snapshots(rundownId).then(setSnapshots);
@@ -88,6 +128,16 @@ export function HistoryPanel({ rundownId, onClose }: { rundownId: string; onClos
         >
           Save version now
         </button>
+      </div>
+      <div>
+        <a
+          className="toolbar-btn"
+          style={{ textDecoration: "none" }}
+          href={`${process.env.NEXT_PUBLIC_SYNC_HTTP_URL ?? "http://localhost:8787"}/rundowns/${rundownId}/report?format=csv`}
+          download
+        >
+          Download as-run report (CSV)
+        </a>
       </div>
       {snapshots.length === 0 && <span style={{ color: "#8a8a8a" }}>No versions yet. One is saved automatically when a show starts.</span>}
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 }}>

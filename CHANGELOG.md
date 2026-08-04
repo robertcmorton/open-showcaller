@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-04 (hardening: durable sessions, join codes, as-run report)
+- **Show sessions are now durable**: every transport command writes through to the database (session state plus a transition log), and a restarted sync server hydrates any live session back — a show in progress survives a server crash, verified by killing and restarting the server mid-show.
+- **Real join codes**: generate role-scoped six-character codes (no confusable characters) per rundown from the editor's Join Codes panel; companion URLs carry `?code=`; the show channel validates codes and guest tokens against the database and rejects invalid credentials. A development fallback code remains available and can be disabled by environment variable.
+- **As-run show report**: the full transition history (which rows ran, when, per session) downloads as CSV from the History panel — rehearsal timing analysis and proof-of-run in one export.
+
+### Changed — 2026-08-04
+- Session establishment on the show channel is now asynchronous (database-backed credential checks) with unchanged wire behavior.
+
 ### Added — 2026-08-04 (Phase 7: guest pass, version history, packaging)
 - **Guest pass**: create read-only share links with per-column visibility from the editor. The server sends guests a filtered projection — hidden columns are absent from the payload, and the collaborative document never reaches guest browsers. The guest page shows a last-updated stamp, refreshes to the latest version, and prints.
 - **Version history**: save labeled versions from the editor, automatic snapshot the moment a show starts, and restore any version as a new copy. (In-place restore of a live collaborative document is deliberately deferred until a document-epoch mechanism lands; the API comment documents why.)

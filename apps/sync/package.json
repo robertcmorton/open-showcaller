@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@hocuspocus/server": "^2.15.2",
+    "@open-showcaller/core": "workspace:^",
     "@open-showcaller/db": "workspace:*",
     "@open-showcaller/protocol": "workspace:*",
     "drizzle-orm": "^0.38.3",

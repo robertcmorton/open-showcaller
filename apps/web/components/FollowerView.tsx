@@ -10,12 +10,12 @@ import { useRundownDoc, useWakeLock } from "../lib/useRundownDoc";
  * Companion follower surface: glanceable current/next cue, live countdown,
  * drift. Read-only; keeps the screen awake for show use.
  */
-export function FollowerView({ rundownId }: { rundownId: string }) {
+export function FollowerView({ rundownId, joinCode }: { rundownId: string; joinCode?: string }) {
   useWakeLock();
   const { doc } = useRundownDoc(rundownId);
   const { meta, columns, rows } = projectRundownDoc(doc);
   const timing = computeTiming(rows, meta.plannedStartSec);
-  const channel = useShowChannel(rundownId, "companion");
+  const channel = useShowChannel(rundownId, "companion", joinCode);
   const live = useLiveTiming(channel, timing);
   const show = channel.show;
 

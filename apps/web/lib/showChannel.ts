@@ -26,7 +26,7 @@ export interface ShowChannel {
  * offset (median of 5 pings, refreshed each connect), seq-guarded show_state,
  * jittered reconnect backoff, idempotent command ids.
  */
-export function useShowChannel(rundownId: string, device: "console" | "companion"): ShowChannel {
+export function useShowChannel(rundownId: string, device: "console" | "companion", joinCode?: string): ShowChannel {
   const [connected, setConnected] = useState(false);
   const [role, setRole] = useState<Role | null>(null);
   const [show, setShow] = useState<ShowStatePayload | null>(null);
@@ -47,11 +47,12 @@ export function useShowChannel(rundownId: string, device: "console" | "companion
 
       ws.onopen = () => {
         retryDelay = 500;
-        // Phase-4 auth stub: console = session token, companion = join code.
+        // Console = dev session token (until accounts); companion = join code
+        // (?code= in the URL, falling back to the local-dev code).
         const auth =
           device === "console"
             ? { kind: "session" as const, token: "dev" }
-            : { kind: "join" as const, code: "DEV123" };
+            : { kind: "join" as const, code: (joinCode ?? "DEV123").toUpperCase() };
         ws.send(JSON.stringify({ v: PROTOCOL_VERSION, t: "hello", auth, device, lastSeq: lastSeqRef.current >= 0 ? lastSeqRef.current : undefined }));
       };
 
@@ -100,7 +101,7 @@ export function useShowChannel(rundownId: string, device: "console" | "companion
       closed = true;
       ws?.close();
     };
-  }, [rundownId, device]);
+  }, [rundownId, device, joinCode]);
 
   return {
     connected,

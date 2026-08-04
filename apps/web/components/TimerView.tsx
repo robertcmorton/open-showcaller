@@ -11,12 +11,12 @@ import { useLiveTiming } from "../lib/useLiveTiming";
  * amber inside the final stretch, red counting up on overrun. Meant for
  * confidence monitors and speakers' phones.
  */
-export function TimerView({ rundownId }: { rundownId: string }) {
+export function TimerView({ rundownId, joinCode }: { rundownId: string; joinCode?: string }) {
   useWakeLock();
   const { doc } = useRundownDoc(rundownId);
   const { meta, rows } = projectRundownDoc(doc);
   const timing = computeTiming(rows, meta.plannedStartSec);
-  const channel = useShowChannel(rundownId, "companion");
+  const channel = useShowChannel(rundownId, "companion", joinCode);
   const live = useLiveTiming(channel, timing);
   const show = channel.show;
 

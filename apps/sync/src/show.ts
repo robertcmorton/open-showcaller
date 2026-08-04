@@ -26,6 +26,11 @@ export class ShowStateMachine {
     return this.state;
   }
 
+  /** Restore a persisted session (server restart resilience). */
+  hydrate(state: ShowStatePayload): void {
+    this.state = state;
+  }
+
   /** Apply a transport command. Returns the new state, or an error string. */
   apply(action: CmdAction, rowId: string | undefined, now = Date.now()): ShowStatePayload | string {
     const s = this.state;

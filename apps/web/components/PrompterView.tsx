@@ -10,11 +10,11 @@ import { useShowChannel } from "../lib/showChannel";
  * start/stop, arrows for speed), font-size controls, mirror mode, a fixed
  * read-position caret, and follow-the-caller (jumps to the active cue).
  */
-export function PrompterView({ rundownId }: { rundownId: string }) {
+export function PrompterView({ rundownId, joinCode }: { rundownId: string; joinCode?: string }) {
   useWakeLock();
   const { doc } = useRundownDoc(rundownId);
   const { columns, rows } = projectRundownDoc(doc);
-  const channel = useShowChannel(rundownId, "companion");
+  const channel = useShowChannel(rundownId, "companion", joinCode);
   const show = channel.show;
 
   const [fontSize, setFontSize] = useState(42);

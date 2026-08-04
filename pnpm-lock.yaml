@@ -20,6 +20,9 @@ importers:
       '@hocuspocus/server':
         specifier: ^2.15.2
         version: 2.15.3(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
+      '@open-showcaller/core':
+        specifier: workspace:^
+        version: link:../../packages/core
       '@open-showcaller/db':
         specifier: workspace:*
         version: link:../../packages/db

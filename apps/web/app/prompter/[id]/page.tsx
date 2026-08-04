@@ -1,6 +1,13 @@
 import { PrompterView } from "../../../components/PrompterView";
 
-export default async function PrompterPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ code?: string }>;
+}) {
   const { id } = await params;
-  return <PrompterView rundownId={id} />;
+  const { code } = await searchParams;
+  return <PrompterView rundownId={id} joinCode={code} />;
 }

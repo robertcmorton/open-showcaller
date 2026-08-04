@@ -1,6 +1,13 @@
 import { TimerView } from "../../../components/TimerView";
 
-export default async function TimerPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ code?: string }>;
+}) {
   const { id } = await params;
-  return <TimerView rundownId={id} />;
+  const { code } = await searchParams;
+  return <TimerView rundownId={id} joinCode={code} />;
 }
