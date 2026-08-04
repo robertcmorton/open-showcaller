@@ -8,7 +8,9 @@ import {
   type Role,
   type ServerMsg,
 } from "@open-showcaller/protocol";
-import { createDb } from "@open-showcaller/db";
+import { createDb, schema } from "@open-showcaller/db";
+import { eq } from "drizzle-orm";
+import { ulid } from "ulid";
 import { ShowStateMachine } from "./show";
 import { createDocServer } from "./doc-server";
 import { createApiHandler } from "./api";
@@ -142,6 +144,23 @@ wss.on("connection", (ws, req) => {
       }
       // No fast path for the caller: everyone (including the sender) gets the broadcast.
       broadcast(ctx.rundownId, { v: PROTOCOL_VERSION, t: "show_state", ...result });
+
+      // Automatic safety snapshot the moment a show goes live.
+      if (msg.action === "start") {
+        void (async () => {
+          const rundown = await dbHandle.db.query.rundowns.findFirst({
+            where: eq(schema.rundowns.id, ctx.rundownId),
+            columns: { doc: true },
+          });
+          if (rundown?.doc)
+            await dbHandle.db.insert(schema.rundownSnapshots).values({
+              id: ulid(),
+              rundownId: ctx.rundownId,
+              doc: rundown.doc,
+              label: "Show start",
+            });
+        })().catch((err) => console.error("[sync] show-start snapshot failed:", err));
+      }
     }
   });
 

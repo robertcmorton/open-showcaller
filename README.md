@@ -25,7 +25,14 @@ pnpm seed          # seeds a demo rundown (embedded PGlite; set DATABASE_URL for
 pnpm dev           # web on :3000, sync on :8787
 ```
 
-`docker compose up postgres` starts a real Postgres for development; the full self-host bundle lands in Phase 7.
+## Self-hosting
+
+```bash
+docker compose up -d            # postgres + sync + web
+docker compose run --rm seed    # optional demo data
+```
+
+Then open http://localhost:3000. For a public deployment, set the three `NEXT_PUBLIC_*` build args in `docker-compose.yml` to the host browsers will reach (e.g. `https://show.example.com`), and terminate TLS in front of ports 3000/8787/8788. For development without Docker, `pnpm seed && pnpm dev` uses an embedded database — no services required.
 
 ## Stack
 

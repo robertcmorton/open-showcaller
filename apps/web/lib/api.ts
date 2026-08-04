@@ -39,8 +39,21 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
   return (await res.json()) as T;
 };
 
+export interface SnapshotSummary {
+  id: string;
+  label: string | null;
+  createdAt: string;
+}
+
 export const api = {
   events: () => request<EventSummary[]>("/events"),
+  createGuestPass: (body: { rundownId: string; columns?: Record<string, boolean> }) =>
+    request<{ token: string }>("/guest-passes", { method: "POST", body: JSON.stringify(body) }),
+  snapshots: (rundownId: string) => request<SnapshotSummary[]>(`/rundowns/${rundownId}/snapshots`),
+  createSnapshot: (rundownId: string, label?: string) =>
+    request<{ id: string }>(`/rundowns/${rundownId}/snapshots`, { method: "POST", body: JSON.stringify({ label }) }),
+  restoreSnapshot: (snapshotId: string, name?: string) =>
+    request<{ id: string }>(`/snapshots/${snapshotId}/restore`, { method: "POST", body: JSON.stringify({ name }) }),
   createEvent: (body: { name: string; location?: string; startDate: string; endDate: string }) =>
     request<{ id: string }>("/events", { method: "POST", body: JSON.stringify(body) }),
   createRundown: (body: {

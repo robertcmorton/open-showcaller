@@ -7,6 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-04 (Phase 7: guest pass, version history, packaging)
+- **Guest pass**: create read-only share links with per-column visibility from the editor. The server sends guests a filtered projection — hidden columns are absent from the payload, and the collaborative document never reaches guest browsers. The guest page shows a last-updated stamp, refreshes to the latest version, and prints.
+- **Version history**: save labeled versions from the editor, automatic snapshot the moment a show starts, and restore any version as a new copy. (In-place restore of a live collaborative document is deliberately deferred until a document-epoch mechanism lands; the API comment documents why.)
+- **Self-host packaging**: Dockerfiles for the web and sync services, a compose file with Postgres, healthchecks, and a one-shot seed job, plus a README quickstart. Build-time public URL arguments documented for real deployments.
+- Verified in-browser: created a guest link with Script and Production Notes hidden and confirmed at the payload level that they never leave the server; saved and restored a version as a copy; confirmed the automatic show-start snapshot.
+- With this, all seven phases of the build plan are implemented; remaining work is the documented hardening list (accounts and API auth, join codes, session persistence, protocol unification).
+
 ### Added — 2026-08-04 (Phase 6: events, templates, CSV)
 - **Events dashboard**: the landing page now lists events with their rundowns, creates events (name, location, dates), and creates rundowns per event — blank, from a saved template, or by pasting CSV.
 - **Templates**: save any rundown as a reusable template from the editor; new rundowns created from a template carry its full content.

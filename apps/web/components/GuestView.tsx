@@ -1,0 +1,91 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { computeTiming, formatDuration, formatTimeOfDay, type PlanRow } from "@open-showcaller/core";
+import { API_URL } from "../lib/api";
+import "./editor.css";
+
+interface GuestProjection {
+  meta: { name: string; use24h: boolean; plannedStartSec: number | null };
+  lastUpdated: string | null;
+  columns: { id: string; key: string; title: string; kind: string }[];
+  rows: (PlanRow & { title: string; color: string | null; cells: Record<string, string> })[];
+}
+
+/**
+ * Guest pass: read-only, no login, refresh-to-update. The server sends a
+ * column-filtered projection — the collaborative document never reaches guests.
+ */
+export function GuestView({ token }: { token: string }) {
+  const [data, setData] = useState<GuestProjection | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_URL}/guest/${token}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? `${res.status}`);
+        setData((await res.json()) as GuestProjection);
+      })
+      .catch((err) => setError(String(err.message ?? err)));
+  }, [token]);
+
+  if (error)
+    return (
+      <main style={{ padding: "4rem", textAlign: "center", color: "#f85149" }}>
+        This guest pass is invalid or has been revoked.
+      </main>
+    );
+  if (!data) return <main style={{ padding: "4rem", textAlign: "center", color: "#8a8a8a" }}>Loading…</main>;
+
+  const { meta, columns, rows } = data;
+  const timing = computeTiming(rows, meta.plannedStartSec);
+  const richColumns = columns.filter((c) => c.kind === "richtext");
+
+  return (
+    <main style={{ maxWidth: 1100, margin: "0 auto", padding: "2rem 1.2rem" }}>
+      <header style={{ display: "flex", alignItems: "baseline", gap: 16, flexWrap: "wrap", marginBottom: "1rem" }}>
+        <h1 style={{ fontSize: "1.2rem", margin: 0 }}>{meta.name}</h1>
+        <span style={{ color: "#8a8a8a", fontSize: "0.78rem" }}>
+          read-only guest view
+          {data.lastUpdated ? ` · last updated ${new Date(data.lastUpdated).toLocaleString()}` : ""} · refresh for the
+          latest version
+        </span>
+        <button className="toolbar-btn" style={{ marginLeft: "auto" }} onClick={() => window.print()}>
+          Print
+        </button>
+      </header>
+
+      <table className="rundown-grid">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Title</th>
+            <th>Start</th>
+            <th>Duration</th>
+            {richColumns.map((c) => (
+              <th key={c.id}>{c.title}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => {
+            const t = timing.rows[i]!;
+            return (
+              <tr key={row.id} className={row.type === "group" ? "group-row" : ""}>
+                <td className="row-number mono" style={{ cursor: "default" }}>
+                  {i + 1}
+                </td>
+                <td style={{ fontWeight: row.type === "group" ? 600 : 400 }}>{row.title}</td>
+                <td className="mono">{t.startSec != null ? formatTimeOfDay(t.startSec, meta.use24h) : "—"}</td>
+                <td className="mono">{row.durationSec != null ? formatDuration(row.durationSec) : ""}</td>
+                {richColumns.map((c) => (
+                  <td key={c.id}>{row.cells[c.key] ?? ""}</td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </main>
+  );
+}

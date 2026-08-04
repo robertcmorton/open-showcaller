@@ -5,6 +5,7 @@ import {
   buildRundownDoc,
   decodeDoc,
   encodeDoc,
+  projectRundownDoc,
   schema,
   type DbHandle,
   type SeedRow,
@@ -134,6 +135,134 @@ export function createApiHandler(handle: DbHandle) {
           description: body.description ? String(body.description) : null,
           showDate: body.showDate ? String(body.showDate) : null,
           plannedStartSec,
+          doc: encodeDoc(doc),
+          docUpdatedAt: new Date(),
+        });
+        json(res, 201, { id });
+        return true;
+      }
+
+      if (req.method === "POST" && pathname === "/guest-passes") {
+        const body = await readJson(req);
+        const rundownId = String(body.rundownId ?? "");
+        const rundown = await db.query.rundowns.findFirst({ where: eq(schema.rundowns.id, rundownId) });
+        if (!rundown) {
+          json(res, 404, { error: "rundown not found" });
+          return true;
+        }
+        const token = ulid();
+        await db.insert(schema.shareTokens).values({
+          id: ulid(),
+          rundownId,
+          kind: "guest",
+          token,
+          role: "guest",
+          columnVisibility: (body.columns as Record<string, boolean> | undefined) ?? null,
+        });
+        json(res, 201, { token });
+        return true;
+      }
+
+      // Guests get a server-filtered plain-JSON projection — never the CRDT.
+      if (req.method === "GET" && pathname.startsWith("/guest/")) {
+        const token = pathname.slice("/guest/".length);
+        const pass = await db.query.shareTokens.findFirst({ where: eq(schema.shareTokens.token, token) });
+        if (!pass || pass.kind !== "guest" || pass.revokedAt) {
+          json(res, 404, { error: "invalid or revoked guest pass" });
+          return true;
+        }
+        const rundown = await db.query.rundowns.findFirst({ where: eq(schema.rundowns.id, pass.rundownId) });
+        if (!rundown?.doc) {
+          json(res, 404, { error: "rundown not found" });
+          return true;
+        }
+        const { meta, columns, rows } = projectRundownDoc(decodeDoc(rundown.doc));
+        const visibility = pass.columnVisibility ?? {};
+        const visibleColumns = columns.filter(
+          (c) => c.kind !== "richtext" || visibility[c.key] !== false,
+        );
+        const visibleKeys = new Set(visibleColumns.map((c) => c.key));
+        json(res, 200, {
+          meta: { name: meta.name, use24h: meta.use24h, plannedStartSec: meta.plannedStartSec },
+          lastUpdated: rundown.docUpdatedAt?.toISOString() ?? null,
+          columns: visibleColumns,
+          rows: rows.map((r) => ({
+            id: r.id,
+            type: r.type,
+            title: r.title,
+            durationSec: r.durationSec,
+            hardStartSec: r.hardStartSec,
+            backtime: r.backtime ?? false,
+            durationMuted: r.durationMuted ?? false,
+            color: r.color ?? null,
+            cells: Object.fromEntries(Object.entries(r.cells).filter(([key]) => visibleKeys.has(key))),
+          })),
+        });
+        return true;
+      }
+
+      if (req.method === "GET" && /^\/rundowns\/[^/]+\/snapshots$/.test(pathname)) {
+        const rundownId = pathname.split("/")[2]!;
+        json(
+          res,
+          200,
+          await db.query.rundownSnapshots.findMany({
+            where: eq(schema.rundownSnapshots.rundownId, rundownId),
+            columns: { id: true, label: true, createdAt: true },
+          }),
+        );
+        return true;
+      }
+
+      if (req.method === "POST" && /^\/rundowns\/[^/]+\/snapshots$/.test(pathname)) {
+        const rundownId = pathname.split("/")[2]!;
+        const body = await readJson(req);
+        const rundown = await db.query.rundowns.findFirst({ where: eq(schema.rundowns.id, rundownId) });
+        if (!rundown?.doc) {
+          json(res, 404, { error: "rundown not found" });
+          return true;
+        }
+        const id = ulid();
+        await db.insert(schema.rundownSnapshots).values({
+          id,
+          rundownId,
+          doc: rundown.doc,
+          label: body.label ? String(body.label) : null,
+        });
+        json(res, 201, { id });
+        return true;
+      }
+
+      // Restore = copy the snapshot into a NEW rundown. In-place restore of a
+      // live CRDT would merge old state back from connected clients; a fresh
+      // rundown id sidesteps that entirely (in-place restore lands with the
+      // doc-epoch mechanism in the hardening pass).
+      if (req.method === "POST" && /^\/snapshots\/[^/]+\/restore$/.test(pathname)) {
+        const snapshotId = pathname.split("/")[2]!;
+        const body = await readJson(req);
+        const snapshot = await db.query.rundownSnapshots.findFirst({
+          where: eq(schema.rundownSnapshots.id, snapshotId),
+        });
+        if (!snapshot) {
+          json(res, 404, { error: "snapshot not found" });
+          return true;
+        }
+        const source = await db.query.rundowns.findFirst({ where: eq(schema.rundowns.id, snapshot.rundownId) });
+        if (!source) {
+          json(res, 404, { error: "source rundown not found" });
+          return true;
+        }
+        const id = ulid();
+        const name = String(body.name ?? `${source.name} (restored)`);
+        const doc = decodeDoc(snapshot.doc);
+        doc.getMap("meta").set("name", name);
+        await db.insert(schema.rundowns).values({
+          id,
+          eventId: source.eventId,
+          name,
+          description: source.description,
+          showDate: source.showDate,
+          plannedStartSec: source.plannedStartSec,
           doc: encodeDoc(doc),
           docUpdatedAt: new Date(),
         });

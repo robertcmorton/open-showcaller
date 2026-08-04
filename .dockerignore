@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+.next
+**/.next
+.turbo
+**/.turbo
+.pglite
+.git
+Images
+Research
+DEMO_NOTES.md
+DEVLOG.md
+CLAUDE.local.md
+*.log

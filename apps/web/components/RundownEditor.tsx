@@ -17,6 +17,7 @@ import {
 import { api } from "../lib/api";
 import { projectRundownDoc, type ColumnDef, type ProjectedRow } from "@open-showcaller/db/doc";
 import { CellEditor } from "./CellEditor";
+import { GuestPassPanel, HistoryPanel } from "./SharePanels";
 import { LiveReadouts, TransportBar } from "./TransportBar";
 import { useShowChannel } from "../lib/showChannel";
 import { useLiveTiming } from "../lib/useLiveTiming";
@@ -72,6 +73,7 @@ export function RundownEditor({ rundownId }: { rundownId: string }) {
   const [selectedRow, setSelectedRow] = useState<string | null>(null);
   const [editingTime, setEditingTime] = useState<string | null>(null); // rowId
   const [editingDuration, setEditingDuration] = useState<string | null>(null);
+  const [panel, setPanel] = useState<"guest" | "history" | null>(null);
   const timeInputRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
@@ -256,6 +258,12 @@ export function RundownEditor({ rundownId }: { rundownId: string }) {
         <button className="toolbar-btn" onClick={saveAsTemplate}>
           Save as template
         </button>
+        <button className="toolbar-btn" onClick={() => setPanel(panel === "guest" ? null : "guest")}>
+          Guest pass
+        </button>
+        <button className="toolbar-btn" onClick={() => setPanel(panel === "history" ? null : "history")}>
+          History
+        </button>
         {selectedRow && (
           <>
             <button
@@ -273,6 +281,9 @@ export function RundownEditor({ rundownId }: { rundownId: string }) {
           </>
         )}
       </div>
+
+      {panel === "guest" && <GuestPassPanel rundownId={rundownId} columns={columns} onClose={() => setPanel(null)} />}
+      {panel === "history" && <HistoryPanel rundownId={rundownId} onClose={() => setPanel(null)} />}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <table className="rundown-grid">
