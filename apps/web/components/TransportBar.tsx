@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { formatDuration, formatTimeOfDay, type LiveShowTiming } from "@open-showcaller/core";
 import type { ShowChannel } from "../lib/showChannel";
+import { Icon } from "./ui";
 
 function signed(sec: number): string {
   const sign = sec < 0 ? "−" : "+";
@@ -16,7 +17,7 @@ export function LiveReadouts({ live, use24h }: { live: LiveShowTiming | null; us
     <>
       <div>
         <div className="header-label">Item</div>
-        <div className="header-clock" style={{ color: over ? "#f85149" : "#3fb950" }}>
+        <div className="header-clock mono" style={{ color: over ? "var(--over)" : "var(--under)" }}>
           {live.remainingInRowSec != null
             ? over
               ? `+${formatDuration(live.rowOverSec)}`
@@ -26,13 +27,13 @@ export function LiveReadouts({ live, use24h }: { live: LiveShowTiming | null; us
       </div>
       <div>
         <div className="header-label">Show</div>
-        <div className="header-clock" style={{ color: (live.showDriftSec ?? 0) > 0 ? "#f85149" : "#3fb950" }}>
+        <div className="header-clock mono" style={{ color: (live.showDriftSec ?? 0) > 0 ? "var(--over)" : "var(--under)" }}>
           {live.showDriftSec != null ? signed(live.showDriftSec) : "—"}
         </div>
       </div>
       <div>
         <div className="header-label">Proj. end</div>
-        <div className="header-clock">
+        <div className="header-clock mono">
           {live.projectedEndSec != null ? formatTimeOfDay(Math.round(live.projectedEndSec), use24h) : "—"}
         </div>
       </div>
@@ -50,6 +51,7 @@ export function TransportBar({
   const show = channel.show;
   const liveState = show?.state ?? "idle";
   const isLive = liveState === "running" || liveState === "paused";
+  const [armStop, setArmStop] = useState(false);
 
   const step = (dir: 1 | -1) => {
     if (!show?.activeRowId) return;
@@ -77,40 +79,48 @@ export function TransportBar({
     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
       {!isLive && (
         <button
-          className="toolbar-btn"
-          style={{ background: "#1a3a1a", borderColor: "#2f6f2f" }}
+          className="btn btn-positive"
           onClick={() => channel.sendCmd("start", orderedRowIds[0])}
           disabled={!channel.connected || orderedRowIds.length === 0}
         >
-          ▶ Start
+          {Icon.play} Start show
         </button>
       )}
       {isLive && (
         <>
           {liveState === "running" ? (
-            <button className="toolbar-btn" onClick={() => channel.sendCmd("pause")}>
-              ⏸ Pause
+            <button className="btn" title="Pause" onClick={() => channel.sendCmd("pause")}>
+              {Icon.pause} Pause
             </button>
           ) : (
-            <button className="toolbar-btn" onClick={() => channel.sendCmd("resume")}>
-              ▶ Resume
+            <button className="btn btn-positive" title="Resume" onClick={() => channel.sendCmd("resume")}>
+              {Icon.play} Resume
             </button>
           )}
-          <button className="toolbar-btn" onClick={() => step(-1)}>
-            ⏮ Prev
+          <button className="btn" title="Previous cue (Shift+Space)" onClick={() => step(-1)}>
+            {Icon.prev} Prev
           </button>
-          <button className="toolbar-btn" onClick={() => step(1)}>
-            Next ⏭
+          <button className="btn btn-primary" title="Next cue (Space)" onClick={() => step(1)}>
+            Next {Icon.next}
           </button>
           <button
-            className="toolbar-btn"
+            className={`btn btn-danger ${armStop ? "is-on" : ""}`}
+            title="Stop the show"
             onClick={() => {
-              if (window.confirm("Stop the show?")) channel.sendCmd("stop");
+              if (armStop) {
+                channel.sendCmd("stop");
+                setArmStop(false);
+              } else {
+                setArmStop(true);
+                window.setTimeout(() => setArmStop(false), 3000);
+              }
             }}
           >
-            ⏹ Stop
+            {Icon.stop} {armStop ? "Confirm stop" : "Stop"}
           </button>
-          <span className="live-badge">{liveState === "paused" ? "PAUSED" : "LIVE"}</span>
+          <span className={`live-badge ${liveState === "paused" ? "paused" : ""}`}>
+            {liveState === "paused" ? "PAUSED" : "LIVE"}
+          </span>
         </>
       )}
     </div>

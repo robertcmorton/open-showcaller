@@ -137,7 +137,7 @@ export function PrompterView({ rundownId, joinCode }: { rundownId: string; joinC
           color: "#9a9a9a",
         }}
       >
-        <button className="toolbar-btn" onClick={() => setScrolling((s) => !s)}>
+        <button className="btn btn-sm" onClick={() => setScrolling((s) => !s)}>
           {scrolling ? "⏸" : "▶"}
         </button>
         <label>
@@ -150,13 +150,13 @@ export function PrompterView({ rundownId, joinCode }: { rundownId: string; joinC
             onChange={(e) => setSpeed(Number(e.target.value))}
           />
         </label>
-        <button className="toolbar-btn" onClick={() => setFontSize((f) => Math.max(20, f - 4))}>
+        <button className="btn btn-sm" onClick={() => setFontSize((f) => Math.max(20, f - 4))}>
           A−
         </button>
-        <button className="toolbar-btn" onClick={() => setFontSize((f) => Math.min(96, f + 4))}>
+        <button className="btn btn-sm" onClick={() => setFontSize((f) => Math.min(96, f + 4))}>
           A+
         </button>
-        <button className="toolbar-btn" onClick={() => setMirror((m) => !m)}>
+        <button className="btn btn-sm" onClick={() => setMirror((m) => !m)}>
           {mirror ? "unmirror" : "mirror"}
         </button>
         <span style={{ marginLeft: "auto" }}>

@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { computeTiming, formatDuration, formatTimeOfDay, type PlanRow } from "@open-showcaller/core";
 import { API_URL } from "../lib/api";
-import "./editor.css";
 
 interface GuestProjection {
   meta: { name: string; use24h: boolean; plannedStartSec: number | null };
@@ -31,11 +30,11 @@ export function GuestView({ token }: { token: string }) {
 
   if (error)
     return (
-      <main style={{ padding: "4rem", textAlign: "center", color: "#f85149" }}>
+      <main style={{ padding: "4rem", textAlign: "center", color: "var(--over)" }}>
         This guest pass is invalid or has been revoked.
       </main>
     );
-  if (!data) return <main style={{ padding: "4rem", textAlign: "center", color: "#8a8a8a" }}>Loading…</main>;
+  if (!data) return <main style={{ padding: "4rem", textAlign: "center", color: "var(--text-3)" }}>Loading…</main>;
 
   const { meta, columns, rows } = data;
   const timing = computeTiming(rows, meta.plannedStartSec);
@@ -45,12 +44,12 @@ export function GuestView({ token }: { token: string }) {
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: "2rem 1.2rem" }}>
       <header style={{ display: "flex", alignItems: "baseline", gap: 16, flexWrap: "wrap", marginBottom: "1rem" }}>
         <h1 style={{ fontSize: "1.2rem", margin: 0 }}>{meta.name}</h1>
-        <span style={{ color: "#8a8a8a", fontSize: "0.78rem" }}>
+        <span style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)" }}>
           read-only guest view
           {data.lastUpdated ? ` · last updated ${new Date(data.lastUpdated).toLocaleString()}` : ""} · refresh for the
           latest version
         </span>
-        <button className="toolbar-btn" style={{ marginLeft: "auto" }} onClick={() => window.print()}>
+        <button className="btn btn-sm" style={{ marginLeft: "auto" }} onClick={() => window.print()}>
           Print
         </button>
       </header>

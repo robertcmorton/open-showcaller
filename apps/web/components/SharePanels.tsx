@@ -5,16 +5,12 @@ import { api, type SnapshotSummary } from "../lib/api";
 import type { ColumnDef } from "@open-showcaller/db/doc";
 
 const panelStyle: React.CSSProperties = {
-  background: "#161616",
-  border: "1px solid #2a2a2a",
-  borderRadius: 8,
-  padding: "12px 14px",
   margin: "0 0 12px",
-  fontSize: "0.82rem",
+  fontSize: "var(--fs-sm)",
   display: "flex",
   flexDirection: "column",
-  gap: 8,
-  maxWidth: 560,
+  gap: 10,
+  maxWidth: 580,
 };
 
 export function GuestPassPanel({ rundownId, columns, onClose }: { rundownId: string; columns: ColumnDef[]; onClose: () => void }) {
@@ -25,7 +21,7 @@ export function GuestPassPanel({ rundownId, columns, onClose }: { rundownId: str
   const [url, setUrl] = useState<string | null>(null);
 
   return (
-    <div style={panelStyle}>
+    <div className="panel" style={panelStyle}>
       <strong>Guest pass — read-only link, column visibility per pass</strong>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
         {richColumns.map((c) => (
@@ -41,18 +37,18 @@ export function GuestPassPanel({ rundownId, columns, onClose }: { rundownId: str
       </div>
       {url ? (
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <code style={{ background: "#0d0d0d", padding: "4px 8px", borderRadius: 4, overflowWrap: "anywhere" }}>{url}</code>
-          <button className="toolbar-btn" onClick={() => void navigator.clipboard.writeText(url)}>
+          <code style={{ background: "var(--bg)", border: "1px solid var(--border-subtle)", padding: "4px 8px", borderRadius: 4, overflowWrap: "anywhere" }}>{url}</code>
+          <button className="btn btn-sm" onClick={() => void navigator.clipboard.writeText(url)}>
             Copy
           </button>
-          <a className="toolbar-btn" href={url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+          <a className="btn btn-sm" href={url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
             Open
           </a>
         </div>
       ) : (
         <div>
           <button
-            className="toolbar-btn"
+            className="btn btn-sm"
             onClick={() =>
               void api
                 .createGuestPass({ rundownId, columns: visible })
@@ -63,7 +59,7 @@ export function GuestPassPanel({ rundownId, columns, onClose }: { rundownId: str
           </button>
         </div>
       )}
-      <button className="toolbar-btn" style={{ alignSelf: "flex-start" }} onClick={onClose}>
+      <button className="btn btn-sm" style={{ alignSelf: "flex-start" }} onClick={onClose}>
         Close
       </button>
     </div>
@@ -78,11 +74,11 @@ export function JoinCodesPanel({ rundownId, onClose }: { rundownId: string; onCl
   const companionUrl = (code: string) => `${window.location.origin}/follow/${rundownId}?code=${code}`;
 
   return (
-    <div style={panelStyle}>
+    <div className="panel" style={panelStyle}>
       <strong>Join codes — crew devices enter with these (QR-able URLs)</strong>
       <div style={{ display: "flex", gap: 8 }}>
         {(["follower", "caller"] as const).map((role) => (
-          <button key={role} className="toolbar-btn" onClick={() => void api.createJoinCode(rundownId, role).then(reload)}>
+          <button key={role} className="btn btn-sm" onClick={() => void api.createJoinCode(rundownId, role).then(reload)}>
             + {role} code
           </button>
         ))}
@@ -90,20 +86,20 @@ export function JoinCodesPanel({ rundownId, onClose }: { rundownId: string; onCl
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 }}>
         {codes.map((c) => (
           <li key={c.joinCode} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
-            <code style={{ background: "#0d0d0d", padding: "3px 8px", borderRadius: 4, fontSize: "1rem", letterSpacing: "0.15em" }}>
+            <code style={{ background: "var(--bg)", border: "1px solid var(--border-subtle)", padding: "3px 8px", borderRadius: 4, fontSize: "1rem", letterSpacing: "0.15em" }}>
               {c.joinCode}
             </code>
-            <span style={{ color: "#8a8a8a" }}>{c.role}</span>
+            <span style={{ color: "var(--text-3)" }}>{c.role}</span>
             {c.joinCode && (
-              <button className="toolbar-btn" onClick={() => void navigator.clipboard.writeText(companionUrl(c.joinCode!))}>
+              <button className="btn btn-sm" onClick={() => void navigator.clipboard.writeText(companionUrl(c.joinCode!))}>
                 Copy follow URL
               </button>
             )}
           </li>
         ))}
       </ul>
-      {codes.length === 0 && <span style={{ color: "#8a8a8a" }}>No codes yet.</span>}
-      <button className="toolbar-btn" style={{ alignSelf: "flex-start" }} onClick={onClose}>
+      {codes.length === 0 && <span style={{ color: "var(--text-3)" }}>No codes yet.</span>}
+      <button className="btn btn-sm" style={{ alignSelf: "flex-start" }} onClick={onClose}>
         Close
       </button>
     </div>
@@ -116,11 +112,11 @@ export function HistoryPanel({ rundownId, onClose }: { rundownId: string; onClos
   useEffect(reload, [rundownId]);
 
   return (
-    <div style={panelStyle}>
+    <div className="panel" style={panelStyle}>
       <strong>Version history</strong>
       <div>
         <button
-          className="toolbar-btn"
+          className="btn btn-sm"
           onClick={() => {
             const label = window.prompt("Version label", "Manual save");
             if (label !== null) void api.createSnapshot(rundownId, label || undefined).then(reload);
@@ -131,7 +127,7 @@ export function HistoryPanel({ rundownId, onClose }: { rundownId: string; onClos
       </div>
       <div>
         <a
-          className="toolbar-btn"
+          className="btn btn-sm"
           style={{ textDecoration: "none" }}
           href={`${process.env.NEXT_PUBLIC_SYNC_HTTP_URL ?? "http://localhost:8787"}/rundowns/${rundownId}/report?format=csv`}
           download
@@ -139,16 +135,16 @@ export function HistoryPanel({ rundownId, onClose }: { rundownId: string; onClos
           Download as-run report (CSV)
         </a>
       </div>
-      {snapshots.length === 0 && <span style={{ color: "#8a8a8a" }}>No versions yet. One is saved automatically when a show starts.</span>}
+      {snapshots.length === 0 && <span style={{ color: "var(--text-3)" }}>No versions yet. One is saved automatically when a show starts.</span>}
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 }}>
         {snapshots.map((s) => (
           <li key={s.id} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
             <span style={{ flex: 1 }}>
               {s.label ?? "Untitled"}{" "}
-              <span style={{ color: "#8a8a8a" }}>{new Date(s.createdAt).toLocaleString()}</span>
+              <span style={{ color: "var(--text-3)" }}>{new Date(s.createdAt).toLocaleString()}</span>
             </span>
             <button
-              className="toolbar-btn"
+              className="btn btn-sm"
               onClick={() =>
                 void api
                   .restoreSnapshot(s.id)
@@ -160,7 +156,7 @@ export function HistoryPanel({ rundownId, onClose }: { rundownId: string; onClos
           </li>
         ))}
       </ul>
-      <button className="toolbar-btn" style={{ alignSelf: "flex-start" }} onClick={onClose}>
+      <button className="btn btn-sm" style={{ alignSelf: "flex-start" }} onClick={onClose}>
         Close
       </button>
     </div>

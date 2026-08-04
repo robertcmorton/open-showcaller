@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { Inter, JetBrains_Mono } from "next/font/google";
+import "./globals.css";
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+const jbmono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jbmono", display: "swap" });
 
 export const metadata: Metadata = {
   title: "Open Showcaller",
@@ -8,18 +13,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body
-        style={{
-          margin: 0,
-          background: "#0d0d0d",
-          color: "#e8e8e8",
-          fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif",
-          minHeight: "100vh",
-        }}
-      >
-        {children}
-      </body>
+    <html lang="en" className={`${inter.variable} ${jbmono.variable}`}>
+      <body>{children}</body>
     </html>
   );
 }

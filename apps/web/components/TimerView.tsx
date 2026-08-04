@@ -27,7 +27,7 @@ export function TimerView({ rundownId, joinCode }: { rundownId: string; joinCode
   const remaining = live?.remainingInRowSec ?? null;
   const over = remaining != null && remaining < 0;
   const amber = !over && remaining != null && planned > 0 && remaining <= Math.min(60, planned * 0.2);
-  const color = !channel.connected ? "#777" : over ? "#f85149" : amber ? "#e8b03c" : "#2ee56a";
+  const color = !channel.connected ? "#777" : over ? "var(--over)" : amber ? "var(--warn)" : "var(--under)";
 
   const display =
     remaining == null ? "--:--" : over ? `+${formatDuration(live!.rowOverSec)}` : formatDuration(remaining);
@@ -47,15 +47,15 @@ export function TimerView({ rundownId, joinCode }: { rundownId: string; joinCode
         userSelect: "none",
       }}
     >
-      <div style={{ color: "#9a9a9a", fontSize: "3.4vw", fontWeight: 500 }}>
+      <div style={{ color: "var(--text-2)", fontSize: "3.4vw", fontWeight: 500 }}>
         {active ? active.title : meta.name}
       </div>
       <div
         style={{
-          border: "1px solid #6b5a2a",
+          border: "1px solid var(--border)",
           borderRadius: 8,
           padding: "2vh 5vw",
-          fontFamily: "ui-monospace, 'SF Mono', monospace",
+          fontFamily: "var(--font-mono)",
           fontWeight: 700,
           fontSize: "22vw",
           lineHeight: 1.05,
@@ -65,7 +65,7 @@ export function TimerView({ rundownId, joinCode }: { rundownId: string; joinCode
       >
         {isLive ? display : "--:--"}
       </div>
-      <div style={{ color: "#666", fontSize: "1.6vw" }}>
+      <div style={{ color: "var(--text-3)", fontSize: "1.6vw" }}>
         {!channel.connected
           ? "reconnecting…"
           : !isLive
