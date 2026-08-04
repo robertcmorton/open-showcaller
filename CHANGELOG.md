@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-05 (left settings panel & navigation)
+- **A persistent left panel on the dashboard and every rundown screen** holds navigation (main page, dashboard) and all the settings features for the current screen — Views (Follow/Timer/Prompter), Output (Print/PDF, CSV export), and Show settings (template, guest pass, history, join codes) on rundown screens; archived toggle and credentials on the dashboard. Collapsible, state remembered per browser, hidden in print. The old ⋯ overflow menu is gone — settings now have a home. Everything in the panel respects the access hierarchy: a company credential sees only its own data; only admin sees all.
+
 ### Added — 2026-08-05 (event-timezone time model)
 - **The event's location now governs every clock.** Each event carries an IANA timezone; the show channel hands it to every connected surface, and header clocks, live drift, and projected-end all compute in the **event's wall clock** (a viewer in another country sees the venue's time, labeled with the zone — "Event time · EDT"). Daylight saving is applied per-instant from the IANA database, so shows that cross a DST change stay correct — covered by unit tests on both a US and an Australian spring-forward boundary.
 - **The primary time can only change when the location changes**: the API rejects a timezone change without an accompanying location change, and the dashboard pairs the two in one "Location…" action. New events pick up the creator's timezone automatically.

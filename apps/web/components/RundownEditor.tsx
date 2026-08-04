@@ -22,6 +22,7 @@ import { CellEditor } from "./CellEditor";
 import { GuestPassPanel, HistoryPanel, JoinCodesPanel } from "./SharePanels";
 import { LiveReadouts, TransportBar } from "./TransportBar";
 import { Dropdown, HeaderClock, Icon } from "./ui";
+import { SideNavSection, WithSideNav } from "./SideNav";
 import { useShowChannel } from "../lib/showChannel";
 import { useLiveTiming } from "../lib/useLiveTiming";
 import { useRundownDoc } from "../lib/useRundownDoc";
@@ -450,7 +451,57 @@ export function RundownEditor({
     return () => document.removeEventListener("pointerdown", onDown);
   }, [durationPopover]);
 
+  const settings = (
+    <>
+      <SideNavSection heading="Views">
+        {(["follow", "timer", "prompter"] as const).map((view) => (
+          <a
+            key={view}
+            className="menu-item"
+            href={`/${view}/${rundownId}${joinCode ? `?code=${joinCode}` : ""}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span className="check" />
+            {view[0]!.toUpperCase() + view.slice(1)}
+          </a>
+        ))}
+      </SideNavSection>
+      <SideNavSection heading="Output">
+        <button type="button" className="menu-item" onClick={() => window.print()}>
+          <span className="check" />
+          Print / PDF
+        </button>
+        <button type="button" className="menu-item" onClick={exportCsv}>
+          <span className="check" />
+          Export CSV
+        </button>
+      </SideNavSection>
+      {isShow && (
+        <SideNavSection heading="Show settings">
+          <button type="button" className="menu-item" onClick={saveAsTemplate}>
+            <span className="check" />
+            Save as template
+          </button>
+          <button type="button" className="menu-item" onClick={() => setPanel(panel === "guest" ? null : "guest")}>
+            <span className="check" />
+            Guest pass
+          </button>
+          <button type="button" className="menu-item" onClick={() => setPanel(panel === "history" ? null : "history")}>
+            <span className="check" />
+            History
+          </button>
+          <button type="button" className="menu-item" onClick={() => setPanel(panel === "join" ? null : "join")}>
+            <span className="check" />
+            Join codes
+          </button>
+        </SideNavSection>
+      )}
+    </>
+  );
+
   return (
+    <WithSideNav title={meta.name} settings={settings}>
     <div style={{ padding: "1.25rem 1.5rem" }}>
       <header className="no-print" style={{ display: "flex", alignItems: "center", gap: "1.75rem", marginBottom: "1rem", flexWrap: "wrap" }}>
         <h1 style={{ fontSize: "1.15rem", fontWeight: 650, margin: 0, letterSpacing: "-0.01em" }}>{meta.name}</h1>
@@ -588,51 +639,6 @@ export function RundownEditor({
               </button>
             </div>
           )}
-          <Dropdown label={Icon.dots} align="right">
-            <div className="menu-heading">Views</div>
-            {(["follow", "timer", "prompter"] as const).map((view) => (
-              <a
-                key={view}
-                className="menu-item"
-                href={`/${view}/${rundownId}${joinCode ? `?code=${joinCode}` : ""}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <span className="check" />
-                {view[0]!.toUpperCase() + view.slice(1)}
-              </a>
-            ))}
-            <div className="menu-sep" />
-            <button type="button" className="menu-item" onClick={() => window.print()}>
-              <span className="check" />
-              Print
-            </button>
-            <button type="button" className="menu-item" onClick={exportCsv}>
-              <span className="check" />
-              Export CSV
-            </button>
-            {isShow && (
-              <>
-                <button type="button" className="menu-item" onClick={saveAsTemplate}>
-                  <span className="check" />
-                  Save as template
-                </button>
-                <div className="menu-sep" />
-                <button type="button" className="menu-item" onClick={() => setPanel("guest")}>
-                  <span className="check" />
-                  Guest pass…
-                </button>
-                <button type="button" className="menu-item" onClick={() => setPanel("history")}>
-                  <span className="check" />
-                  History…
-                </button>
-                <button type="button" className="menu-item" onClick={() => setPanel("join")}>
-                  <span className="check" />
-                  Join codes…
-                </button>
-              </>
-            )}
-          </Dropdown>
         </div>
       </div>
 
@@ -816,5 +822,6 @@ export function RundownEditor({
         )}
       </p>
     </div>
+    </WithSideNav>
   );
 }

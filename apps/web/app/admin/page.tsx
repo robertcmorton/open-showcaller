@@ -13,6 +13,7 @@ import {
 } from "../../lib/api";
 import { Icon } from "../../components/ui";
 import { ImportPanel } from "../../components/ImportPanel";
+import { SideNavSection, WithSideNav } from "../../components/SideNav";
 
 function CreateEventForm({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
@@ -252,8 +253,39 @@ export default function AdminPage() {
       </div>
     );
 
+  const settings = (
+    <>
+      <SideNavSection heading="Dashboard">
+        <button type="button" className="menu-item" onClick={() => setShowArchived((a) => !a)}>
+          <span className="check">{showArchived && "✓"}</span>
+          Show archived
+        </button>
+      </SideNavSection>
+      <SideNavSection heading="Credentials">
+        {getAdminToken() ? (
+          <button
+            type="button"
+            className="menu-item"
+            onClick={() => {
+              setAdminToken(null);
+              reload();
+            }}
+          >
+            <span className="check" />
+            Forget token
+          </button>
+        ) : (
+          <div style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", padding: "2px 9px" }}>
+            Dev-open server — no token needed.
+          </div>
+        )}
+      </SideNavSection>
+    </>
+  );
+
   return (
     <div data-theme="light" style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
+      <WithSideNav title={me?.role === "company" ? me.teamName : "Admin"} settings={settings}>
       <main style={{ maxWidth: 960, margin: "0 auto", padding: "3rem 1.5rem" }}>
         <header style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: "1.5rem" }}>
           <div style={{ flex: 1 }}>
@@ -269,20 +301,6 @@ export default function AdminPage() {
                 : "Every event company, event, and show. Admin sees everything."}
             </p>
           </div>
-          <button className={`btn ${showArchived ? "is-on" : ""}`} onClick={() => setShowArchived((a) => !a)}>
-            {showArchived ? "Hide archived" : "Show archived"}
-          </button>
-          {getAdminToken() && (
-            <button
-              className="btn btn-ghost"
-              onClick={() => {
-                setAdminToken(null);
-                reload();
-              }}
-            >
-              Forget token
-            </button>
-          )}
           <CreateEventForm onCreated={reload} />
         </header>
 
@@ -498,6 +516,7 @@ export default function AdminPage() {
           </div>
         )}
       </main>
+      </WithSideNav>
     </div>
   );
 }

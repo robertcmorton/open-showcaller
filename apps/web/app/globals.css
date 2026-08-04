@@ -860,3 +860,69 @@ kbd {
   size: A4 landscape;
   margin: 12mm;
 }
+
+/* ---------- Left settings panel ---------- */
+
+.sidenav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 220px;
+  z-index: 40;
+  background: var(--surface);
+  border-right: 1px solid var(--border-subtle);
+  padding: 14px 10px;
+  overflow-y: auto;
+  transition: transform var(--t-med) var(--ease);
+}
+.sidenav.closed {
+  transform: translateX(-100%);
+}
+.sidenav-toggle {
+  position: fixed;
+  top: 10px;
+  z-index: 45;
+  transition: left var(--t-med) var(--ease);
+}
+.sidenav-brand {
+  display: block;
+  font-weight: 750;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  text-decoration: none;
+  padding: 4px 9px 10px;
+}
+.sidenav-title {
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  padding: 0 9px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidenav-section {
+  margin-bottom: 10px;
+}
+.sidenav .menu-item {
+  font-size: var(--fs-sm);
+}
+.with-sidenav {
+  padding-left: 232px;
+  transition: padding-left var(--t-med) var(--ease);
+}
+.with-sidenav.sidenav-closed {
+  padding-left: 34px;
+}
+@media (max-width: 900px) {
+  .with-sidenav,
+  .with-sidenav.sidenav-closed {
+    padding-left: 0;
+  }
+  .sidenav {
+    box-shadow: var(--shadow-overlay);
+  }
+}
