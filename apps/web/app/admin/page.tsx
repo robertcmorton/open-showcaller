@@ -36,7 +36,7 @@ function CreateEventForm({ onCreated }: { onCreated: () => void }) {
       onSubmit={(e) => {
         e.preventDefault();
         if (!name.trim()) return;
-        void api.createEvent({ name: name.trim(), location: location.trim() || undefined, startDate, endDate }).then(() => {
+        void api.createEvent({ name: name.trim(), location: location.trim() || undefined, startDate, endDate, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }).then(() => {
           setName("");
           setLocation("");
           setOpen(false);
@@ -372,6 +372,25 @@ export default function AdminPage() {
                 </span>
                 <button className="btn btn-sm btn-ghost" onClick={() => rename("event", event.id, event.name)}>
                   Rename
+                </button>
+                <button
+                  className="btn btn-sm btn-ghost"
+                  title="The event's location decides its timezone — the primary time only changes when the location does"
+                  onClick={() => {
+                    const location = window.prompt("Event location", event.location ?? "");
+                    if (location === null) return;
+                    const timezone = window.prompt(
+                      "Timezone for this location (IANA name)",
+                      event.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    );
+                    if (timezone === null) return;
+                    void api
+                      .patchEvent(event.id, { location, timezone })
+                      .then(reload)
+                      .catch((err) => window.alert(String(err)));
+                  }}
+                >
+                  Location…
                 </button>
                 <button
                   className="btn btn-sm btn-ghost"

@@ -239,9 +239,24 @@ export function createApiHandler(handle: DbHandle) {
         const id = pathname.split("/")[2]!;
         if (!(await requireEventAccess(id))) return true;
         const body = await readJson(req);
+        const current = await db.query.events.findFirst({ where: eq(schema.events.id, id) });
+        if (!current) {
+          json(res, 404, { error: "event not found" });
+          return true;
+        }
         const patch: Record<string, unknown> = {};
         if (typeof body.name === "string" && body.name.trim()) patch.name = body.name.trim();
         if (typeof body.location === "string") patch.location = body.location.trim() || null;
+        if (typeof body.timezone === "string" && body.timezone && body.timezone !== current.timezone) {
+          // The event's primary time may only change when its LOCATION changes.
+          const locationChanged =
+            typeof body.location === "string" && (body.location.trim() || null) !== current.location;
+          if (!locationChanged) {
+            json(res, 400, { error: "timezone can only change together with the event location" });
+            return true;
+          }
+          patch.timezone = body.timezone;
+        }
         if (Object.keys(patch).length > 0) await db.update(schema.events).set(patch).where(eq(schema.events.id, id));
         json(res, 200, { id });
         return true;
@@ -555,6 +570,13 @@ export function createApiHandler(handle: DbHandle) {
             use24h: meta.use24h,
             plannedStartSec: meta.plannedStartSec,
             versionLabel: meta.versionLabel || null,
+            timezone: (await (async () => {
+              const ev = await db.query.events.findFirst({
+                where: eq(schema.events.id, rundown.eventId),
+                columns: { timezone: true },
+              });
+              return ev?.timezone ?? null;
+            })()),
           },
           keyTimes,
           lastUpdated: rundown.docUpdatedAt?.toISOString() ?? null,

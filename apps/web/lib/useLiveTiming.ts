@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { computeLiveTiming, localSecondsOfDay, type LiveShowTiming, type PlanTiming } from "@opencall/core";
+import { computeLiveTiming, zoneSecondsOfDay, type LiveShowTiming, type PlanTiming } from "@opencall/core";
 import type { ShowChannel } from "./showChannel";
 
 /**
@@ -31,7 +31,7 @@ export function useLiveTiming(channel: ShowChannel, timing: PlanTiming): LiveSho
           pausedAccumMs: show.pausedAccumMs,
           pausedAtMs: show.pausedAtMs,
           nowMs: channelRef.current.serverNow(),
-          toSecondsOfDay: localSecondsOfDay,
+          toSecondsOfDay: (ms) => zoneSecondsOfDay(ms, channelRef.current.timezone),
         }),
       );
     };

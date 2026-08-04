@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { formatTimeOfDay } from "@opencall/core";
+import { formatTimeOfDay, zoneAbbreviation, zoneSecondsOfDay } from "@opencall/core";
 
 /** Close on outside pointerdown or Escape. */
 export function useDismiss(open: boolean, onClose: () => void) {
@@ -60,21 +60,22 @@ export function Dropdown({
   );
 }
 
-/** Ticking time-of-day clock for surface headers. */
-export function HeaderClock({ use24h }: { use24h: boolean }) {
+/**
+ * Ticking clock for surface headers — always the EVENT's wall clock (its
+ * location's timezone, DST-aware), never the viewer's device time.
+ */
+export function HeaderClock({ use24h, timeZone }: { use24h: boolean; timeZone?: string | null }) {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
-    const tick = () => {
-      const d = new Date();
-      setNow(d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds());
-    };
+    const tick = () => setNow(Math.floor(zoneSecondsOfDay(Date.now(), timeZone)));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [timeZone]);
+  const abbr = timeZone ? zoneAbbreviation(timeZone) : "";
   return (
     <div style={{ textAlign: "right" }}>
-      <div className="header-label">Time</div>
+      <div className="header-label">Event time{abbr ? ` · ${abbr}` : ""}</div>
       <div className="header-clock mono">{now != null ? formatTimeOfDay(now, use24h) : "--:--:--"}</div>
     </div>
   );

@@ -107,7 +107,7 @@ export const api = {
     request<{ id: string }>(`/rundowns/${rundownId}/snapshots`, { method: "POST", body: JSON.stringify({ label }) }),
   restoreSnapshot: (snapshotId: string, name?: string) =>
     request<{ id: string }>(`/snapshots/${snapshotId}/restore`, { method: "POST", body: JSON.stringify({ name }) }),
-  createEvent: (body: { name: string; location?: string; startDate: string; endDate: string }) =>
+  createEvent: (body: { name: string; location?: string; startDate: string; endDate: string; timezone?: string }) =>
     request<{ id: string }>("/events", { method: "POST", body: JSON.stringify(body) }),
   createRundown: (body: {
     eventId: string;
@@ -126,7 +126,7 @@ export const api = {
   resolveCode: (code: string) =>
     request<{ role: "caller" | "editor" | "follower"; rundownId: string }>(`/codes/${encodeURIComponent(code)}`),
   live: () => request<{ rundownId: string; state: string; startedAt: string }[]>("/live"),
-  patchEvent: (id: string, body: { name?: string; location?: string }) =>
+  patchEvent: (id: string, body: { name?: string; location?: string; timezone?: string }) =>
     request<{ id: string }>(`/events/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteEvent: (id: string) => request<{ id: string }>(`/events/${id}`, { method: "DELETE" }),
   patchRundown: (id: string, body: { name?: string }) =>

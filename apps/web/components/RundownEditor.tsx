@@ -480,7 +480,7 @@ export function RundownEditor({
         <div style={{ marginLeft: "auto", display: "flex", gap: 16, alignItems: "center" }}>
           <span className={`status-dot ${connected ? "ok" : ""}`}>doc</span>
           <span className={`status-dot ${channel.connected ? "ok" : ""}`}>show</span>
-          <HeaderClock use24h={meta.use24h} />
+          <HeaderClock use24h={meta.use24h} timeZone={channel.timezone} />
         </div>
       </header>
 

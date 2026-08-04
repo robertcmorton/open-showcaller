@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-05 (event-timezone time model)
+- **The event's location now governs every clock.** Each event carries an IANA timezone; the show channel hands it to every connected surface, and header clocks, live drift, and projected-end all compute in the **event's wall clock** (a viewer in another country sees the venue's time, labeled with the zone — "Event time · EDT"). Daylight saving is applied per-instant from the IANA database, so shows that cross a DST change stay correct — covered by unit tests on both a US and an Australian spring-forward boundary.
+- **The primary time can only change when the location changes**: the API rejects a timezone change without an accompanying location change, and the dashboard pairs the two in one "Location…" action. New events pick up the creator's timezone automatically.
+
 ### Added — 2026-08-05 (access hierarchy: event companies & archive)
 - **Three-tier access**: **Admin** (top level, sees and changes everything) → **Event company** (showcaller credentials: change event details and everything below, strictly scoped to the company's own events) → **Editor** (assigned per rundown via join code: changes rundown content, never events). Admin creates companies from the dashboard and hands out per-company showcaller tokens (rotatable); company tokens also drive the show and document channels as caller-level within their own company only. Verified against a locked server: a company sees only its own events, cannot touch another company's event (401), and cannot list companies (401); admin sees all.
 - **Archive** for events and rundowns (in addition to delete): archive/unarchive from the dashboard, archived items hidden by default with a "Show archived" toggle, shown dimmed with an archived chip.

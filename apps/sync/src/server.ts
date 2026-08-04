@@ -147,6 +147,17 @@ wss.on("connection", (ws, req) => {
         return;
       }
       clients.set(ws, { role: resolved.role, rundownId, device: msg.device });
+      // The event's location decides the timezone every clock renders in.
+      const rundownRow = await dbHandle.db.query.rundowns.findFirst({
+        where: eq(schema.rundowns.id, rundownId),
+        columns: { eventId: true },
+      });
+      const eventRow = rundownRow
+        ? await dbHandle.db.query.events.findFirst({
+            where: eq(schema.events.id, rundownRow.eventId),
+            columns: { timezone: true },
+          })
+        : null;
       send(ws, {
         v: PROTOCOL_VERSION,
         t: "welcome",
@@ -155,6 +166,7 @@ wss.on("connection", (ws, req) => {
         serverTimeMs: Date.now(),
         show: (await showStore.get(rundownId)).current,
         doc: { mode: resolved.role === "guest" ? "projection" : "sync" },
+        timezone: eventRow?.timezone,
       });
       broadcastPresence(rundownId);
       return;

@@ -158,3 +158,8 @@ Server supports current and previous `v` for one release cycle. This file is nor
 - **Cmd action `fire`** (requires `rowId`): logs an untimed pool cue into the live session's
   as-run record (`show_transitions.type = "fire"`, rowId = `pool:<title>`) without any state
   transition. Errors with 400 when no session is live.
+
+## v1.3 additions (additive)
+
+- **`welcome.timezone`** (optional string): the IANA timezone of the event's location. Clients
+  render every clock in this zone (DST-aware via Intl); absent → device-local fallback.

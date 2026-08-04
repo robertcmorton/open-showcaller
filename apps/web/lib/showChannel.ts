@@ -15,6 +15,8 @@ const OFFSET_SAMPLES = 5;
 export interface ShowChannel {
   connected: boolean;
   role: Role | null;
+  /** IANA timezone of the event — governs every clock on this surface. */
+  timezone: string | null;
   show: ShowStatePayload | null;
   /** Server clock now: Date.now() + measured offset. */
   serverNow: () => number;
@@ -29,6 +31,7 @@ export interface ShowChannel {
 export function useShowChannel(rundownId: string, device: "console" | "companion", joinCode?: string): ShowChannel {
   const [connected, setConnected] = useState(false);
   const [role, setRole] = useState<Role | null>(null);
+  const [timezone, setTimezone] = useState<string | null>(null);
   const [show, setShow] = useState<ShowStatePayload | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const offsetRef = useRef(0);
@@ -65,6 +68,7 @@ export function useShowChannel(rundownId: string, device: "console" | "companion
           case "welcome": {
             setConnected(true);
             setRole(msg.role);
+            setTimezone(msg.timezone ?? null);
             lastSeqRef.current = msg.show.seq;
             setShow(msg.show);
             for (let i = 0; i < OFFSET_SAMPLES; i++)
@@ -108,6 +112,7 @@ export function useShowChannel(rundownId: string, device: "console" | "companion
   return {
     connected,
     role,
+    timezone,
     show,
     serverNow: () => Date.now() + offsetRef.current,
     sendCmd: (action, rowId) => {
