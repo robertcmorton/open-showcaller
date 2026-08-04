@@ -1,0 +1,11 @@
+.DS_Store
+node_modules/
+.env
+.env.*
+!.env.example
+dist/
+.next/
+.turbo/
+Images/
+DEMO_NOTES.md
+CLAUDE.local.md
