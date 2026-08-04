@@ -61,3 +61,7 @@ I want to build **Open Showcaller**: an open-source, self-hostable rundown and s
 **Researched future scope (post-v1 — don't build, don't design out):** per-event task management (task lists with reusable templates, nested subtasks, milestones, dependencies, tags/watchers; list + Gantt + calendar views; public calendar links; per-event content hub, team chat, notifications; guest users with task-scoped visibility; org-level KPI dashboard). And from a timecode-driven show-automation tool: a "pro mode" where a rundown item carries a frame-accurate cue timeline chased by external timecode, with typed automation tracks (camera cuts, OSC/MIDI/HTTP triggers, text) and live override verbs (skip/hold/take). Native iOS/Android companion apps consuming the same protocol. Details in local research notes.
 
 Start with Phase 1. Before writing code, propose for my review: (a) the Postgres schema, (b) the Yjs document shape for a rundown (rows, columns, cells, timing fields), and (c) the realtime protocol message set as a `PROTOCOL.md` draft — join/auth, state sync, show transport, clock offset. The sync model and protocol are the hardest things to change later; we get those right first.
+
+---
+
+**Status:** all seven phases above are shipped and deployed. The next milestone — run-sheet import (XLSX/XLS/CSV/PDF upload), role-based screens (Admin/Showcaller/Edit/View), live active-row highlighting, and a full UI modernization — is specified in [BUILD_PROMPT_2.md](BUILD_PROMPT_2.md).

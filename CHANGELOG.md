@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-04 (spec: milestone 2 build prompt)
+- **`BUILD_PROMPT_2.md`** — the next build milestone, specified end to end in five phases: (1) design-system foundation and full UI modernization (tokens, dark show-surface theme, tabular-figure timing type, component set, motion) folding in the parked visual-parity items; (2) role-based screens with server-enforced access — **Admin** (cross-show control room), **Showcaller** (full console), **Edit** (content-only), **View** (read-only) — plus interim token gating of the doc channel and management API; (3) the run-sheet import pipeline (XLSX/XLS/CSV/PDF upload → extract → detect → column-mapping preview) with tolerant parsers and synthetic fixtures; (4) rundown fidelity features from real-world sheets — milestone/banner rows, row colors, cue-type chips, key times, countdown-to-anchor column, version label, untimed cue pool; (5) live polish — unmistakable active-row highlighting with progress bar on every surface while the timer runs, and formatted print/PDF export with repeated headers and title block.
+
 ### Changed — 2026-08-04 (spec: real-world run sheet import)
 - The import requirement in `BUILD_PROMPT.md` now covers **uploading existing run sheets as XLSX, XLS, CSV, or PDF** through a single extract → map-columns → preview pipeline, with tolerant parsing of real-world data (free-text durations, mixed time formats, milestone rows, section banners, stacked multi-cue cells, per-page repeated headers). Informed by analysis of real produced run sheets kept as local-only reference material; the print/PDF export spec gained key-times table, repeated per-page headers, and footers to match.
 
