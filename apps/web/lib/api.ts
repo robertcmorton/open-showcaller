@@ -16,6 +16,7 @@ export interface RundownSummary {
 
 export interface EventSummary {
   id: string;
+  teamId: string;
   name: string;
   location: string | null;
   archivedAt: string | null;
@@ -94,6 +95,7 @@ export const api = {
     request<{ id: string; companyToken: string }>("/companies", { method: "POST", body: JSON.stringify({ name }) }),
   rotateCompanyToken: (id: string) =>
     request<{ id: string; companyToken: string }>(`/companies/${id}/rotate-token`, { method: "POST" }),
+  deleteCompany: (id: string) => request<{ id: string }>(`/companies/${id}`, { method: "DELETE" }),
   createGuestPass: (body: { rundownId: string; columns?: Record<string, boolean> }) =>
     request<{ token: string }>("/guest-passes", { method: "POST", body: JSON.stringify(body) }),
   joinCodes: (rundownId: string) => request<JoinCodeSummary[]>(`/rundowns/${rundownId}/join-codes`),
@@ -107,7 +109,7 @@ export const api = {
     request<{ id: string }>(`/rundowns/${rundownId}/snapshots`, { method: "POST", body: JSON.stringify({ label }) }),
   restoreSnapshot: (snapshotId: string, name?: string) =>
     request<{ id: string }>(`/snapshots/${snapshotId}/restore`, { method: "POST", body: JSON.stringify({ name }) }),
-  createEvent: (body: { name: string; location?: string; startDate: string; endDate: string; timezone?: string }) =>
+  createEvent: (body: { name: string; location?: string; startDate: string; endDate: string; timezone?: string; teamId?: string }) =>
     request<{ id: string }>("/events", { method: "POST", body: JSON.stringify(body) }),
   createRundown: (body: {
     eventId: string;

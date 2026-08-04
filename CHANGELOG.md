@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-05 (dashboard: companies own their events; drag-and-drop import)
+- **Events now appear underneath their event company** on the dashboard: each company is a band with its event count, showcaller-token actions, and its own "+ New event" (events created there belong to that company). A company credential sees exactly one band — its own.
+- **Companies can be deleted** (armed two-click confirm) — deletion cascades through the company's events, rundowns, sessions, tokens, snapshots, templates, and memberships.
+- **The import box accepts drag-and-drop**: drop an XLSX/XLS/CSV/PDF straight onto it (highlights while dragging) — clicking to browse still works.
+
 ### Added — 2026-08-05 (event date editing & ordering rule)
 - **Event dates are now editable** from the dashboard (a "Dates…" inline editor on each event card) — previously they were fixed at creation.
 - **The end date can never precede the start date**, enforced in three layers: the date pickers themselves (the end input's minimum follows the start, and moving the start forward bumps the end along), the form guard, and the API — which validates the *merged* result on both create and edit, so moving just one side past the other is rejected with a clear error.

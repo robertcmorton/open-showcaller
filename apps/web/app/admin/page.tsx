@@ -15,7 +15,7 @@ import { Icon } from "../../components/ui";
 import { ImportPanel } from "../../components/ImportPanel";
 import { SideNavSection, WithSideNav } from "../../components/SideNav";
 
-function CreateEventForm({ onCreated }: { onCreated: () => void }) {
+function CreateEventForm({ onCreated, teamId }: { onCreated: () => void; teamId?: string }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
@@ -37,7 +37,7 @@ function CreateEventForm({ onCreated }: { onCreated: () => void }) {
       onSubmit={(e) => {
         e.preventDefault();
         if (!name.trim()) return;
-        void api.createEvent({ name: name.trim(), location: location.trim() || undefined, startDate, endDate, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }).then(() => {
+        void api.createEvent({ name: name.trim(), location: location.trim() || undefined, startDate, endDate, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, teamId }).then(() => {
           setName("");
           setLocation("");
           setOpen(false);
@@ -330,6 +330,25 @@ export default function AdminPage() {
     void (kind === "event" ? api.patchEvent(id, { name }) : api.patchRundown(id, { name })).then(reload);
   };
 
+  // Events appear underneath their company. Admin sees every company;
+  // a company credential sees exactly one group — its own.
+  const eventsByTeam = new Map<string, EventSummary[]>();
+  for (const event of events ?? []) {
+    const list = eventsByTeam.get(event.teamId) ?? [];
+    list.push(event);
+    eventsByTeam.set(event.teamId, list);
+  }
+  const groups =
+    me?.role === "admin" && companies.length > 0
+      ? companies.map((c) => ({
+          id: c.id,
+          name: c.name,
+          companyToken: c.companyToken,
+          real: true,
+          events: eventsByTeam.get(c.id) ?? [],
+        }))
+      : [{ id: "own", name: me?.teamName ?? "Events", companyToken: null, real: false, events: events ?? [] }];
+
   if (locked)
     return (
       <div data-theme="light" style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
@@ -385,7 +404,21 @@ export default function AdminPage() {
                 : "Every event company, event, and show. Admin sees everything."}
             </p>
           </div>
-          <CreateEventForm onCreated={reload} />
+          {me?.role === "admin" && (
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                const name = window.prompt("Company name");
+                if (name?.trim())
+                  void api.createCompany(name.trim()).then(({ companyToken }) => {
+                    window.alert(`Company created. Showcaller token (share it securely):\n\n${companyToken}`);
+                    reload();
+                  });
+              }}
+            >
+              {Icon.plus} Company
+            </button>
+          )}
         </header>
 
         {error && (
@@ -401,69 +434,45 @@ export default function AdminPage() {
           </div>
         )}
 
-        {me?.role === "admin" && (
-          <section className="card" style={{ marginBottom: 14, padding: "14px 16px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <h2 style={{ fontSize: "1.02rem", fontWeight: 650, margin: 0, flex: 1 }}>
-                Event companies{" "}
-                <span style={{ color: "var(--text-3)", fontWeight: 400, fontSize: "var(--fs-sm)" }}>
-                  — each company's showcaller credential manages only its own events
-                </span>
-              </h2>
-              <button
-                className="btn btn-sm"
-                onClick={() => {
-                  const name = window.prompt("Company name");
-                  if (name?.trim())
-                    void api.createCompany(name.trim()).then(({ companyToken }) => {
-                      window.alert(`Company created. Showcaller token (share it securely):\n\n${companyToken}`);
-                      reload();
-                    });
-                }}
-              >
-                {Icon.plus} Company
-              </button>
-            </div>
-            <ul style={{ listStyle: "none", margin: "8px 0 0", padding: 0 }}>
-              {companies.map((c) => (
-                <li key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderTop: "1px solid var(--border-subtle)" }}>
-                  <strong style={{ minWidth: 160 }}>{c.name}</strong>
-                  <span style={{ color: "var(--text-3)", fontSize: "var(--fs-sm)", flex: 1 }}>
-                    {c.eventCount} event{c.eventCount === 1 ? "" : "s"}
-                  </span>
-                  {c.companyToken && (
+        <div style={{ display: "grid", gap: 20 }}>
+          {groups.map((group) => (
+            <section key={group.id}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "2px 2px 8px" }}>
+                <h2 style={{ fontSize: "1.1rem", fontWeight: 700, margin: 0, letterSpacing: "-0.01em" }}>{group.name}</h2>
+                <span className="chip">{group.events.length} event{group.events.length === 1 ? "" : "s"}</span>
+                <span style={{ flex: 1 }} />
+                {me?.role === "admin" && group.real && (
+                  <>
+                    {group.companyToken && (
+                      <button
+                        className="btn btn-sm"
+                        title="Copy this company's showcaller credential"
+                        onClick={() => void navigator.clipboard.writeText(group.companyToken!)}
+                      >
+                        Copy token
+                      </button>
+                    )}
                     <button
-                      className="btn btn-sm"
-                      onClick={() => void navigator.clipboard.writeText(c.companyToken!)}
-                      title="Copy the showcaller credential for this company"
+                      className="btn btn-sm btn-ghost"
+                      onClick={() =>
+                        void api.rotateCompanyToken(group.id).then(({ companyToken }) => {
+                          window.alert(`New token (the old one stops working):\n\n${companyToken}`);
+                          reload();
+                        })
+                      }
                     >
-                      Copy token
+                      Rotate
                     </button>
-                  )}
-                  <button
-                    className="btn btn-sm btn-ghost"
-                    onClick={() =>
-                      void api.rotateCompanyToken(c.id).then(({ companyToken }) => {
-                        window.alert(`New token (the old one stops working):\n\n${companyToken}`);
-                        reload();
-                      })
-                    }
-                  >
-                    Rotate
-                  </button>
-                </li>
-              ))}
-              {companies.length === 0 && (
-                <li style={{ color: "var(--text-3)", fontSize: "var(--fs-sm)", padding: "6px 0" }}>
-                  No companies yet — create one to hand out scoped showcaller credentials.
-                </li>
-              )}
-            </ul>
-          </section>
-        )}
-
-        <div style={{ display: "grid", gap: 14 }}>
-          {events?.map((event) => (
+                    <DangerButton
+                      label="Delete company"
+                      confirmLabel={`Delete company + ${group.events.length} event${group.events.length === 1 ? "" : "s"}?`}
+                      onConfirm={() => void api.deleteCompany(group.id).then(reload)}
+                    />
+                  </>
+                )}
+              </div>
+              <div style={{ display: "grid", gap: 12, paddingLeft: 12, borderLeft: "2px solid var(--border-subtle)" }}>
+                {group.events.map((event) => (
             <section key={event.id} className="card">
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px 4px", opacity: event.archivedAt ? 0.55 : 1 }}>
                 <h2 style={{ fontSize: "1.02rem", fontWeight: 650, margin: 0 }}>{event.name}</h2>
@@ -590,6 +599,17 @@ export default function AdminPage() {
                 </div>
               )}
               <CreateRundownForm eventId={event.id} templates={templates} onCreated={reload} />
+            </section>
+                ))}
+                {group.events.length === 0 && (
+                  <div style={{ color: "var(--text-3)", fontSize: "var(--fs-sm)", padding: "2px 0" }}>
+                    No events yet for this company.
+                  </div>
+                )}
+                <div>
+                  <CreateEventForm teamId={group.real ? group.id : undefined} onCreated={reload} />
+                </div>
+              </div>
             </section>
           ))}
         </div>

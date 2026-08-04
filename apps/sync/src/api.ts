@@ -225,6 +225,30 @@ export function createApiHandler(handle: DbHandle) {
         return true;
       }
 
+      if (req.method === "DELETE" && /^\/companies\/[^/]+$/.test(pathname)) {
+        if (!(await requireAdmin())) return true;
+        const id = pathname.split("/")[2]!;
+        // Cascade: every event under the company (and everything under those),
+        // the company's templates and memberships, then the company itself.
+        const companyEvents = await db.query.events.findMany({
+          where: eq(schema.events.teamId, id),
+          columns: { id: true },
+        });
+        for (const event of companyEvents) {
+          const rundowns = await db.query.rundowns.findMany({
+            where: eq(schema.rundowns.eventId, event.id),
+            columns: { id: true },
+          });
+          for (const r of rundowns) await deleteRundown(r.id);
+          await db.delete(schema.events).where(eq(schema.events.id, event.id));
+        }
+        await db.delete(schema.templates).where(eq(schema.templates.teamId, id));
+        await db.delete(schema.teamMembers).where(eq(schema.teamMembers.teamId, id));
+        await db.delete(schema.teams).where(eq(schema.teams.id, id));
+        json(res, 200, { id });
+        return true;
+      }
+
       if (req.method === "PATCH" && /^\/companies\/[^/]+$/.test(pathname)) {
         if (!(await requireAdmin())) return true;
         const id = pathname.split("/")[2]!;

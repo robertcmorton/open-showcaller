@@ -66,6 +66,7 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
   const [mapping, setMapping] = useState<ColumnTarget[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   const rows = useMemo(
     () => (grid ? classifyRows(grid, headerIndex, mapping) : []),
@@ -134,7 +135,25 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
       {!grid && (
         <label
           className="empty"
-          style={{ border: "1.5px dashed var(--border)", borderRadius: "var(--r-md)", cursor: "pointer", display: "block" }}
+          style={{
+            border: `1.5px dashed ${dragOver ? "var(--accent)" : "var(--border)"}`,
+            background: dragOver ? "var(--accent-soft)" : undefined,
+            borderRadius: "var(--r-md)",
+            cursor: "pointer",
+            display: "block",
+            transition: "border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease)",
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) void onFile(file);
+          }}
         >
           <input
             type="file"
@@ -146,7 +165,13 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
             }}
           />
           <div className="glyph">⤒</div>
-          <div>{busy ? "Reading file…" : "Click to choose a file — spreadsheets and text-based PDFs work; nothing uploads until you confirm."}</div>
+          <div>
+            {busy
+              ? "Reading file…"
+              : dragOver
+                ? "Drop it here"
+                : "Drop a file here or click to choose — spreadsheets and text-based PDFs work; nothing uploads until you confirm."}
+          </div>
         </label>
       )}
 
