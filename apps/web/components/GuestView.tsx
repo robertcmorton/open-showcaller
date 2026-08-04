@@ -5,7 +5,8 @@ import { computeTiming, formatDuration, formatTimeOfDay, type PlanRow } from "@o
 import { API_URL } from "../lib/api";
 
 interface GuestProjection {
-  meta: { name: string; use24h: boolean; plannedStartSec: number | null };
+  meta: { name: string; use24h: boolean; plannedStartSec: number | null; versionLabel: string | null };
+  keyTimes: { id: string; label: string; sec: number }[];
   lastUpdated: string | null;
   columns: { id: string; key: string; title: string; kind: string }[];
   rows: (PlanRow & { title: string; color: string | null; cells: Record<string, string> })[];
@@ -44,6 +45,12 @@ export function GuestView({ token }: { token: string }) {
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: "2rem 1.2rem" }}>
       <header style={{ display: "flex", alignItems: "baseline", gap: 16, flexWrap: "wrap", marginBottom: "1rem" }}>
         <h1 style={{ fontSize: "1.2rem", margin: 0 }}>{meta.name}</h1>
+        {meta.versionLabel && <span className="chip" style={{ color: "var(--warn)", borderColor: "var(--warn)" }}>{meta.versionLabel}</span>}
+        {data.keyTimes.length > 0 && (
+          <span style={{ color: "var(--text-2)", fontSize: "var(--fs-sm)" }} className="mono">
+            {data.keyTimes.map((kt) => `${kt.label} ${formatTimeOfDay(kt.sec, meta.use24h)}`).join(" · ")}
+          </span>
+        )}
         <span style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)" }}>
           read-only guest view
           {data.lastUpdated ? ` · last updated ${new Date(data.lastUpdated).toLocaleString()}` : ""} · refresh for the
@@ -70,7 +77,11 @@ export function GuestView({ token }: { token: string }) {
           {rows.map((row, i) => {
             const t = timing.rows[i]!;
             return (
-              <tr key={row.id} className={row.type === "group" ? "group-row" : ""}>
+              <tr
+                key={row.id}
+                className={row.type === "group" ? "group-row" : row.type === "milestone" ? "milestone-row" : ""}
+                style={{ background: row.type !== "group" && row.color ? row.color : undefined }}
+              >
                 <td className="row-number mono" style={{ cursor: "default" }}>
                   {i + 1}
                 </td>

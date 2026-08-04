@@ -166,7 +166,7 @@ export const showSessions = pgTable(
   ],
 );
 
-export const transitionTypes = ["start", "pause", "resume", "next", "prev", "jump", "stop"] as const;
+export const transitionTypes = ["start", "pause", "resume", "next", "prev", "jump", "stop", "fire"] as const;
 
 export const showTransitions = pgTable("show_transitions", {
   id: id().primaryKey(),

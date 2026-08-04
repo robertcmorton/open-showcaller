@@ -663,3 +663,76 @@ kbd {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------- Milestone rows ---------- */
+
+.rundown-grid tr.milestone-row td {
+  background: linear-gradient(90deg, var(--warn-soft), transparent 70%);
+  border-top: 1px solid rgba(232, 176, 60, 0.35);
+  border-bottom: 1px solid rgba(232, 176, 60, 0.35);
+  font-weight: 600;
+  color: var(--warn);
+}
+.rundown-grid tr.milestone-row td.mono {
+  color: var(--warn);
+}
+
+/* ---------- Row color swatches ---------- */
+
+.color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  padding: 0;
+  transition: transform var(--t-fast) var(--ease);
+}
+.color-swatch:hover {
+  transform: scale(1.15);
+}
+
+/* ---------- Cue-type chips over a cell editor ---------- */
+
+.chip-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.chip-row button {
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+.chip-row button:hover {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+/* ---------- Cue pool ---------- */
+
+.pool-section {
+  margin-top: 14px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-lg);
+  padding: 10px 14px;
+}
+.pool-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+.pool-item:first-of-type {
+  border-top: none;
+}

@@ -7,6 +7,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-05 (milestone 2 · phase 4: rundown fidelity)
+- **Milestone rows**: a first-class row type for timed markers with no duration (doors, kick-off, "team list due") rendered as a full-width amber banner; excluded from duration math; produced by the importer and the new **+ Milestone** button.
+- **Row highlight colors**: multi-select rows and pick from a curated palette (or clear) in the selection bar; colors follow the row onto every surface including the guest view.
+- **Key times**: labeled times for the day (doors, soundcheck, on-air…) editable from a header chip, stored in the document, shown on Showcaller/Edit/View headers and the guest page — the real-world "KEY TIMES" table.
+- **ZERO countdown column**: optional per-user column showing T-minus to the next anchored time — the printed countdown convention from live sport cue sheets.
+- **Version label**: a free-text chip on the rundown header ("V2", "FINAL") stored in the document and shown to guests; ready for print title blocks.
+- **Cue-type quick chips**: columns titled "Type" get a one-click vocabulary (AUDIO, GFX, VTR, LED, PA, MC, PYRO…) above the cell editor — still free text underneath.
+- **Untimed cue pool**: a section below the rundown for cues that live outside the timeline (stings, chants, filler). During a live show the caller **fires** a pool cue and it logs into the as-run report with a timestamp — verified end-to-end (`fire` → `pool:Goal Sting` row in the report CSV) — without moving the active row. Guest views hide it; the protocol gained an additive `fire` action.
+- Guest projection now respects **Hide** on durations (hidden durations never leave the server).
+
 ### Added — 2026-08-05 (milestone 2 · phase 3: run-sheet import)
 - **Upload an existing run sheet — XLSX, XLS, CSV, or PDF — from the admin dashboard** ("Import run sheet…" per event). Extraction is fully client-side: spreadsheets read as displayed text; PDFs go through text-run clustering (lines by Y, column bands by X, repeated page headers dropped) with a clear error for scanned files that have no text layer.
 - **Mapping preview before anything is created**: auto-detected header row and column mapping (title/start/duration/departments, with synonym matching — VTR→Video, LX→Lights, WHO/WHAT→Production Notes…), retargetable per column, unknown headers become new custom columns; rows classified as cue / **milestone** (time, no duration) / **section** (title-only banner) / spacer; unparseable cells highlighted in red and imported empty rather than silently dropped.

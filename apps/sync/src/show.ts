@@ -75,6 +75,10 @@ export class ShowStateMachine {
         if (s.state === "idle" || s.state === "ended") return "not live";
         return next({ state: "ended", activeRowId: null, activeRowStartedAtMs: null, pausedAtMs: null });
       }
+      // "fire" is handled by the server before the state machine — it logs to
+      // the as-run record and never transitions state.
+      case "fire":
+        return "fire is not a state transition";
     }
   }
 }

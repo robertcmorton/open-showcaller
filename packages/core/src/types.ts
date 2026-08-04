@@ -1,4 +1,5 @@
-export type RowType = "cue" | "group";
+/** "milestone" = a timed marker with no duration (gates open, kick-off). */
+export type RowType = "cue" | "group" | "milestone";
 
 /** Plain-JS projection of one rundown row — the timing engine never reads Yjs directly. */
 export interface PlanRow {

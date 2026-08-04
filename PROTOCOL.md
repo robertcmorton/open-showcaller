@@ -150,3 +150,11 @@ Server supports current and previous `v` for one release cycle. This file is nor
 - **Management API**: `Authorization: Bearer <ADMIN_TOKEN>` for cross-show endpoints;
   `X-Join-Code` (caller/editor, scoped to the rundown) for rundown-scoped endpoints.
   `GET /codes/:code` is public — a valid code is itself the credential.
+
+## v1.2 additions (additive)
+
+- **Row type `milestone`**: a timed marker with no duration (doors, kick-off). Timing engines
+  treat it as zero-duration; renderers show a full-width banner.
+- **Cmd action `fire`** (requires `rowId`): logs an untimed pool cue into the live session's
+  as-run record (`show_transitions.type = "fire"`, rowId = `pool:<title>`) without any state
+  transition. Errors with 400 when no session is live.

@@ -14,7 +14,7 @@ export interface ColumnDef {
 }
 
 export interface SeedRow {
-  type: "cue" | "group";
+  type: "cue" | "group" | "milestone";
   title: string;
   durationSec?: number | null;
   hardStartSec?: number | null;
@@ -49,6 +49,14 @@ export interface DocMeta {
   name?: string;
   plannedStartSec?: number | null;
   use24h?: boolean;
+  /** Free-text version label shown on headers and print ("V2", "FINAL"). */
+  versionLabel?: string;
+}
+
+export interface KeyTime {
+  id: string;
+  label: string;
+  sec: number;
 }
 
 /**
@@ -133,13 +141,28 @@ export interface ProjectedRow extends PlanRow {
 }
 
 /** Project a rundown Y.Doc into plain rows for the timing engine and renderers. */
-export function projectRundownDoc(doc: Y.Doc): { meta: Required<DocMeta>; columns: ColumnDef[]; rows: ProjectedRow[] } {
+export function projectRundownDoc(doc: Y.Doc): {
+  meta: Required<DocMeta>;
+  keyTimes: KeyTime[];
+  columns: ColumnDef[];
+  rows: ProjectedRow[];
+} {
   const metaMap = doc.getMap("meta");
   const meta: Required<DocMeta> = {
     name: (metaMap.get("name") as string | undefined) ?? "Untitled Rundown",
     plannedStartSec: (metaMap.get("plannedStartSec") as number | undefined) ?? null,
     use24h: (metaMap.get("use24h") as boolean | undefined) ?? false,
+    versionLabel: (metaMap.get("versionLabel") as string | undefined) ?? "",
   };
+  const keyTimes: KeyTime[] = doc
+    .getArray<Y.Map<unknown>>("keyTimes")
+    .toArray()
+    .map((kt) => ({
+      id: kt.get("id") as string,
+      label: (kt.get("label") as string | undefined) ?? "",
+      sec: (kt.get("sec") as number | undefined) ?? 0,
+    }))
+    .sort((a, b) => a.sec - b.sec);
   const columns: ColumnDef[] = doc
     .getArray<Y.Map<unknown>>("columns")
     .toArray()
@@ -171,7 +194,7 @@ export function projectRundownDoc(doc: Y.Doc): { meta: Required<DocMeta>; column
 
     rows.push({
       id: rowId,
-      type: (row.get("type") as "cue" | "group") ?? "cue",
+      type: (row.get("type") as "cue" | "group" | "milestone") ?? "cue",
       durationSec: (row.get("durationSec") as number | null) ?? null,
       hardStartSec: (row.get("hardStartSec") as number | null) ?? null,
       backtime: (row.get("backtime") as boolean | undefined) ?? false,
@@ -182,7 +205,7 @@ export function projectRundownDoc(doc: Y.Doc): { meta: Required<DocMeta>; column
       color: row.get("color") as string | undefined,
     });
   }
-  return { meta, columns, rows };
+  return { meta, keyTimes, columns, rows };
 }
 
 export const encodeDoc = (doc: Y.Doc): Uint8Array => Y.encodeStateAsUpdate(doc);

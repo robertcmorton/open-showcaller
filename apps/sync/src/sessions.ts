@@ -44,6 +44,24 @@ export class PersistentShowStore {
     return machine;
   }
 
+  /**
+   * Logs a fired pool cue into the as-run record of the live session without
+   * touching the state machine. No-op when no session is live.
+   */
+  async logFire(rundownId: string, label: string): Promise<boolean> {
+    const machine = await this.get(rundownId);
+    const { sessionId, state } = machine.current;
+    if (!sessionId || (state !== "running" && state !== "paused")) return false;
+    await this.handle.db.insert(schema.showTransitions).values({
+      id: ulid(),
+      sessionId,
+      at: new Date(),
+      type: "fire",
+      rowId: label,
+    });
+    return true;
+  }
+
   /** Queue the DB write-through for an accepted command. */
   persist(rundownId: string, state: ShowStatePayload, action: CmdAction, rowId?: string): void {
     const prev = this.writeChains.get(rundownId) ?? Promise.resolve();

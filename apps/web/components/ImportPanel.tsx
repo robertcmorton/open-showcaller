@@ -96,10 +96,12 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
   const doImport = () => {
     const seedRows: SeedRow[] = importable.map((r) => {
       if (r.kind === "banner") return { type: "group", title: r.title };
+      if (r.kind === "milestone")
+        return { type: "milestone", title: r.title || "—", durationSec: null, hardStartSec: r.startSec };
       return {
         type: "cue",
-        title: r.title || (r.kind === "milestone" ? "—" : ""),
-        durationSec: r.kind === "milestone" ? null : r.durationSec,
+        title: r.title,
+        durationSec: r.durationSec,
         hardStartSec: r.startSec,
         cells: r.cells,
       };

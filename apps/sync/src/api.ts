@@ -395,21 +395,28 @@ export function createApiHandler(handle: DbHandle) {
           json(res, 404, { error: "rundown not found" });
           return true;
         }
-        const { meta, columns, rows } = projectRundownDoc(decodeDoc(rundown.doc));
+        const { meta, keyTimes, columns, rows } = projectRundownDoc(decodeDoc(rundown.doc));
         const visibility = pass.columnVisibility ?? {};
         const visibleColumns = columns.filter(
           (c) => c.kind !== "richtext" || visibility[c.key] !== false,
         );
         const visibleKeys = new Set(visibleColumns.map((c) => c.key));
         json(res, 200, {
-          meta: { name: meta.name, use24h: meta.use24h, plannedStartSec: meta.plannedStartSec },
+          meta: {
+            name: meta.name,
+            use24h: meta.use24h,
+            plannedStartSec: meta.plannedStartSec,
+            versionLabel: meta.versionLabel || null,
+          },
+          keyTimes,
           lastUpdated: rundown.docUpdatedAt?.toISOString() ?? null,
           columns: visibleColumns,
           rows: rows.map((r) => ({
             id: r.id,
             type: r.type,
             title: r.title,
-            durationSec: r.durationSec,
+            // durationHidden means exactly this: hidden on shared views.
+            durationSec: r.durationHidden ? null : r.durationSec,
             hardStartSec: r.hardStartSec,
             backtime: r.backtime ?? false,
             durationMuted: r.durationMuted ?? false,

@@ -174,6 +174,14 @@ wss.on("connection", (ws, req) => {
       if (seen.length > 100) seen.shift();
       seenCmdIds.set(ctx.rundownId, seen);
 
+      // Pool-cue fire: as-run log entry only, never a state transition.
+      if (msg.action === "fire") {
+        const logged = await showStore.logFire(ctx.rundownId, msg.rowId!);
+        if (!logged)
+          send(ws, { v: PROTOCOL_VERSION, t: "cmd_error", id: msg.id, code: 400, msg: "no live session to fire into" });
+        return;
+      }
+
       const result = (await showStore.get(ctx.rundownId)).apply(msg.action, msg.rowId);
       if (typeof result === "string") {
         send(ws, { v: PROTOCOL_VERSION, t: "cmd_error", id: msg.id, code: 400, msg: result });

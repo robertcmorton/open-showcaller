@@ -29,7 +29,8 @@ export const HelloMsg = z.object({
 
 export const PingMsg = z.object({ ...envelope, t: z.literal("ping"), t0: z.number() });
 
-export const CmdAction = z.enum(["start", "pause", "resume", "next", "prev", "jump", "stop"]);
+// "fire" logs an untimed pool cue to the as-run record without moving the show.
+export const CmdAction = z.enum(["start", "pause", "resume", "next", "prev", "jump", "stop", "fire"]);
 export type CmdAction = z.infer<typeof CmdAction>;
 
 export const CmdMsg = z
@@ -42,6 +43,7 @@ export const CmdMsg = z
     confirm: z.boolean().optional(),
   })
   .refine((m) => m.action !== "jump" || !!m.rowId, { message: "jump requires rowId" })
+  .refine((m) => m.action !== "fire" || !!m.rowId, { message: "fire requires rowId" })
   .refine((m) => m.action !== "stop" || m.confirm === true, { message: "stop requires confirm" });
 
 export const ClientMsg = z.union([HelloMsg, PingMsg, CmdMsg]);
@@ -91,7 +93,7 @@ export const DocProjectionMsg = z.object({
   rows: z.array(
     z.object({
       id: z.string(),
-      type: z.enum(["cue", "group"]),
+      type: z.enum(["cue", "group", "milestone"]),
       startSec: z.number().nullable(),
       durationSec: z.number().nullable(),
       cells: z.record(z.string()),

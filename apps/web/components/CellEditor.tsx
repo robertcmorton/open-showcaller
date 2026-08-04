@@ -81,7 +81,16 @@ function FormatBar({ editor, suppressBlur }: { editor: Editor; suppressBlur: Mut
 }
 
 /** TipTap editor bound to one cell's Y.XmlFragment. Mounted only for the active cell. */
-export function CellEditor({ fragment, onDone }: { fragment: Y.XmlFragment; onDone: () => void }) {
+export function CellEditor({
+  fragment,
+  onDone,
+  chips,
+}: {
+  fragment: Y.XmlFragment;
+  onDone: () => void;
+  /** Quick-insert vocabulary (cue-type columns) — free text stays possible. */
+  chips?: string[];
+}) {
   const suppressBlur = useRef(false);
   const editor = useEditor({
     immediatelyRender: false,
@@ -111,6 +120,22 @@ export function CellEditor({ fragment, onDone }: { fragment: Y.XmlFragment; onDo
   return (
     <div style={{ position: "relative" }}>
       {editor && <FormatBar editor={editor} suppressBlur={suppressBlur} />}
+      {editor && chips && chips.length > 0 && (
+        <div className="chip-row">
+          {chips.map((chip) => (
+            <button
+              key={chip}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                editor.chain().focus().insertContent(`${chip} `).run();
+              }}
+            >
+              {chip}
+            </button>
+          ))}
+        </div>
+      )}
       <EditorContent editor={editor} />
     </div>
   );

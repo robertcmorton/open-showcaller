@@ -16,6 +16,8 @@ import {
 } from "@opencall/core";
 import { api, setActiveJoinCode } from "../lib/api";
 import { projectRundownDoc, type ColumnDef, type ProjectedRow } from "@opencall/db/doc";
+import { CuePool } from "./CuePool";
+import { KeyTimesEditor } from "./KeyTimes";
 import { CellEditor } from "./CellEditor";
 import { GuestPassPanel, HistoryPanel, JoinCodesPanel } from "./SharePanels";
 import { LiveReadouts, TransportBar } from "./TransportBar";
@@ -25,6 +27,9 @@ import { useLiveTiming } from "../lib/useLiveTiming";
 import { useRundownDoc } from "../lib/useRundownDoc";
 
 type ActiveCell = { rowId: string; columnId: string } | null;
+
+/** Default cue-type vocabulary from real production sheets. Free text always works too. */
+const CUE_TYPE_CHIPS = ["AUDIO", "GFX", "VTR", "LED", "PA", "MC", "GA", "DJ", "CREW", "PYRO", "LIGHTING", "LIVE VSN", "CAM", "SUPER", "TAKEOVER", "SCORE", "NOTE"];
 
 function SortableRow({
   row,
@@ -47,12 +52,12 @@ function SortableRow({
   return (
     <tr
       ref={setNodeRef}
-      className={`${row.type === "group" ? "group-row" : ""} ${selected ? "selected" : ""} ${active ? "active-row" : ""}`}
+      className={`${row.type === "group" ? "group-row" : ""} ${row.type === "milestone" ? "milestone-row" : ""} ${selected ? "selected" : ""} ${active ? "active-row" : ""}`}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.5 : 1,
-        background: row.type === "cue" && row.color ? row.color : undefined,
+        background: row.type !== "group" && row.color ? row.color : undefined,
       }}
     >
       <td className="row-number mono" onClick={onSelect} {...attributes} {...listeners}>
@@ -103,7 +108,7 @@ export function RundownEditor({
   const canEditContent = mode !== "view";
   const { doc, connected } = useRundownDoc(rundownId, joinCode);
   // The hook re-renders on every doc update, so projecting during render stays fresh.
-  const { meta, columns, rows } = projectRundownDoc(doc);
+  const { meta, keyTimes, columns, rows } = projectRundownDoc(doc);
   const timing = computeTiming(rows, meta.plannedStartSec);
   const channel = useShowChannel(rundownId, "console", joinCode);
   // Panel API calls (join codes, snapshots…) inherit this page's code.
@@ -120,6 +125,7 @@ export function RundownEditor({
   const [durationPopover, setDurationPopover] = useState<string | null>(null); // rowId
   const [panel, setPanel] = useState<"guest" | "history" | "join" | null>(null);
   const [hiddenCols, setHiddenCols] = useState<ReadonlySet<string>>(new Set());
+  const [showZero, setShowZero] = useState(false);
   const timeInputRef = useRef<HTMLInputElement>(null);
 
   // Per-user column visibility, loaded after mount to avoid hydration mismatch.
@@ -127,6 +133,7 @@ export function RundownEditor({
     try {
       const raw = localStorage.getItem(HIDDEN_COLS_KEY(rundownId));
       if (raw) setHiddenCols(new Set(JSON.parse(raw) as string[]));
+      setShowZero(localStorage.getItem(`oc:zerocol:${rundownId}`) === "1");
     } catch {
       /* ignore */
     }
@@ -186,14 +193,14 @@ export function RundownEditor({
     setLastSelected(rowId);
   };
 
-  const addRow = (type: "cue" | "group"): void => {
+  const addRow = (type: "cue" | "group" | "milestone"): void => {
     doc.transact(() => {
       const rowId = ulid();
       const yRow = new Y.Map();
       yRow.set("id", rowId);
       yRow.set("type", type);
       yRow.set("hardStartSec", null);
-      yRow.set("durationSec", type === "cue" ? 60 : null);
+      yRow.set("durationSec", type === "cue" ? 60 : null); // groups & milestones carry no duration
       yRow.set("cells", new Y.Map<Y.XmlFragment>());
       yRows.set(rowId, yRow);
       const order = yOrder.toArray();
@@ -317,7 +324,11 @@ export function RundownEditor({
       if (fragment)
         return (
           <td key={column.id} className="active-cell">
-            <CellEditor fragment={fragment} onDone={() => setActiveCell(null)} />
+            <CellEditor
+              fragment={fragment}
+              onDone={() => setActiveCell(null)}
+              chips={/^(cue\s*)?type$/i.test(column.title) ? CUE_TYPE_CHIPS : undefined}
+            />
           </td>
         );
     }
@@ -339,7 +350,9 @@ export function RundownEditor({
         style={{ position: "relative", cursor: "default" }}
         onDoubleClick={canEditContent ? () => setDurationPopover(rowRecord.id) : undefined}
       >
-        {rowRecord.durationSec != null ? (
+        {rowRecord.type === "milestone" ? (
+          <span className="duration-hidden-marker">—</span>
+        ) : rowRecord.durationSec != null ? (
           <span
             className={
               rowRecord.durationMuted ? "duration-muted" : rowRecord.durationHidden ? "duration-hidden-marker" : ""
@@ -421,6 +434,19 @@ export function RundownEditor({
       <header style={{ display: "flex", alignItems: "center", gap: "1.75rem", marginBottom: "1rem", flexWrap: "wrap" }}>
         <h1 style={{ fontSize: "1.15rem", fontWeight: 650, margin: 0, letterSpacing: "-0.01em" }}>{meta.name}</h1>
         {mode !== "show" && <span className="chip">{mode === "edit" ? "EDIT — no transport" : "VIEW ONLY"}</span>}
+        <button
+          className="chip"
+          style={{ cursor: canEditContent ? "pointer" : "default", border: meta.versionLabel ? "1px solid var(--warn)" : undefined, color: meta.versionLabel ? "var(--warn)" : undefined }}
+          title="Version label — printed on exports"
+          onClick={() => {
+            if (!canEditContent) return;
+            const label = window.prompt("Version label (e.g. V2, FINAL — empty to clear)", meta.versionLabel);
+            if (label !== null) doc.getMap("meta").set("versionLabel", label.trim());
+          }}
+        >
+          {meta.versionLabel || (canEditContent ? "+ version" : "")}
+        </button>
+        <KeyTimesEditor doc={doc} keyTimes={keyTimes} use24h={meta.use24h} canEdit={canEditContent} />
         <div>
           <div className="header-label">Planned</div>
           <div className="header-clock mono">
@@ -447,6 +473,9 @@ export function RundownEditor({
             <button className="btn" onClick={() => addRow("group")}>
               {Icon.plus} Group
             </button>
+            <button className="btn" onClick={() => addRow("milestone")} title="A timed marker with no duration — gates open, kick-off, doors">
+              {Icon.plus} Milestone
+            </button>
           </>
         )}
         <Dropdown label={<>{Icon.columns} Columns</>}>
@@ -457,6 +486,20 @@ export function RundownEditor({
               {c.title}
             </button>
           ))}
+          <div className="menu-sep" />
+          <button
+            type="button"
+            className="menu-item"
+            data-keep-open
+            onClick={() => {
+              const next = !showZero;
+              setShowZero(next);
+              localStorage.setItem(`oc:zerocol:${rundownId}`, next ? "1" : "0");
+            }}
+          >
+            <span className="check">{showZero && Icon.check}</span>
+            ZERO countdown
+          </button>
           {canEditContent && (
             <>
               <div className="menu-sep" />
@@ -475,6 +518,31 @@ export function RundownEditor({
               </button>
               <button className="btn btn-sm" onClick={toggleGroupSelected}>
                 Group
+              </button>
+              {[
+                ["rgba(229,72,77,0.16)", "Red"],
+                ["rgba(232,176,60,0.16)", "Amber"],
+                ["rgba(63,214,143,0.14)", "Green"],
+                ["rgba(76,141,255,0.15)", "Blue"],
+                ["rgba(167,139,250,0.16)", "Purple"],
+              ].map(([color, label]) => (
+                <button
+                  key={color}
+                  className="color-swatch"
+                  title={`Highlight ${label}`}
+                  style={{ background: color }}
+                  onClick={() =>
+                    doc.transact(() => selected.forEach((id) => yRows.get(id)?.set("color", color)))
+                  }
+                />
+              ))}
+              <button
+                className="color-swatch"
+                title="Clear highlight"
+                style={{ background: "transparent" }}
+                onClick={() => doc.transact(() => selected.forEach((id) => yRows.get(id)?.set("color", null)))}
+              >
+                ✕
               </button>
               <button className="btn btn-sm btn-danger" onClick={deleteSelected}>
                 Delete
@@ -550,6 +618,7 @@ export function RundownEditor({
               <th>Title</th>
               <th>Start</th>
               <th>Duration</th>
+              {showZero && <th title="Countdown to the next anchored time">Zero</th>}
               {richColumns.map((c) => (
                 <th key={c.id}>{c.title}</th>
               ))}
@@ -603,7 +672,23 @@ export function RundownEditor({
                       )}
                     </td>
                     {renderDurationCell(rowRecord)}
-                    {richColumns.map((c) => renderRichCell(rowRecord, c))}
+                    {showZero && (
+                      <td className="mono" style={{ color: "var(--text-2)" }}>
+                        {(() => {
+                          const start = t.startSec;
+                          if (start == null) return "";
+                          for (let j = i; j < rows.length; j++) {
+                            const other = rows[j]!;
+                            const ot = timing.rows[j]!;
+                            if (other.hardStartSec != null && ot.startSec != null && j > i) {
+                              const zero = ot.startSec - start;
+                              return zero > 0 ? `-${formatDuration(zero)}` : "";
+                            }
+                          }
+                          return "";
+                        })()}
+                      </td>
+                    )}
                   </SortableRow>
                 );
               })}
@@ -611,6 +696,8 @@ export function RundownEditor({
           </SortableContext>
         </table>
       </DndContext>
+
+      <CuePool doc={doc} mode={mode} channel={channel} />
 
       {rows.length === 0 && (
         <div className="empty">
