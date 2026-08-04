@@ -7,8 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-05 (milestone 2 · phase 2: role screens & gated access)
+- **Four ways into the app, each a real screen**: `/admin` (cross-show control room: every event and rundown, create/rename/delete/duplicate, live-now badges, one-click jump into any screen), `/show/[id]` (full showcaller console), `/edit/[id]` (content editing, **no transport and no share/admin panels**), `/view/[id]` (read-only grid with live position, personal column visibility, print). The old `/rundown/[id]` URL redirects to `/show`.
+- **Landing page**: crew enter a join code and are routed to the screen their role allows — caller → Showcaller, editor → Edit, follower → View — with the code carried in the URL and reused by every panel and channel.
+- **Server-enforced access (interim tokens, accounts still to come)**: a new `admin` role is granted only by the server's `ADMIN_TOKEN`. When that variable is set the deployment is locked: the management API requires the admin token (cross-show) or a caller/editor join code (rundown-scoped); the collaborative document channel authenticates every connection and gives follower codes a **read-only** document; dev session tokens are rejected. Unset, the server stays dev-open. Verified against a locked instance: 7/7 HTTP checks and 4/4 show-channel checks (dev token rejected, admin welcomed, follower's transport command refused, bad code closed).
+- Admin endpoints: rename/delete events and rundowns (delete cascades sessions, tokens, snapshots), duplicate rundown, `GET /live` (which shows are running), `GET /codes/:code` (landing-page routing). Join-code panel now issues editor codes too and copies role-appropriate URLs.
+
 ### Changed — 2026-08-05 (rename: OpenCall)
-- The project is now **OpenCall**: repo `robertcmorton/opencall`, packages `@opencall/*`, app title and PWA metadata, Docker/compose service names, hosting service names and domains (`opencall-production` / `opencall-sync-production` on Railway), and all docs. No functional changes; existing data is unaffected.
+- The project is now **OpenCall**: repo `robertcmorton/opencall`, packages `@opencall/*`, app title and PWA metadata, Docker/compose service names, hosting service names and domains (`opencall-web-production` / `opencall-sync-production` on Railway), and all docs. No functional changes; existing data is unaffected.
 
 ### Changed — 2026-08-05 (milestone 2 · phase 1: design system & UI modernization)
 - **New design system** (`globals.css`): color/spacing/radius/elevation/motion tokens with semantic roles; dark theme as the primary show-surface theme and a light theme for the dashboard; Inter for UI text and JetBrains Mono with tabular figures for every timing readout (no width jitter while ticking); one shared component set (buttons, panels, menus, chips, inputs, badges, empty states, skeletons); 130–190 ms eased motion with `prefers-reduced-motion` respected; pulsing LIVE badge.

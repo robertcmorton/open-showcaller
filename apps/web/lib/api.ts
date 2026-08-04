@@ -30,12 +30,40 @@ export interface TemplateSummary {
   description: string | null;
 }
 
+// ── Interim client credentials ────────────────────────────────────────────────
+// Admin token (localStorage) and an optional per-page join code accompany every
+// API call; the server decides what they're worth. Dev-open servers ignore both.
+
+const ADMIN_TOKEN_KEY = "oc:admintoken";
+let activeJoinCode: string | null = null;
+
+export const getAdminToken = (): string | null =>
+  typeof localStorage === "undefined" ? null : localStorage.getItem(ADMIN_TOKEN_KEY);
+export const setAdminToken = (token: string | null): void => {
+  if (token) localStorage.setItem(ADMIN_TOKEN_KEY, token);
+  else localStorage.removeItem(ADMIN_TOKEN_KEY);
+};
+/** Screens that carry a ?code= call this once so panel API calls inherit it. */
+export const setActiveJoinCode = (code: string | null): void => {
+  activeJoinCode = code;
+};
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+  ) {
+    super(message);
+  }
+}
+
 const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: { "content-type": "application/json" },
-    ...init,
-  });
-  if (!res.ok) throw new Error(`${path}: ${res.status} ${await res.text()}`);
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  const admin = getAdminToken();
+  if (admin) headers.authorization = `Bearer ${admin}`;
+  if (activeJoinCode) headers["x-join-code"] = activeJoinCode;
+  const res = await fetch(`${API_URL}${path}`, { headers, ...init });
+  if (!res.ok) throw new ApiError(`${path}: ${res.status} ${await res.text()}`, res.status);
   return (await res.json()) as T;
 };
 
@@ -80,6 +108,17 @@ export const api = {
   templates: () => request<TemplateSummary[]>("/templates"),
   saveTemplate: (body: { rundownId: string; name: string }) =>
     request<{ id: string }>("/templates", { method: "POST", body: JSON.stringify(body) }),
+  // ── Landing & admin ──
+  resolveCode: (code: string) =>
+    request<{ role: "caller" | "editor" | "follower"; rundownId: string }>(`/codes/${encodeURIComponent(code)}`),
+  live: () => request<{ rundownId: string; state: string; startedAt: string }[]>("/live"),
+  patchEvent: (id: string, body: { name?: string; location?: string }) =>
+    request<{ id: string }>(`/events/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteEvent: (id: string) => request<{ id: string }>(`/events/${id}`, { method: "DELETE" }),
+  patchRundown: (id: string, body: { name?: string }) =>
+    request<{ id: string }>(`/rundowns/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteRundown: (id: string) => request<Record<string, never>>(`/rundowns/${id}`, { method: "DELETE" }),
+  duplicateRundown: (id: string) => request<{ id: string }>(`/rundowns/${id}/duplicate`, { method: "POST" }),
 };
 
 /**

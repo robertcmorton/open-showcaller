@@ -14,7 +14,7 @@ import {
   parseTimeOfDay,
   serializeCsv,
 } from "@opencall/core";
-import { api } from "../lib/api";
+import { api, setActiveJoinCode } from "../lib/api";
 import { projectRundownDoc, type ColumnDef, type ProjectedRow } from "@opencall/db/doc";
 import { CellEditor } from "./CellEditor";
 import { GuestPassPanel, HistoryPanel, JoinCodesPanel } from "./SharePanels";
@@ -32,6 +32,7 @@ function SortableRow({
   children,
   selected,
   active,
+  disabled,
   onSelect,
 }: {
   row: ProjectedRow;
@@ -39,9 +40,10 @@ function SortableRow({
   children: React.ReactNode;
   selected: boolean;
   active: boolean;
+  disabled: boolean;
   onSelect: (e: React.MouseEvent) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id, disabled });
   return (
     <tr
       ref={setNodeRef}
@@ -86,12 +88,29 @@ function cloneRow(source: Y.Map<unknown>, newId: string): Y.Map<unknown> {
 
 const HIDDEN_COLS_KEY = (rundownId: string) => `oc:hiddencols:${rundownId}`;
 
-export function RundownEditor({ rundownId }: { rundownId: string }) {
-  const { doc, connected } = useRundownDoc(rundownId);
+export type EditorMode = "show" | "edit" | "view";
+
+export function RundownEditor({
+  rundownId,
+  mode = "show",
+  joinCode,
+}: {
+  rundownId: string;
+  mode?: EditorMode;
+  joinCode?: string;
+}) {
+  const isShow = mode === "show";
+  const canEditContent = mode !== "view";
+  const { doc, connected } = useRundownDoc(rundownId, joinCode);
   // The hook re-renders on every doc update, so projecting during render stays fresh.
   const { meta, columns, rows } = projectRundownDoc(doc);
   const timing = computeTiming(rows, meta.plannedStartSec);
-  const channel = useShowChannel(rundownId, "console");
+  const channel = useShowChannel(rundownId, "console", joinCode);
+  // Panel API calls (join codes, snapshots…) inherit this page's code.
+  useEffect(() => {
+    setActiveJoinCode(joinCode ?? null);
+    return () => setActiveJoinCode(null);
+  }, [joinCode]);
   const live = useLiveTiming(channel, timing);
   const activeRowId = channel.show?.state === "running" || channel.show?.state === "paused" ? channel.show.activeRowId : null;
   const [activeCell, setActiveCell] = useState<ActiveCell>(null);
@@ -303,7 +322,10 @@ export function RundownEditor({ rundownId }: { rundownId: string }) {
         );
     }
     return (
-      <td key={column.id} onDoubleClick={() => setActiveCell({ rowId: rowRecord.id, columnId: column.id })}>
+      <td
+        key={column.id}
+        onDoubleClick={canEditContent ? () => setActiveCell({ rowId: rowRecord.id, columnId: column.id }) : undefined}
+      >
         {rowRecord.cells[column.key] ?? ""}
       </td>
     );
@@ -315,7 +337,7 @@ export function RundownEditor({ rundownId }: { rundownId: string }) {
       <td
         className="mono"
         style={{ position: "relative", cursor: "default" }}
-        onDoubleClick={() => setDurationPopover(rowRecord.id)}
+        onDoubleClick={canEditContent ? () => setDurationPopover(rowRecord.id) : undefined}
       >
         {rowRecord.durationSec != null ? (
           <span
@@ -398,6 +420,7 @@ export function RundownEditor({ rundownId }: { rundownId: string }) {
     <div style={{ padding: "1.25rem 1.5rem" }}>
       <header style={{ display: "flex", alignItems: "center", gap: "1.75rem", marginBottom: "1rem", flexWrap: "wrap" }}>
         <h1 style={{ fontSize: "1.15rem", fontWeight: 650, margin: 0, letterSpacing: "-0.01em" }}>{meta.name}</h1>
+        {mode !== "show" && <span className="chip">{mode === "edit" ? "EDIT — no transport" : "VIEW ONLY"}</span>}
         <div>
           <div className="header-label">Planned</div>
           <div className="header-clock mono">
@@ -415,13 +438,17 @@ export function RundownEditor({ rundownId }: { rundownId: string }) {
       </header>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <TransportBar channel={channel} orderedRowIds={rows.map((r) => r.id)} />
-        <button className="btn" onClick={() => addRow("cue")}>
-          {Icon.plus} Row
-        </button>
-        <button className="btn" onClick={() => addRow("group")}>
-          {Icon.plus} Group
-        </button>
+        {isShow && <TransportBar channel={channel} orderedRowIds={rows.map((r) => r.id)} />}
+        {canEditContent && (
+          <>
+            <button className="btn" onClick={() => addRow("cue")}>
+              {Icon.plus} Row
+            </button>
+            <button className="btn" onClick={() => addRow("group")}>
+              {Icon.plus} Group
+            </button>
+          </>
+        )}
         <Dropdown label={<>{Icon.columns} Columns</>}>
           <div className="menu-heading">Show columns</div>
           {allRichColumns.map((c) => (
@@ -430,13 +457,17 @@ export function RundownEditor({ rundownId }: { rundownId: string }) {
               {c.title}
             </button>
           ))}
-          <div className="menu-sep" />
-          <button type="button" className="menu-item" onClick={addColumn}>
-            <span className="check">{Icon.plus}</span> Add column…
-          </button>
+          {canEditContent && (
+            <>
+              <div className="menu-sep" />
+              <button type="button" className="menu-item" onClick={addColumn}>
+                <span className="check">{Icon.plus}</span> Add column…
+              </button>
+            </>
+          )}
         </Dropdown>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-          {selected.size > 0 && (
+          {canEditContent && selected.size > 0 && (
             <div className="selection-bar">
               <span className="count">{selected.size} selected</span>
               <button className="btn btn-sm" onClick={duplicateSelected}>
@@ -462,33 +493,47 @@ export function RundownEditor({ rundownId }: { rundownId: string }) {
           <Dropdown label={Icon.dots} align="right">
             <div className="menu-heading">Views</div>
             {(["follow", "timer", "prompter"] as const).map((view) => (
-              <a key={view} className="menu-item" href={`/${view}/${rundownId}`} target="_blank" rel="noreferrer">
+              <a
+                key={view}
+                className="menu-item"
+                href={`/${view}/${rundownId}${joinCode ? `?code=${joinCode}` : ""}`}
+                target="_blank"
+                rel="noreferrer"
+              >
                 <span className="check" />
                 {view[0]!.toUpperCase() + view.slice(1)}
               </a>
             ))}
             <div className="menu-sep" />
+            <button type="button" className="menu-item" onClick={() => window.print()}>
+              <span className="check" />
+              Print
+            </button>
             <button type="button" className="menu-item" onClick={exportCsv}>
               <span className="check" />
               Export CSV
             </button>
-            <button type="button" className="menu-item" onClick={saveAsTemplate}>
-              <span className="check" />
-              Save as template
-            </button>
-            <div className="menu-sep" />
-            <button type="button" className="menu-item" onClick={() => setPanel("guest")}>
-              <span className="check" />
-              Guest pass…
-            </button>
-            <button type="button" className="menu-item" onClick={() => setPanel("history")}>
-              <span className="check" />
-              History…
-            </button>
-            <button type="button" className="menu-item" onClick={() => setPanel("join")}>
-              <span className="check" />
-              Join codes…
-            </button>
+            {isShow && (
+              <>
+                <button type="button" className="menu-item" onClick={saveAsTemplate}>
+                  <span className="check" />
+                  Save as template
+                </button>
+                <div className="menu-sep" />
+                <button type="button" className="menu-item" onClick={() => setPanel("guest")}>
+                  <span className="check" />
+                  Guest pass…
+                </button>
+                <button type="button" className="menu-item" onClick={() => setPanel("history")}>
+                  <span className="check" />
+                  History…
+                </button>
+                <button type="button" className="menu-item" onClick={() => setPanel("join")}>
+                  <span className="check" />
+                  Join codes…
+                </button>
+              </>
+            )}
           </Dropdown>
         </div>
       </div>
@@ -521,17 +566,18 @@ export function RundownEditor({ rundownId }: { rundownId: string }) {
                     index={i}
                     selected={selected.has(rowRecord.id)}
                     active={activeRowId === rowRecord.id}
-                    onSelect={(e) => selectRow(rowRecord.id, e)}
+                    disabled={!canEditContent}
+                    onSelect={(e) => canEditContent && selectRow(rowRecord.id, e)}
                   >
                     {titleColumn ? renderRichCell(rowRecord, titleColumn) : <td />}
-                    <td className="mono" onDoubleClick={() => setEditingTime(rowRecord.id)}>
+                    <td className="mono" onDoubleClick={canEditContent ? () => setEditingTime(rowRecord.id) : undefined}>
                       {rowRecord.hardStartSec != null && (
                         <span
                           className="anchor-flag"
                           title="Anchored start — click to reset to auto"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setRowField(rowRecord.id, "hardStartSec", null);
+                            if (canEditContent) setRowField(rowRecord.id, "hardStartSec", null);
                           }}
                         >
                           ⚑
@@ -574,8 +620,15 @@ export function RundownEditor({ rundownId }: { rundownId: string }) {
       )}
 
       <p style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", marginTop: "1rem" }}>
-        Double-click a cell to edit · double-click Duration for hide/mute · double-click Start to anchor (⚑ resets) ·
-        <kbd>⇧</kbd>/<kbd>⌘</kbd>-click row numbers for multi-select · drag row numbers to reorder · edits sync live.
+        {canEditContent ? (
+          <>
+            Double-click a cell to edit · double-click Duration for hide/mute · double-click Start to anchor (⚑ resets)
+            · <kbd>⇧</kbd>/<kbd>⌘</kbd>-click row numbers for multi-select · drag row numbers to reorder · edits sync
+            live.
+          </>
+        ) : (
+          <>Read-only view — live position highlights as the show runs. Use the Columns menu to tailor what you see.</>
+        )}
       </p>
     </div>
   );

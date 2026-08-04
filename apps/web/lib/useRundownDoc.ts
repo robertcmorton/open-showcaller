@@ -6,17 +6,23 @@ import { HocuspocusProvider } from "@hocuspocus/provider";
 
 const DOC_WS_URL = process.env.NEXT_PUBLIC_DOC_WS_URL ?? "ws://localhost:8787/doc";
 
-/** Shared rundown document connection; re-renders the consumer on every doc update. */
-export function useRundownDoc(rundownId: string): { doc: Y.Doc; connected: boolean } {
+/**
+ * Shared rundown document connection; re-renders the consumer on every doc
+ * update. `joinCode` (or the stored admin token) authenticates the connection
+ * on locked-down servers; follower codes get a read-only doc.
+ */
+export function useRundownDoc(rundownId: string, joinCode?: string): { doc: Y.Doc; connected: boolean } {
   const [doc] = useState(() => new Y.Doc());
   const [connected, setConnected] = useState(false);
   const [, setTick] = useState(0);
 
   useEffect(() => {
+    const token = joinCode ?? localStorage.getItem("oc:admintoken") ?? "dev";
     const provider = new HocuspocusProvider({
       url: DOC_WS_URL,
       name: rundownId,
       document: doc,
+      token,
       onConnect: () => setConnected(true),
       onDisconnect: () => setConnected(false),
     });
@@ -26,7 +32,7 @@ export function useRundownDoc(rundownId: string): { doc: Y.Doc; connected: boole
       doc.off("update", bump);
       provider.destroy();
     };
-  }, [doc, rundownId]);
+  }, [doc, rundownId, joinCode]);
 
   return { doc, connected };
 }

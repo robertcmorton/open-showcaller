@@ -3,7 +3,9 @@ import { z } from "zod";
 /** Wire protocol version. Bumps only on breaking changes — see PROTOCOL.md. */
 export const PROTOCOL_VERSION = 1;
 
-export const Role = z.enum(["caller", "editor", "follower", "guest"]);
+// "admin" sits above the per-show roles: it is granted only by the server's
+// ADMIN_TOKEN (never stored in share_tokens) and can act across shows.
+export const Role = z.enum(["admin", "caller", "editor", "follower", "guest"]);
 export type Role = z.infer<typeof Role>;
 
 export const ShowStateName = z.enum(["idle", "running", "paused", "ended"]);

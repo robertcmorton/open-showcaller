@@ -37,7 +37,7 @@ Server replies:
 
 ```json
 { "v": 1, "t": "welcome",
-  "role": "caller" | "editor" | "follower" | "guest",
+  "role": "admin" | "caller" | "editor" | "follower" | "guest",
   "userLabel": "K. B.",
   "serverTimeMs": 1791234567890,
   "show": { ...show_state payload, see §3... },
@@ -89,7 +89,7 @@ Single authoritative object, broadcast in full on every change (it is tiny; no d
     "rowId": "01J..." }            // jump only
 ```
 
-- Server validates role = `caller`, applies to the session, bumps `seq`, persists the
+- Server validates role = `caller` (or `admin`), applies to the session, bumps `seq`, persists the
   transition, broadcasts `show_state` to all clients (including the sender — the sender has
   no special path; UI updates when the broadcast arrives, keeping every device identical).
 - Reply to sender only on failure: `{ "t":"cmd_error", "id", "code", "msg" }`.
@@ -135,3 +135,18 @@ editors): `{ "v":1, "t":"presence", "counts": {"caller":1,"editor":2,"follower":
 Server supports current and previous `v` for one release cycle. This file is normative;
 `packages/protocol` exports the Zod schemas that implement it and CI fails if they drift
 (schema snapshot test).
+
+## Interim access control (v1.1 — additive)
+
+- **`admin` role** (added): granted only when a `session` auth token equals the server's
+  `ADMIN_TOKEN` environment variable; never stored in `share_tokens`. Admin may send transport
+  commands and passes every management-API check across shows.
+- **Locked vs dev-open**: when `ADMIN_TOKEN` is unset the server is *dev-open* — session tokens
+  resolve to `caller` and the doc channel accepts any connection. Setting `ADMIN_TOKEN` locks the
+  deployment: session tokens other than the admin token are rejected (4001).
+- **Doc channel auth** (locked servers): the Hocuspocus provider must send a `token` — the admin
+  token or a valid join code for the document's rundown. Follower codes get a **read-only** doc
+  connection; `caller`/`editor` codes may write; anything else fails authentication.
+- **Management API**: `Authorization: Bearer <ADMIN_TOKEN>` for cross-show endpoints;
+  `X-Join-Code` (caller/editor, scoped to the rundown) for rundown-scoped endpoints.
+  `GET /codes/:code` is public — a valid code is itself the credential.

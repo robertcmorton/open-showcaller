@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne, inArray } from "drizzle-orm";
 import { ulid } from "ulid";
+import { apiRole, canEdit, resolveJoinCode } from "./auth";
 import { serializeCsv } from "@opencall/core";
 import {
   buildRundownDoc,
@@ -46,16 +47,154 @@ export function createApiHandler(handle: DbHandle) {
     const url = new URL(req.url ?? "/", "http://localhost");
     const { pathname } = url;
     res.setHeader("access-control-allow-origin", "*");
-    res.setHeader("access-control-allow-headers", "content-type");
-    res.setHeader("access-control-allow-methods", "GET,POST,OPTIONS");
+    res.setHeader("access-control-allow-headers", "content-type,authorization,x-join-code");
+    res.setHeader("access-control-allow-methods", "GET,POST,PATCH,DELETE,OPTIONS");
     if (req.method === "OPTIONS") {
       res.statusCode = 204;
       res.end();
       return true;
     }
 
+    /** Admin-only routes (cross-show). Sends 401 and returns false when denied. */
+    const requireAdmin = async (): Promise<boolean> => {
+      if ((await apiRole(handle, req)) === "admin") return true;
+      json(res, 401, { error: "admin token required" });
+      return false;
+    };
+
+    /** Rundown-scoped routes: admin, or a caller/editor join code for that rundown. */
+    const requireEditor = async (rundownId: string): Promise<boolean> => {
+      if (canEdit(await apiRole(handle, req, rundownId))) return true;
+      json(res, 401, { error: "editor access required" });
+      return false;
+    };
+
+    /** Deletes a rundown and every row that references it. */
+    const deleteRundown = async (rundownId: string): Promise<void> => {
+      const sessions = await db.query.showSessions.findMany({
+        where: eq(schema.showSessions.rundownId, rundownId),
+        columns: { id: true },
+      });
+      if (sessions.length > 0)
+        await db.delete(schema.showTransitions).where(
+          inArray(schema.showTransitions.sessionId, sessions.map((s) => s.id)),
+        );
+      await db.delete(schema.showSessions).where(eq(schema.showSessions.rundownId, rundownId));
+      await db.delete(schema.shareTokens).where(eq(schema.shareTokens.rundownId, rundownId));
+      await db.delete(schema.rundownSnapshots).where(eq(schema.rundownSnapshots.rundownId, rundownId));
+      await db.delete(schema.rundowns).where(eq(schema.rundowns.id, rundownId));
+    };
+
     try {
+      // ── Landing-page code resolution (public: a valid code IS the credential) ──
+      if (req.method === "GET" && /^\/codes\/[^/]+$/.test(pathname)) {
+        const resolved = await resolveJoinCode(handle, pathname.split("/")[2]!);
+        if (!resolved) {
+          json(res, 404, { error: "unknown code" });
+          return true;
+        }
+        json(res, 200, resolved);
+        return true;
+      }
+
+      // ── Cross-show endpoints (admin) ──
+      if (req.method === "GET" && pathname === "/live") {
+        if (!(await requireAdmin())) return true;
+        const sessions = await db.query.showSessions.findMany({
+          where: ne(schema.showSessions.state, "ended"),
+          columns: { rundownId: true, state: true, startedAt: true },
+        });
+        json(res, 200, sessions.map((s) => ({ ...s, startedAt: s.startedAt.toISOString() })));
+        return true;
+      }
+
+      if (req.method === "PATCH" && /^\/events\/[^/]+$/.test(pathname)) {
+        if (!(await requireAdmin())) return true;
+        const id = pathname.split("/")[2]!;
+        const body = await readJson(req);
+        const patch: Record<string, unknown> = {};
+        if (typeof body.name === "string" && body.name.trim()) patch.name = body.name.trim();
+        if (typeof body.location === "string") patch.location = body.location.trim() || null;
+        if (Object.keys(patch).length > 0) await db.update(schema.events).set(patch).where(eq(schema.events.id, id));
+        json(res, 200, { id });
+        return true;
+      }
+
+      if (req.method === "DELETE" && /^\/events\/[^/]+$/.test(pathname)) {
+        if (!(await requireAdmin())) return true;
+        const id = pathname.split("/")[2]!;
+        const rundowns = await db.query.rundowns.findMany({
+          where: eq(schema.rundowns.eventId, id),
+          columns: { id: true },
+        });
+        for (const r of rundowns) await deleteRundown(r.id);
+        await db.delete(schema.events).where(eq(schema.events.id, id));
+        json(res, 200, { id });
+        return true;
+      }
+
+      if (req.method === "PATCH" && /^\/rundowns\/[^/]+$/.test(pathname)) {
+        if (!(await requireAdmin())) return true;
+        const id = pathname.split("/")[2]!;
+        const body = await readJson(req);
+        if (typeof body.name === "string" && body.name.trim()) {
+          const name = body.name.trim();
+          const row = await db.query.rundowns.findFirst({ where: eq(schema.rundowns.id, id) });
+          if (!row) {
+            json(res, 404, { error: "rundown not found" });
+            return true;
+          }
+          const patch: { name: string; doc?: Uint8Array; docUpdatedAt?: Date } = { name };
+          // Keep the doc's meta name in step. (A concurrently open editor may
+          // overwrite this on its next store; the row name is authoritative
+          // for dashboards either way.)
+          if (row.doc) {
+            const doc = decodeDoc(row.doc);
+            doc.getMap("meta").set("name", name);
+            patch.doc = encodeDoc(doc);
+            patch.docUpdatedAt = new Date();
+          }
+          await db.update(schema.rundowns).set(patch).where(eq(schema.rundowns.id, id));
+        }
+        json(res, 200, { id });
+        return true;
+      }
+
+      if (req.method === "DELETE" && /^\/rundowns\/[^/]+$/.test(pathname)) {
+        if (!(await requireAdmin())) return true;
+        await deleteRundown(pathname.split("/")[2]!);
+        json(res, 200, {});
+        return true;
+      }
+
+      if (req.method === "POST" && /^\/rundowns\/[^/]+\/duplicate$/.test(pathname)) {
+        if (!(await requireAdmin())) return true;
+        const sourceId = pathname.split("/")[2]!;
+        const source = await db.query.rundowns.findFirst({ where: eq(schema.rundowns.id, sourceId) });
+        if (!source?.doc) {
+          json(res, 404, { error: "rundown not found" });
+          return true;
+        }
+        const id = ulid();
+        const name = `${source.name} (copy)`;
+        const doc = decodeDoc(source.doc);
+        doc.getMap("meta").set("name", name);
+        await db.insert(schema.rundowns).values({
+          id,
+          eventId: source.eventId,
+          name,
+          description: source.description,
+          showDate: source.showDate,
+          plannedStartSec: source.plannedStartSec,
+          doc: encodeDoc(doc),
+          docUpdatedAt: new Date(),
+        });
+        json(res, 201, { id });
+        return true;
+      }
+
       if (req.method === "GET" && pathname === "/events") {
+        if (!(await requireAdmin())) return true;
         const events = await db.query.events.findMany();
         const rundowns = await db.query.rundowns.findMany({
           columns: { id: true, eventId: true, name: true, description: true, showDate: true },
@@ -72,6 +211,7 @@ export function createApiHandler(handle: DbHandle) {
       }
 
       if (req.method === "POST" && pathname === "/events") {
+        if (!(await requireAdmin())) return true;
         const body = await readJson(req);
         const id = ulid();
         await db.insert(schema.events).values({
@@ -89,6 +229,7 @@ export function createApiHandler(handle: DbHandle) {
       }
 
       if (req.method === "GET" && pathname === "/rundowns") {
+        if (!(await requireAdmin())) return true;
         json(
           res,
           200,
@@ -100,6 +241,7 @@ export function createApiHandler(handle: DbHandle) {
       }
 
       if (req.method === "POST" && pathname === "/rundowns") {
+        if (!(await requireAdmin())) return true;
         const body = await readJson(req);
         const eventId = String(body.eventId ?? "");
         const event = await db.query.events.findFirst({ where: eq(schema.events.id, eventId) });
@@ -145,6 +287,7 @@ export function createApiHandler(handle: DbHandle) {
 
       if (req.method === "GET" && /^\/rundowns\/[^/]+\/join-codes$/.test(pathname)) {
         const rundownId = pathname.split("/")[2]!;
+        if (!(await requireEditor(rundownId))) return true;
         const rows = await db.query.shareTokens.findMany({
           where: and(eq(schema.shareTokens.rundownId, rundownId), eq(schema.shareTokens.kind, "join")),
           columns: { id: true, joinCode: true, role: true, revokedAt: true },
@@ -155,6 +298,7 @@ export function createApiHandler(handle: DbHandle) {
 
       if (req.method === "POST" && /^\/rundowns\/[^/]+\/join-codes$/.test(pathname)) {
         const rundownId = pathname.split("/")[2]!;
+        if (!(await requireEditor(rundownId))) return true;
         const body = await readJson(req);
         const role = ["caller", "editor", "follower"].includes(String(body.role)) ? String(body.role) : "follower";
         // Readable code: no confusable characters.
@@ -178,6 +322,7 @@ export function createApiHandler(handle: DbHandle) {
       // As-run show report: sessions + transitions for a rundown (JSON or CSV).
       if (req.method === "GET" && /^\/rundowns\/[^/]+\/report/.test(pathname)) {
         const rundownId = pathname.split("/")[2]!.split("?")[0]!;
+        if (!(await requireEditor(rundownId))) return true;
         const sessions = await db.query.showSessions.findMany({
           where: eq(schema.showSessions.rundownId, rundownId),
         });
@@ -213,6 +358,7 @@ export function createApiHandler(handle: DbHandle) {
       if (req.method === "POST" && pathname === "/guest-passes") {
         const body = await readJson(req);
         const rundownId = String(body.rundownId ?? "");
+        if (!(await requireEditor(rundownId))) return true;
         const rundown = await db.query.rundowns.findFirst({ where: eq(schema.rundowns.id, rundownId) });
         if (!rundown) {
           json(res, 404, { error: "rundown not found" });
@@ -271,6 +417,7 @@ export function createApiHandler(handle: DbHandle) {
 
       if (req.method === "GET" && /^\/rundowns\/[^/]+\/snapshots$/.test(pathname)) {
         const rundownId = pathname.split("/")[2]!;
+        if (!(await requireEditor(rundownId))) return true;
         json(
           res,
           200,
@@ -284,6 +431,7 @@ export function createApiHandler(handle: DbHandle) {
 
       if (req.method === "POST" && /^\/rundowns\/[^/]+\/snapshots$/.test(pathname)) {
         const rundownId = pathname.split("/")[2]!;
+        if (!(await requireEditor(rundownId))) return true;
         const body = await readJson(req);
         const rundown = await db.query.rundowns.findFirst({ where: eq(schema.rundowns.id, rundownId) });
         if (!rundown?.doc) {
@@ -315,6 +463,7 @@ export function createApiHandler(handle: DbHandle) {
           json(res, 404, { error: "snapshot not found" });
           return true;
         }
+        if (!(await requireEditor(snapshot.rundownId))) return true;
         const source = await db.query.rundowns.findFirst({ where: eq(schema.rundowns.id, snapshot.rundownId) });
         if (!source) {
           json(res, 404, { error: "source rundown not found" });
@@ -339,6 +488,7 @@ export function createApiHandler(handle: DbHandle) {
       }
 
       if (req.method === "GET" && pathname === "/templates") {
+        if (!(await requireAdmin())) return true;
         json(
           res,
           200,
@@ -349,6 +499,7 @@ export function createApiHandler(handle: DbHandle) {
 
       if (req.method === "POST" && pathname === "/templates") {
         const body = await readJson(req);
+        if (!(await requireEditor(String(body.rundownId ?? "")))) return true;
         const rundown = await db.query.rundowns.findFirst({
           where: eq(schema.rundowns.id, String(body.rundownId ?? "")),
         });

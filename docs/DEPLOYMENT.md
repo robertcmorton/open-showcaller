@@ -1,11 +1,11 @@
 # Deployment
 
-Everything runs on **Railway** in one project (consolidated 2026-08-04; an initial Vercel deployment of the web app was retired the same day to keep a single platform).
+Everything runs on **Railway** in one project named `opencall` (consolidated 2026-08-04; an initial Vercel deployment of the web app was retired the same day to keep a single platform; renamed from the OpenCall rename on 2026-08-05).
 
 | Service | What it runs | URL / notes |
 |---|---|---|
-| `opencall` | Web app (Next.js) | https://opencall-production.up.railway.app — domain targets port **3000** (`PORT=3000` set explicitly) |
-| `@opencall/sync` | Sync server: HTTP API + show channel (ws `/`) + doc sync (ws `/doc`) | https://opencallsync-production.up.railway.app — domain targets port **8080** (Railway-injected `PORT`) |
+| `opencall` | Web app (Next.js) | https://opencall-web-production.up.railway.app — domain targets port **3000** (`PORT=3000` set explicitly; the bare `opencall-production` subdomain was already taken on Railway) |
+| `opencall-sync` | Sync server: HTTP API + show channel (ws `/`) + doc sync (ws `/doc`) | https://opencall-sync-production.up.railway.app — domain targets port **8080** (Railway-injected `PORT`) |
 | `Postgres` | Managed PostgreSQL with volume | referenced by sync as `DATABASE_URL=${{Postgres.DATABASE_URL}}` |
 
 Both app services build from the same GitHub repo (`main`, auto-deploy) with the Railpack builder at the repo root:
@@ -16,9 +16,9 @@ Both app services build from the same GitHub repo (`main`, auto-deploy) with the
 ## Web service variables (build-time — changing them requires a rebuild)
 
 ```
-NEXT_PUBLIC_SYNC_HTTP_URL=https://opencallsync-production.up.railway.app
-NEXT_PUBLIC_SYNC_WS_URL=wss://opencallsync-production.up.railway.app
-NEXT_PUBLIC_DOC_WS_URL=wss://opencallsync-production.up.railway.app/doc
+NEXT_PUBLIC_SYNC_HTTP_URL=https://opencall-sync-production.up.railway.app
+NEXT_PUBLIC_SYNC_WS_URL=wss://opencall-sync-production.up.railway.app
+NEXT_PUBLIC_DOC_WS_URL=wss://opencall-sync-production.up.railway.app/doc
 PORT=3000
 ```
 

@@ -73,7 +73,7 @@ export function TransportBar({
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  if (channel.role !== "caller") return null;
+  if (channel.role !== "caller" && channel.role !== "admin") return null;
 
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

@@ -71,13 +71,17 @@ export function JoinCodesPanel({ rundownId, onClose }: { rundownId: string; onCl
   const reload = () => void api.joinCodes(rundownId).then(setCodes);
   useEffect(reload, [rundownId]);
 
-  const companionUrl = (code: string) => `${window.location.origin}/follow/${rundownId}?code=${code}`;
+  // The URL a code holder should be handed, by role.
+  const urlFor = (code: string, role: string) => {
+    const route = role === "caller" ? "show" : role === "editor" ? "edit" : "view";
+    return `${window.location.origin}/${route}/${rundownId}?code=${code}`;
+  };
 
   return (
     <div className="panel" style={panelStyle}>
-      <strong>Join codes — crew devices enter with these (QR-able URLs)</strong>
+      <strong>Join codes — enter on the landing page or open the copied URL. Caller → console, editor → edit, follower → view.</strong>
       <div style={{ display: "flex", gap: 8 }}>
-        {(["follower", "caller"] as const).map((role) => (
+        {(["follower", "editor", "caller"] as const).map((role) => (
           <button key={role} className="btn btn-sm" onClick={() => void api.createJoinCode(rundownId, role).then(reload)}>
             + {role} code
           </button>
@@ -91,8 +95,8 @@ export function JoinCodesPanel({ rundownId, onClose }: { rundownId: string; onCl
             </code>
             <span style={{ color: "var(--text-3)" }}>{c.role}</span>
             {c.joinCode && (
-              <button className="btn btn-sm" onClick={() => void navigator.clipboard.writeText(companionUrl(c.joinCode!))}>
-                Copy follow URL
+              <button className="btn btn-sm" onClick={() => void navigator.clipboard.writeText(urlFor(c.joinCode!, c.role))}>
+                Copy URL
               </button>
             )}
           </li>

@@ -47,12 +47,14 @@ export function useShowChannel(rundownId: string, device: "console" | "companion
 
       ws.onopen = () => {
         retryDelay = 500;
-        // Console = dev session token (until accounts); companion = join code
-        // (?code= in the URL, falling back to the local-dev code).
-        const auth =
-          device === "console"
-            ? { kind: "session" as const, token: "dev" }
-            : { kind: "join" as const, code: (joinCode ?? "DEV123").toUpperCase() };
+        // A join code always wins (it carries the role). Otherwise consoles
+        // send the stored admin token as a session token — on dev-open
+        // servers any session token maps to caller.
+        const auth = joinCode
+          ? { kind: "join" as const, code: joinCode.toUpperCase() }
+          : device === "console"
+            ? { kind: "session" as const, token: localStorage.getItem("oc:admintoken") ?? "dev" }
+            : { kind: "join" as const, code: "DEV123" };
         ws.send(JSON.stringify({ v: PROTOCOL_VERSION, t: "hello", auth, device, lastSeq: lastSeqRef.current >= 0 ? lastSeqRef.current : undefined }));
       };
 

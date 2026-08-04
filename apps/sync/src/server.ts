@@ -14,6 +14,7 @@ import { ulid } from "ulid";
 import { createDocServer } from "./doc-server";
 import { createApiHandler } from "./api";
 import { PersistentShowStore } from "./sessions";
+import * as authMod from "./auth";
 
 // One public port for everything: HTTP API, the show channel (default ws
 // path), and Yjs doc sync (ws path /doc). PORT is what PaaS hosts inject.
@@ -52,16 +53,21 @@ const broadcastPresence = (rundownId: string): void => {
 };
 
 /**
- * Auth: join codes and guest tokens validate against share_tokens. Session
- * tokens remain a dev stub (→ caller) until Auth.js accounts land. The
- * literal join code DEV123 stays as a local-dev fallback unless disabled
- * via ALLOW_DEV_JOIN=0.
+ * Auth: join codes and guest tokens validate against share_tokens; the
+ * ADMIN_TOKEN env var (sent as a session token) grants "admin". When
+ * ADMIN_TOKEN is unset the deployment is dev-open and session tokens fall
+ * back to "caller" (the pre-accounts stub). The literal join code DEV123
+ * stays as a local-dev fallback unless disabled via ALLOW_DEV_JOIN=0.
  */
 async function resolveAuth(
   auth: { kind: "session"; token: string } | { kind: "join"; code: string } | { kind: "guest"; token: string },
   rundownId: string,
 ): Promise<{ role: Role; label: string } | null> {
-  if (auth.kind === "session") return { role: "caller", label: "Caller" };
+  if (auth.kind === "session") {
+    if (auth.token && auth.token === authMod.adminToken()) return { role: "admin", label: "Admin" };
+    if (authMod.isOpenAccess()) return { role: "caller", label: "Caller" };
+    return null;
+  }
   if (auth.kind === "join") {
     const row = await dbHandle.db.query.shareTokens.findFirst({
       where: and(
@@ -158,7 +164,7 @@ wss.on("connection", (ws, req) => {
     }
 
     if (msg.t === "cmd") {
-      if (ctx.role !== "caller") {
+      if (ctx.role !== "caller" && ctx.role !== "admin") {
         send(ws, { v: PROTOCOL_VERSION, t: "cmd_error", id: msg.id, code: CloseCodes.FORBIDDEN, msg: "caller role required" });
         return;
       }
