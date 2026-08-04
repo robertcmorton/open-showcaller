@@ -19,9 +19,10 @@ export function WithSideNav({
   settings?: ReactNode;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(true);
+  // Closed by default — opens only when this browser explicitly opened it before.
+  const [open, setOpen] = useState(false);
   useEffect(() => {
-    setOpen(localStorage.getItem("oc:sidenav") !== "0");
+    setOpen(localStorage.getItem("oc:sidenav") === "1");
   }, []);
   const toggle = () => {
     const next = !open;
