@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-06 (PDF export)
+- **Export PDF** in the rundown's Output menu downloads a real PDF file — A4 landscape with a repeating table header, the rundown name/version/planned times and key times atop every page, page-numbered footers, anchored times marked with `*`, group rows as full-width dark bands, row highlight colours preserved, skipped rows greyed, and column widths matching the on-screen layout (including personal resizes). Generated entirely in the browser; the print dialog remains available as "Print".
+
 ### Added — 2026-08-06 (PDF row boundaries from the table's ruled lines · admin sub-pages)
 - **PDF imports now read the table's actual ruled lines** from the document's drawing layer and use them as authoritative row boundaries. This fixes the last merge imperfections: bottom lines of tall rows no longer bleed into the next short row, ruled sub-rows inside one item (per-line WHO/WHAT rules) join their item, and **unnumbered section banners survive as their own section rows** instead of being absorbed — a real sheet recovered four match-phase banners that earlier imports swallowed. Pages without detectable rules fall back to the previous nearest-item heuristic.
 - **Users & access and the Error log now live on their own pages** (`/admin/users`, `/admin/errors`), linked from the sidebar, instead of stacking on top of the events dashboard.

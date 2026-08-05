@@ -15,6 +15,7 @@ import {
   serializeCsv,
 } from "@opencall/core";
 import { api, setActiveJoinCode } from "../lib/api";
+import { exportRundownPdf } from "../lib/exportPdf";
 import { projectRundownDoc, type ColumnDef, type ProjectedRow } from "@opencall/db/doc";
 import { CuePool } from "./CuePool";
 import { ReconcilePanel, findTimingGaps } from "./ReconcilePanel";
@@ -444,6 +445,19 @@ export function RundownEditor({
     URL.revokeObjectURL(a.href);
   };
 
+  const exportPdf = (): void => {
+    void exportRundownPdf({
+      name: meta.name,
+      versionLabel: meta.versionLabel,
+      use24h: meta.use24h,
+      keyTimes,
+      richColumns,
+      widthFor: (key) => colWidths[key] ?? columns.find((c) => c.key === key)?.width,
+      rows,
+      timing,
+    });
+  };
+
   const saveAsTemplate = (): void => {
     const name = window.prompt("Template name", `${meta.name} template`);
     if (!name) return;
@@ -611,9 +625,13 @@ export function RundownEditor({
         ))}
       </SideNavSection>
       <SideNavSection heading="Output">
+        <button type="button" className="menu-item" onClick={exportPdf}>
+          <span className="check" />
+          Export PDF
+        </button>
         <button type="button" className="menu-item" onClick={() => window.print()}>
           <span className="check" />
-          Print / PDF
+          Print
         </button>
         <button type="button" className="menu-item" onClick={exportCsv}>
           <span className="check" />
