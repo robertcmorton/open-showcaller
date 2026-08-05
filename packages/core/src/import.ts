@@ -264,10 +264,19 @@ export function classifyRows(grid: string[][], headerIndex: number, mapping: Col
       if (!value) return;
       if (target.kind === "title") title = title ? `${title} ${value}` : value;
       else if (target.kind === "start") {
-        if (!startRaw || (parseTimeLoose(startRaw) == null && parseTimeLoose(value) != null)) startRaw = value;
+        // Merged multi-line cells may hold several lines; the first parseable one wins.
+        for (const line of value.split("\n")) {
+          const v = line.trim();
+          if (!v) continue;
+          if (!startRaw || (parseTimeLoose(startRaw) == null && parseTimeLoose(v) != null)) startRaw = v;
+        }
       } else if (target.kind === "duration") {
-        if (!durationRaw || (parseDurationLoose(durationRaw) == null && parseDurationLoose(value) != null))
-          durationRaw = value;
+        for (const line of value.split("\n")) {
+          const v = line.trim();
+          if (!v) continue;
+          if (!durationRaw || (parseDurationLoose(durationRaw) == null && parseDurationLoose(v) != null))
+            durationRaw = v;
+        }
       }
       else if (target.kind === "department") {
         cells[target.key] = cells[target.key] ? `${cells[target.key]}\n${value}` : value;
@@ -302,14 +311,137 @@ export function classifyRows(grid: string[][], headerIndex: number, mapping: Col
   return out;
 }
 
+/** Page/vertical position of each extracted grid line (from the PDF extractor). */
+export interface LineMeta {
+  page: number;
+  /** PDF y (grows upward — larger is higher on the page). */
+  y: number;
+}
+
+/**
+ * PDF text extraction emits one grid row per VISUAL LINE, so a sheet item
+ * whose cells wrap (a four-line WHAT column) arrives as several rows — most
+ * of them empty shells. Real sheets number their items, and that column is
+ * the row boundary: numbered lines start logical rows, every other line is a
+ * continuation of a neighbouring item, cell lines joined with newlines.
+ * Because PDF cells are vertically CENTRED, a wrapped cell's top lines sit
+ * ABOVE the item number — with `lineMeta` each continuation attaches to the
+ * nearer numbered line by y distance instead of blindly to the previous one.
+ * Without a credible item-number column the grid is returned untouched.
+ */
+export function mergeWrappedRows(grid: string[][], headerIndex: number, lineMeta?: LineMeta[]): string[][] {
+  const headerRow = grid[headerIndex] ?? [];
+  const dataRows = grid.slice(headerIndex + 1);
+  if (dataRows.length === 0) return grid;
+
+  // The item-number column: mostly pure integers, enough of them to matter.
+  const columnCount = Math.max(...dataRows.map((r) => r.length), 0);
+  let groupCol = -1;
+  let groupInts = 0;
+  for (let c = 0; c < columnCount; c++) {
+    let nonEmpty = 0;
+    let ints = 0;
+    for (const row of dataRows) {
+      const v = (row[c] ?? "").trim();
+      if (!v) continue;
+      nonEmpty += 1;
+      if (/^\d+$/.test(v)) ints += 1;
+    }
+    if (ints >= 5 && ints / Math.max(1, nonEmpty) >= 0.8 && ints > groupInts) {
+      groupCol = c;
+      groupInts = ints;
+    }
+  }
+  if (groupCol < 0) return grid;
+
+  // Data lines in order, page headers repeated by pagination dropped.
+  const lineIdxs: number[] = [];
+  for (let i = headerIndex + 1; i < grid.length; i++) {
+    const row = grid[i]!;
+    if (headerScore(row) >= 2 && row.join("|") === headerRow.join("|")) continue;
+    if (row.some((v) => v.trim())) lineIdxs.push(i);
+  }
+
+  // Numbered lines each open an item.
+  const itemOf = new Map<number, number>();
+  const numbered: number[] = [];
+  for (const i of lineIdxs) {
+    if (/^\d+$/.test((grid[i]![groupCol] ?? "").trim())) {
+      itemOf.set(i, numbered.length);
+      numbered.push(i);
+    }
+  }
+  if (numbered.length === 0) return grid;
+
+  const itemLines: number[][] = numbered.map((i) => [i]);
+  const standalone: number[] = []; // unattachable lines, kept as their own rows
+  let prevNum: number | null = null;
+  for (const i of lineIdxs) {
+    if (itemOf.has(i)) {
+      prevNum = i;
+      continue;
+    }
+    const nextNum = numbered.find((n) => n > i);
+    let target: number | null = prevNum != null ? itemOf.get(prevNum)! : null;
+    if (lineMeta && nextNum != null) {
+      const m = lineMeta[i];
+      const nm = lineMeta[nextNum];
+      const pm = prevNum != null ? lineMeta[prevNum] : undefined;
+      if (m && nm && nm.page === m.page) {
+        if (!pm || pm.page !== m.page || Math.abs(m.y - nm.y) < Math.abs(m.y - pm.y))
+          target = itemOf.get(nextNum)!;
+      }
+    } else if (target == null && nextNum != null && !lineMeta) {
+      target = null; // no positions, nothing before — keep standalone
+    }
+    if (target == null) standalone.push(i);
+    else itemLines[target]!.push(i);
+  }
+
+  const build = (idxs: number[]): string[] => {
+    const out: string[] = Array.from({ length: columnCount }, () => "");
+    for (const i of [...idxs].sort((a, b) => a - b)) {
+      grid[i]!.forEach((v, c) => {
+        const value = v.trim();
+        if (!value) return;
+        out[c] = out[c] ? `${out[c]}\n${value}` : value;
+      });
+    }
+    return out;
+  };
+
+  const merged = [...standalone.map((i) => [...grid[i]!]), ...itemLines.map(build)];
+  return [...grid.slice(0, headerIndex + 1), ...merged];
+}
+
+/** Headers that mark the sheet's own role/assignment column (labels vary per production house). */
+const ROLE_HEADERS = [
+  "who", "role", "roles", "resp", "responsible", "owner", "assigned", "assigned to",
+  "crew", "talent", "presenter", "cast", "dept",
+];
+
+/** The imported column that carries role assignments, if the sheet has one. */
+export function findRoleColumn(headers: string[], mapping: ColumnTarget[]): string | null {
+  for (let i = 0; i < mapping.length; i++) {
+    const t = mapping[i];
+    if (t?.kind === "department" && ROLE_HEADERS.includes(normalizeHeader(headers[i] ?? ""))) return t.key;
+  }
+  return null;
+}
+
 /** One-call pipeline: grid in, header + mapping + classified rows out. */
-export function planImport(grid: string[][]): {
+export function planImport(
+  grid: string[][],
+  opts: { headerIndex?: number; mergeWrapped?: boolean; lineMeta?: LineMeta[] } = {},
+): {
+  grid: string[][];
   headerIndex: number;
   headers: string[];
   mapping: ColumnTarget[];
+  roleColumnKey: string | null;
   rows: ClassifiedRow[];
 } {
-  const headerIndex = detectHeaderRow(grid);
+  const headerIndex = opts.headerIndex ?? detectHeaderRow(grid);
   const headers = grid[headerIndex] ?? [];
   const dataRows = grid.slice(headerIndex + 1);
   // A data sample lets untitled columns be identified by their contents.
@@ -369,7 +501,15 @@ export function planImport(grid: string[][]): {
     rescue("duration", (v) => parseDurationLoose(v) != null, 3);
     rescue("title", undefined, 2);
   }
-  return { headerIndex, headers, mapping, rows: classifyRows(grid, headerIndex, mapping) };
+  const finalGrid = opts.mergeWrapped ? mergeWrappedRows(grid, headerIndex, opts.lineMeta) : grid;
+  return {
+    grid: finalGrid,
+    headerIndex,
+    headers,
+    mapping,
+    roleColumnKey: findRoleColumn(headers, mapping),
+    rows: classifyRows(finalGrid, headerIndex, mapping),
+  };
 }
 
 // ── Role detection ────────────────────────────────────────────────────────────
@@ -388,13 +528,22 @@ export interface DetectedRole {
 /**
  * Mines assigned roles (BGM, Camera 1, PA, VTR…) from classified rows: short
  * cell lines that repeat across the sheet and aren't times or durations. Each
- * role gets a stable colour from the palette, most frequent first.
+ * role gets a stable colour from the palette, most frequent first. When the
+ * sheet has its own role column (WHO, ROLE…) pass its key — roles come from
+ * that column alone, with a lower repeat threshold since it IS the roster.
  */
-export function detectRoles(rows: ClassifiedRow[], max = 12): DetectedRole[] {
+export function detectRoles(rows: ClassifiedRow[], max = 12, roleColumnKey?: string | null): DetectedRole[] {
   const counts = new Map<string, { name: string; count: number }>();
+  const minCount = roleColumnKey ? 2 : 3;
   for (const row of rows) {
-    for (const value of Object.values(row.cells)) {
-      for (const line of value.split("\n")) {
+    const values = roleColumnKey
+      ? row.cells[roleColumnKey] != null
+        ? [row.cells[roleColumnKey]!]
+        : []
+      : Object.values(row.cells);
+    for (const value of values) {
+      // Multi-role cells are common ("VTR | LED", "GA, GFX") — each part is a role.
+      for (const line of value.split(/\n|\s*[|,+]\s*|\s+&\s+|\s+and\s+/i)) {
         const v = line.trim();
         if (!v || v.length > 24) continue;
         if (/^\d/.test(v)) continue; // numbering, times, "2 x wedges"…
@@ -407,7 +556,7 @@ export function detectRoles(rows: ClassifiedRow[], max = 12): DetectedRole[] {
     }
   }
   return [...counts.values()]
-    .filter((e) => e.count >= 3)
+    .filter((e) => e.count >= minCount)
     .sort((a, b) => b.count - a.count)
     .slice(0, max)
     .map((e, i) => ({ name: e.name, color: ROLE_COLORS[i % ROLE_COLORS.length]! }));

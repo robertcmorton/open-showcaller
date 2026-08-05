@@ -7,6 +7,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-05 (wrapped-row merge · role column · error log · mobile simplification)
+- **PDF imports now produce one row per sheet item.** PDF text extraction yields one grid line per visual line, so items with wrapped cells arrived as several mostly-empty rows. The importer now recognises the sheet's item-number column and merges every continuation line into its item — using each line's vertical position to attach it to the nearer numbered row (cells are vertically centred, so a wrapped cell's top lines sit *above* the item number). A 15-page real sheet went from 388 fragmented rows to 78 rows mirroring the source exactly, every one anchored to its printed time.
+- **The sheet's own role column drives role features.** A column headed WHO, ROLE, RESPONSIBLE, CREW (labels vary per production house) is recognised on import: roles are mined from it alone (composite cells like "VTR | LED" split into their parts), no duplicate "Roles" column is synthesized, and the rundown remembers which column holds assignments — so "My role" highlighting and the on-air bar match against actual assignments, never prose mentions in notes columns.
+- **Server-kept error log.** Everything that breaks is journaled server-side: API failures, process-level crashes, and **every visitor's browser errors** (uncaught exceptions, promise rejections, failed API calls are reported automatically). Admins review entries — time, origin, message, stack — and clear the journal from a new **Error log** panel.
+- **Users & access and Error log now live in the left settings sidebar**, visible to admins only.
+- **Access tokens work on the landing page.** Pasting a personal, company, or admin token into the join box signs you in and opens the dashboard — previously the field treated tokens as join codes (and uppercased them, corrupting them).
+- **Phones show a simplified run sheet**: title, start, duration, and the role column only, with an **All columns** button to bring the full sheet back (side-scrolling inside the grid). Secondary header chrome is hidden on small screens.
+
+### Fixed — 2026-08-05
+- **Department columns render again in the run-sheet grid.** A regression left every imported column (WHO, WHAT, notes…) header-only — the cell contents were stored but never drawn.
+
 ### Added — 2026-08-05 (user database, timing reconciliation, live skip, roles column, mobile)
 - **User database with per-user access**: admins create users from the dashboard, each with a personal access token and precise grants — full admin, an entire event company, a single event, or **view-only** access to an event. Grants govern the dashboard (users see only their events), the API, the show channel (managers call, viewers follow), and the document channel (view grants are read-only). Tokens are copyable and rotatable; users sign in by pasting their token on the access page.
 - **Timing reconciliation wizard**: when a sheet imports with TIME and DURATION columns that don't add up, a "⚠ N timing gaps — Reconcile" chip appears. It walks the showcaller through each disagreement one at a time — absorb the gap into the preceding duration, un-anchor the disagreeing time, or mark the gap intentional (a genuine hold).

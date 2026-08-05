@@ -184,6 +184,9 @@ export function RundownEditor({
   const [showZero, setShowZero] = useState(false);
   const [followScroll, setFollowScroll] = useState(true);
   const [myRole, setMyRole] = useState<string | null>(null);
+  // Phones show only the essentials (title/start/duration + the role column);
+  // this opts back into the full sheet.
+  const [mobileAllCols, setMobileAllCols] = useState(false);
   // Set after mount: locale-formatted dates differ between server and client,
   // and rendering one during SSR causes a hydration mismatch.
   const [printedAt, setPrintedAt] = useState("");
@@ -249,7 +252,9 @@ export function RundownEditor({
   })();
   const isPaused = channel.show?.state === "paused";
   const timingGaps = findTimingGaps(rows, timing);
-  const myRoleRows = myRole ? new Set(rows.filter((r) => rowMatchesRole(r, myRole)).map((r) => r.id)) : null;
+  const myRoleRows = myRole
+    ? new Set(rows.filter((r) => rowMatchesRole(r, myRole, meta.roleColumnKey)).map((r) => r.id))
+    : null;
   const myRoleColor = myRole
     ? (roles.find((r) => r.name.toLowerCase() === myRole.toLowerCase())?.color ?? "#2dd4bf")
     : "#2dd4bf";
@@ -422,13 +427,16 @@ export function RundownEditor({
   const richColumns = allRichColumns.filter((c) => !hiddenCols.has(c.key));
   const titleColumn = columns.find((c) => c.kind === "title");
 
+  const richColClass = (column: ColumnDef): string =>
+    column.kind !== "richtext" ? "" : `col-rich${column.key === meta.roleColumnKey ? " col-role" : ""}`;
+
   const renderRichCell = (rowRecord: ProjectedRow, column: ColumnDef) => {
     const isActive = activeCell?.rowId === rowRecord.id && activeCell.columnId === column.id;
     if (isActive) {
       const fragment = getFragment(rowRecord.id, column.id);
       if (fragment)
         return (
-          <td key={column.id} className="active-cell">
+          <td key={column.id} className={`active-cell ${richColClass(column)}`}>
             <CellEditor
               fragment={fragment}
               onDone={() => setActiveCell(null)}
@@ -440,6 +448,7 @@ export function RundownEditor({
     return (
       <td
         key={column.id}
+        className={richColClass(column)}
         onDoubleClick={canEditContent ? () => setActiveCell({ rowId: rowRecord.id, columnId: column.id }) : undefined}
       >
         {highlightRoles(rowRecord.cells[column.key] ?? "", roles)}
@@ -600,7 +609,7 @@ export function RundownEditor({
         <h1 style={{ fontSize: "1.15rem", fontWeight: 650, margin: 0, letterSpacing: "-0.01em" }}>{meta.name}</h1>
         {mode !== "show" && <span className="chip">{mode === "edit" ? "EDIT — no transport" : "VIEW ONLY"}</span>}
         <button
-          className="chip"
+          className="chip hide-mobile"
           style={{ cursor: canEditContent ? "pointer" : "default", border: meta.versionLabel ? "1px solid var(--warn)" : undefined, color: meta.versionLabel ? "var(--warn)" : undefined }}
           title="Version label — printed on exports"
           onClick={() => {
@@ -612,7 +621,7 @@ export function RundownEditor({
           {meta.versionLabel || (canEditContent ? "+ version" : "")}
         </button>
         <KeyTimesEditor doc={doc} keyTimes={keyTimes} use24h={meta.use24h} canEdit={canEditContent} />
-        <div>
+        <div className="hide-mobile">
           <div className="header-label">Planned</div>
           <div className="header-clock mono">
             {timing.startSec != null ? formatTimeOfDay(timing.startSec, meta.use24h) : "—"} · dur{" "}
@@ -622,8 +631,8 @@ export function RundownEditor({
         </div>
         <LiveReadouts live={live} use24h={meta.use24h} />
         <div style={{ marginLeft: "auto", display: "flex", gap: 16, alignItems: "center" }}>
-          <span className={`status-dot ${connected ? "ok" : ""}`}>doc</span>
-          <span className={`status-dot ${channel.connected ? "ok" : ""}`}>show</span>
+          <span className={`status-dot hide-mobile ${connected ? "ok" : ""}`}>doc</span>
+          <span className={`status-dot hide-mobile ${channel.connected ? "ok" : ""}`}>show</span>
           <HeaderClock use24h={meta.use24h} timeZone={channel.timezone} />
         </div>
       </header>
@@ -658,6 +667,13 @@ export function RundownEditor({
             ⚠ {timingGaps.length} timing gap{timingGaps.length === 1 ? "" : "s"} — Reconcile
           </button>
         )}
+        <button
+          className="btn btn-sm mobile-only"
+          title="Phones show only the essentials — switch to see every column"
+          onClick={() => setMobileAllCols((v) => !v)}
+        >
+          {mobileAllCols ? "Key columns" : "All columns"}
+        </button>
         <Dropdown label={<>{Icon.columns} Columns</>}>
           <div className="menu-heading">Show columns</div>
           {allRichColumns.map((c) => (
@@ -820,7 +836,7 @@ export function RundownEditor({
       )}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-        <div className="grid-scroll">
+        <div className={`grid-scroll ${mobileAllCols ? "mobile-show-all" : ""}`}>
         <table className="rundown-grid">
           <thead>
             <tr>
@@ -830,7 +846,11 @@ export function RundownEditor({
               <th>Duration</th>
               {showZero && <th title="Countdown to the next anchored time">Zero</th>}
               {richColumns.map((c) => (
-                <th key={c.id} style={c.width ? { width: c.width, minWidth: Math.min(c.width, 140) } : undefined}>
+                <th
+                  key={c.id}
+                  className={richColClass(c)}
+                  style={c.width ? { width: c.width, minWidth: Math.min(c.width, 140) } : undefined}
+                >
                   {c.title}
                 </th>
               ))}
@@ -925,6 +945,7 @@ export function RundownEditor({
                         })()}
                       </td>
                     )}
+                    {richColumns.map((c) => renderRichCell(rowRecord, c))}
                   </SortableRow>
                 );
               })}
@@ -957,6 +978,7 @@ export function RundownEditor({
         <RoleBar
           myRole={myRole}
           roleColor={myRoleColor}
+          roleColumnKey={meta.roleColumnKey}
           rows={rows}
           timing={timing}
           live={live}
@@ -980,7 +1002,7 @@ export function RundownEditor({
         <span>Generated {printedAt} · OpenCall</span>
       </div>
 
-      <p className="no-print" style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", marginTop: "1rem" }}>
+      <p className="no-print hide-mobile" style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", marginTop: "1rem" }}>
         {canEditContent ? (
           <>
             Double-click a cell to edit · double-click Duration for hide/mute · double-click Start to anchor (⚑ resets)

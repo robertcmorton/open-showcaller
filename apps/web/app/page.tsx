@@ -3,14 +3,18 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api } from "../lib/api";
+import { api, getAdminToken, setAdminToken } from "../lib/api";
 
 const ROUTE_BY_ROLE = { caller: "show", editor: "edit", follower: "view" } as const;
+
+/** Personal/company/admin access tokens are pasted here too — they start with a known prefix. */
+const looksLikeAccessToken = (v: string): boolean => /^(usr_|co_|oc_)/i.test(v);
 
 /**
  * Landing: crew enter their join code and land on the screen their role
  * allows — Showcaller (full console), Edit (content only), or View
- * (read-only). Admins head to /admin.
+ * (read-only). Access tokens (personal, company, admin) work here too and
+ * lead to the dashboard. Admins head to /admin.
  */
 export default function Landing() {
   const router = useRouter();
@@ -20,14 +24,40 @@ export default function Landing() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = code.trim().toUpperCase();
-    if (!trimmed) return;
+    const raw = code.trim();
+    if (!raw) return;
     setBusy(true);
     setError(null);
+
+    if (looksLikeAccessToken(raw)) {
+      // An access token, not a join code: sign in with it (tokens are
+      // case-sensitive — use exactly what was pasted) and head to the dashboard.
+      const previous = getAdminToken();
+      setAdminToken(raw);
+      api
+        .me()
+        .then((me) => {
+          if (me.role == null) {
+            setAdminToken(previous);
+            setError("That access token isn't valid (or has been rotated). Check with your admin.");
+            setBusy(false);
+            return;
+          }
+          router.push("/admin");
+        })
+        .catch(() => {
+          setAdminToken(previous);
+          setError("Couldn't verify that token — is the server reachable?");
+          setBusy(false);
+        });
+      return;
+    }
+
+    const joinCode = raw.toUpperCase();
     api
-      .resolveCode(trimmed)
+      .resolveCode(joinCode)
       .then(({ role, rundownId }) => {
-        router.push(`/${ROUTE_BY_ROLE[role]}/${rundownId}?code=${encodeURIComponent(trimmed)}`);
+        router.push(`/${ROUTE_BY_ROLE[role]}/${rundownId}?code=${encodeURIComponent(joinCode)}`);
       })
       .catch(() => {
         setError("That code isn't valid (or has been revoked). Check with your showcaller.");
@@ -56,15 +86,20 @@ export default function Landing() {
 
       <form onSubmit={submit} className="panel" style={{ width: "min(420px, 92vw)", display: "grid", gap: 12 }}>
         <div>
-          <label className="field-label">Join a show</label>
+          <label className="field-label">Join a show — or sign in</label>
           <input
             className="input mono"
             autoFocus
-            placeholder="Enter your join code — e.g. 3YD8PJ"
-            style={{ width: "100%", fontSize: "1.05rem", letterSpacing: "0.15em", textTransform: "uppercase" }}
+            placeholder="Join code (e.g. 3YD8PJ) or access token"
+            style={{
+              width: "100%",
+              fontSize: "1.05rem",
+              letterSpacing: looksLikeAccessToken(code.trim()) ? "0.02em" : "0.15em",
+              textTransform: looksLikeAccessToken(code.trim()) ? "none" : "uppercase",
+            }}
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            maxLength={12}
+            maxLength={64}
           />
         </div>
         {error && <div style={{ color: "var(--over)", fontSize: "var(--fs-sm)" }}>{error}</div>}
@@ -74,7 +109,8 @@ export default function Landing() {
         <p style={{ margin: 0, color: "var(--text-3)", fontSize: "var(--fs-xs)" }}>
           Your code decides what you can do: <strong>caller</strong> codes open the full console,{" "}
           <strong>editor</strong> codes open the editor without transport, <strong>crew</strong> codes open the
-          read-only view.
+          read-only view. Personal, company, and admin tokens (<code>usr_…</code>, <code>co_…</code>) sign you in to
+          the dashboard.
         </p>
       </form>
 

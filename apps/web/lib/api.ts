@@ -70,7 +70,15 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
   if (admin) headers.authorization = `Bearer ${admin}`;
   if (activeJoinCode) headers["x-join-code"] = activeJoinCode;
   const res = await fetch(`${API_URL}${path}`, { headers, ...init });
-  if (!res.ok) throw new ApiError(`${path}: ${res.status} ${await res.text()}`, res.status);
+  if (!res.ok) {
+    const detail = await res.text();
+    // 401s are ordinary auth gating; anything else is journaled server-side.
+    if (res.status !== 401 && res.status !== 404) {
+      const { reportClientError } = await import("./errorReport");
+      reportClientError(`API ${init?.method ?? "GET"} ${path} → ${res.status}: ${detail.slice(0, 300)}`);
+    }
+    throw new ApiError(`${path}: ${res.status} ${detail}`, res.status);
+  }
   return (await res.json()) as T;
 };
 
@@ -148,7 +156,13 @@ export const api = {
     rows?: SeedRow[];
     columns?: { key: string; title: string; width?: number }[];
     roles?: { name: string; color: string }[];
+    roleColumnKey?: string | null;
   }) => request<{ id: string }>("/rundowns", { method: "POST", body: JSON.stringify(body) }),
+  errors: (limit = 200) =>
+    request<{ id: string; at: string; source: string; message: string; stack: string | null; url: string | null; userAgent: string | null }[]>(
+      `/errors?limit=${limit}`,
+    ),
+  clearErrors: () => request<Record<string, never>>("/errors", { method: "DELETE" }),
   templates: () => request<TemplateSummary[]>("/templates"),
   saveTemplate: (body: { rundownId: string; name: string }) =>
     request<{ id: string }>("/templates", { method: "POST", body: JSON.stringify(body) }),

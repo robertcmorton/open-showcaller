@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyRows, detectHeaderRow, detectRoles, mapColumns, parseDurationLoose, parseTimeLoose, planImport } from "../src/import";
+import { classifyRows, detectHeaderRow, detectRoles, findRoleColumn, mapColumns, mergeWrappedRows, parseDurationLoose, parseTimeLoose, planImport } from "../src/import";
 
 describe("parseDurationLoose", () => {
   it("parses worded durations", () => {
@@ -187,5 +187,61 @@ describe("detectRoles", () => {
     expect(names).toContain("Ctrl Room");
     expect(names).not.toContain("16:00:00");
     expect(new Set(roles.map((r) => r.color)).size).toBe(roles.length); // distinct colours
+  });
+});
+
+describe("mergeWrappedRows", () => {
+  // A PDF-extracted grid: one row per visual line, items numbered in col 0,
+  // wrapped cells spilling onto continuation lines.
+  const pdfGrid = [
+    ["ITEM", "TIME", "DURATION", "ACTION", "WHO", "WHAT"],
+    ["1", "", "", "", "", "KA, Production Crew"],
+    ["", "", "", "Check Content", "", "SET - Tunnel go pro"],
+    ["", "3:00:00PM", "0:60:00", "", "", "CHECK - Dressing room cam"],
+    ["2", "4:30:00PM", "0:15:00", "Crew arrive", "", "DJ set desk"],
+    ["3", "5:45:00PM", "0:30:00", "Rehearsals", "", "- 5:45 - soundcheck"],
+    ["", "", "", "", "", "- 6:00 - MC segment"],
+    ["", "", "", "", "", "- 6:10 - rehearsal"],
+    ["4", "6:30:00PM", "0:17:30", "Music Fill", "AUDIO", "DJ tracks"],
+    ["", "", "", "", "GFX", "Holding loop"],
+    ["5", "6:50:00PM", "0:01:15", "Toss seg", "JORDAN", "Pre-record"],
+    ["6", "7:00:00PM", "0:01:15", "Meet seg", "JORDAN", "Pre-record"],
+  ];
+
+  it("merges continuation lines into one row per numbered item", () => {
+    const { grid, rows } = planImport(pdfGrid, { mergeWrapped: true });
+    // 6 items → 6 data rows (plus the header).
+    expect(grid.length).toBe(7);
+    const importable = rows.filter((r) => r.kind !== "spacer");
+    expect(importable.length).toBe(6);
+    // Item 1's title came from a continuation line; its time from another.
+    expect(importable[0]!.title).toBe("Check Content");
+    expect(importable[0]!.startSec).toBe(15 * 3600);
+    expect(importable[0]!.cells["what"]).toContain("Tunnel go pro");
+    // Item 3's wrapped WHAT lines all merged (times inside stay in WHAT).
+    expect(importable[2]!.cells["what"]!.split("\n").length).toBe(3);
+    expect(importable[2]!.startSec).toBe(17 * 3600 + 45 * 60);
+    // No empty shell rows between items.
+    expect(importable.every((r) => r.title || r.cells["what"])).toBe(true);
+  });
+
+  it("leaves grids without a credible item-number column untouched", () => {
+    const grid = [
+      ["TIME", "ACTIVITY"],
+      ["16:00:00", "Doors"],
+      ["16:30:00", "Show"],
+    ];
+    expect(mergeWrappedRows(grid, 0)).toBe(grid);
+  });
+
+  it("identifies the sheet's own role column and mines roles from it alone", () => {
+    const { headers, mapping, roleColumnKey, rows } = planImport(pdfGrid, { mergeWrapped: true });
+    expect(roleColumnKey).toBe(findRoleColumn(headers, mapping));
+    expect(roleColumnKey).toBe("who");
+    const roles = detectRoles(rows.filter((r) => r.kind !== "spacer"), 12, roleColumnKey);
+    const names = roles.map((r) => r.name);
+    expect(names).toContain("JORDAN");
+    // "DJ tracks" lives in WHAT — never a role when the sheet has a WHO column.
+    expect(names.every((n) => !n.includes("tracks"))).toBe(true);
   });
 });

@@ -1119,7 +1119,27 @@ kbd {
 
 /* ---------- Mobile ---------- */
 
+/* Visible only on small screens (the "All columns" toggle). */
+.mobile-only {
+  display: none !important;
+}
+
 @media (max-width: 760px) {
+  .mobile-only {
+    display: inline-flex !important;
+  }
+  .hide-mobile {
+    display: none !important;
+  }
+  /* Phones show the essentials: title, start, duration, and the role column.
+     The "All columns" toggle brings the full sheet back (with side-scroll). */
+  .grid-scroll:not(.mobile-show-all) .col-rich:not(.col-role) {
+    display: none;
+  }
+  .grid-scroll:not(.mobile-show-all) .rundown-grid {
+    min-width: 0;
+    width: 100%;
+  }
   .with-sidenav,
   .with-sidenav.sidenav-closed {
     padding-left: 0;

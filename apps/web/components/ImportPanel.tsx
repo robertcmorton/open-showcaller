@@ -4,9 +4,9 @@ import { useMemo, useState } from "react";
 import {
   classifyRows,
   detectRoles,
+  findRoleColumn,
   formatDuration,
   formatTimeOfDay,
-  mapColumns,
   planImport,
   type ClassifiedRow,
   type ColumnTarget,
@@ -62,6 +62,9 @@ const KIND_STYLE: Record<ClassifiedRow["kind"], { label: string; color: string }
  */
 export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onDone: (rundownId: string) => void; onClose: () => void }) {
   const [name, setName] = useState("");
+  const [rawGrid, setRawGrid] = useState<string[][] | null>(null); // as extracted, pre-merge
+  const [lineMeta, setLineMeta] = useState<{ page: number; y: number }[] | undefined>(undefined);
+  const [isPdf, setIsPdf] = useState(false);
   const [grid, setGrid] = useState<string[][] | null>(null);
   const [headerIndex, setHeaderIndex] = useState(0);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -77,32 +80,50 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
   );
   const importable = rows.filter((r) => r.kind !== "spacer");
   const warnings = rows.filter((r) => r.startRaw || r.durationRaw).length;
-  const roles = useMemo(() => detectRoles(importable), [importable]);
+  // The sheet's own role column (WHO, ROLE…) is the roster when it exists.
+  const roleKey = useMemo(() => findRoleColumn(headers, mapping), [headers, mapping]);
+  const roles = useMemo(() => detectRoles(importable, 12, roleKey), [importable, roleKey]);
+
+  const applyPlan = (
+    source: string[][],
+    pdf: boolean,
+    forcedHeaderIndex?: number,
+    meta?: { page: number; y: number }[],
+  ) => {
+    const plan = planImport(source, { headerIndex: forcedHeaderIndex, mergeWrapped: pdf, lineMeta: meta });
+    setGrid(plan.grid);
+    setHeaderIndex(plan.headerIndex);
+    setHeaders(plan.headers);
+    setMapping(plan.mapping);
+  };
 
   const onFile = async (file: File) => {
     setError(null);
     setBusy(true);
     try {
-      const { grid: extracted, widths: extractedWidths } = await extractGrid(file);
-      const plan = planImport(extracted);
-      setGrid(extracted);
+      const pdf = /\.pdf$/i.test(file.name);
+      const { grid: extracted, widths: extractedWidths, lineMeta: meta } = await extractGrid(file);
+      setRawGrid(extracted);
+      setLineMeta(meta);
+      setIsPdf(pdf);
       setWidths(extractedWidths);
-      setHeaderIndex(plan.headerIndex);
-      setHeaders(plan.headers);
-      setMapping(plan.mapping);
+      applyPlan(extracted, pdf, undefined, meta);
       setName(file.name.replace(/\.(xlsx|xls|csv|pdf)$/i, ""));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setGrid(null);
+      setRawGrid(null);
     } finally {
       setBusy(false);
     }
   };
 
   const doImport = () => {
-    // Auto-assign: every detected role that appears in a row's cells lands in
-    // its "Roles" column (an item can carry several).
+    // When the sheet has NO role column of its own, every detected role that
+    // appears in a row's cells lands in a synthesized "Roles" column (an item
+    // can carry several). Sheets with a WHO/ROLE column keep it as-is.
     const rolesFor = (r: ClassifiedRow): string => {
+      if (roleKey) return "";
       const hay = `${r.title}\n${Object.values(r.cells).join("\n")}`.toLowerCase();
       return roles
         .filter((role) => hay.includes(role.name.toLowerCase()))
@@ -138,7 +159,7 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
     const clampWidth = (w: number | null | undefined): number | undefined =>
       w ? Math.min(420, Math.max(80, w)) : undefined;
     const roleColumn: { key: string; title: string; width?: number }[] =
-      roles.length > 0 ? [{ key: "roles", title: "Roles", width: 140 }] : [];
+      roles.length > 0 && !roleKey ? [{ key: "roles", title: "Roles", width: 140 }] : [];
     const customColumns = roleColumn.concat(
       mapping
       .map((t, i) => ({ t, i }))
@@ -150,7 +171,14 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
     );
     setBusy(true);
     api
-      .createRundown({ eventId, name: name.trim() || "Imported rundown", rows: seedRows, columns: customColumns, roles })
+      .createRundown({
+        eventId,
+        name: name.trim() || "Imported rundown",
+        rows: seedRows,
+        columns: customColumns,
+        roles,
+        roleColumnKey: roleKey ?? (roles.length > 0 ? "roles" : null),
+      })
       .then(({ id }) => onDone(id))
       .catch((err) => {
         setError(String(err));
@@ -231,11 +259,9 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
                 value={headerIndex + 1}
                 style={{ width: 74 }}
                 onChange={(e) => {
-                  const idx = Math.min(grid.length - 1, Math.max(0, Number(e.target.value) - 1));
-                  setHeaderIndex(idx);
-                  const hdrs = grid[idx] ?? [];
-                  setHeaders(hdrs);
-                  setMapping(mapColumns(hdrs, grid.slice(idx + 1, idx + 60)));
+                  if (!rawGrid) return;
+                  const idx = Math.min(rawGrid.length - 1, Math.max(0, Number(e.target.value) - 1));
+                  applyPlan(rawGrid, isPdf, idx, lineMeta);
                 }}
               />
             </div>

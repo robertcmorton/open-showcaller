@@ -14,6 +14,8 @@ export interface ExtractedSheet {
   grid: string[][];
   /** Per-source-column display width hints in px (when the file provides them). */
   widths: (number | null)[];
+  /** PDF only: page + vertical position per grid row, for wrapped-row merging. */
+  lineMeta?: { page: number; y: number }[];
 }
 
 export async function extractGrid(file: File): Promise<ExtractedSheet> {
@@ -90,7 +92,8 @@ async function extractPdf(buffer: ArrayBuffer): Promise<ExtractedSheet> {
   };
 
   const grid: string[][] = [];
-  for (const runs of pages) {
+  const lineMeta: { page: number; y: number }[] = [];
+  pages.forEach((runs, pageIndex) => {
     // Lines: sort by page Y (PDF Y grows upward), group within tolerance.
     const sorted = [...runs].sort((a, b) => b.y - a.y || a.x - b.x);
     let line: Run[] = [];
@@ -103,6 +106,7 @@ async function extractPdf(buffer: ArrayBuffer): Promise<ExtractedSheet> {
         cells[band] = cells[band] ? `${cells[band]} ${run.text.trim()}` : run.text.trim();
       }
       grid.push(cells);
+      lineMeta.push({ page: pageIndex, y: line[0]!.y });
       line = [];
     };
     for (const run of sorted) {
@@ -116,11 +120,11 @@ async function extractPdf(buffer: ArrayBuffer): Promise<ExtractedSheet> {
       }
     }
     flush();
-  }
+  });
   // Band spans (pt ≈ px) give each source column a proportional width hint.
   const widths = bands.map((x, i) => {
     const next = bands[i + 1];
     return next != null ? Math.round((next - x) * 1.25) : null;
   });
-  return { grid, widths };
+  return { grid, widths, lineMeta };
 }

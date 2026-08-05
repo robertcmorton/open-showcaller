@@ -53,6 +53,8 @@ export interface DocMeta {
   use24h?: boolean;
   /** Free-text version label shown on headers and print ("V2", "FINAL"). */
   versionLabel?: string;
+  /** The imported column that carries role assignments (WHO, ROLE…), if any. */
+  roleColumnKey?: string | null;
 }
 
 export interface KeyTime {
@@ -89,6 +91,7 @@ export function buildRundownDoc(
     if (docMeta.name != null) meta.set("name", docMeta.name);
     if (docMeta.plannedStartSec != null) meta.set("plannedStartSec", docMeta.plannedStartSec);
     if (docMeta.use24h != null) meta.set("use24h", docMeta.use24h);
+    if (docMeta.roleColumnKey != null) meta.set("roleColumnKey", docMeta.roleColumnKey);
 
     const columns = doc.getArray<Y.Map<unknown>>("columns");
     const columnIdByKey = new Map<string, string>();
@@ -179,6 +182,7 @@ export function projectRundownDoc(doc: Y.Doc): {
     plannedStartSec: (metaMap.get("plannedStartSec") as number | undefined) ?? null,
     use24h: (metaMap.get("use24h") as boolean | undefined) ?? false,
     versionLabel: (metaMap.get("versionLabel") as string | undefined) ?? "",
+    roleColumnKey: (metaMap.get("roleColumnKey") as string | undefined) ?? null,
   };
   const roles: RoleDef[] = doc
     .getArray<Y.Map<unknown>>("roles")

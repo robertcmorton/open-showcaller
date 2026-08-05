@@ -27,11 +27,22 @@ export function highlightRoles(text: string, roles: RoleDef[]): React.ReactNode 
   });
 }
 
-/** Does this row involve the given role? Any cell (or the title) may name it. */
-export function rowMatchesRole(row: ProjectedRow, role: string): boolean {
+/**
+ * Does this row involve the given role? When the rundown knows its role
+ * column (WHO, ROLE, the imported Roles column…) that column is the
+ * assignment record — matching against it (plus the title) avoids false
+ * positives from prose like "DJ tracks" in a notes column. Without one,
+ * any cell may name the role.
+ */
+export function rowMatchesRole(row: ProjectedRow, role: string, roleColumnKey?: string | null): boolean {
   const needle = role.trim().toLowerCase();
   if (!needle) return false;
   if (row.title.toLowerCase().includes(needle)) return true;
+  if (roleColumnKey) {
+    const assigned = row.cells[roleColumnKey];
+    if (assigned != null) return assigned.toLowerCase().includes(needle);
+    return false;
+  }
   return Object.values(row.cells).some((v) => v.toLowerCase().includes(needle));
 }
 
@@ -180,6 +191,7 @@ export function RolePicker({
 export function RoleBar({
   myRole,
   roleColor = "#2dd4bf",
+  roleColumnKey,
   rows,
   timing,
   live,
@@ -188,6 +200,7 @@ export function RoleBar({
 }: {
   myRole: string;
   roleColor?: string;
+  roleColumnKey?: string | null;
   rows: ProjectedRow[];
   timing: PlanTiming;
   live: LiveShowTiming | null;
@@ -198,7 +211,7 @@ export function RoleBar({
 
   const activeIndex = rows.findIndex((r) => r.id === activeRowId);
   const activeRow = activeIndex >= 0 ? rows[activeIndex]! : null;
-  const onAir = activeRow != null && rowMatchesRole(activeRow, myRole);
+  const onAir = activeRow != null && rowMatchesRole(activeRow, myRole, roleColumnKey);
 
   if (onAir) {
     const over = live.remainingInRowSec != null && live.remainingInRowSec < 0;
@@ -222,7 +235,7 @@ export function RoleBar({
   let next: { row: ProjectedRow; startSec: number | null } | null = null;
   for (let i = Math.max(0, activeIndex) + 1; i < rows.length; i++) {
     const row = rows[i]!;
-    if (row.type === "group" || row.skipped || !rowMatchesRole(row, myRole)) continue;
+    if (row.type === "group" || row.skipped || !rowMatchesRole(row, myRole, roleColumnKey)) continue;
     next = { row, startSec: timing.rows[i]!.startSec };
     break;
   }

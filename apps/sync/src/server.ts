@@ -12,7 +12,7 @@ import { createDb, ensureSchema, schema } from "@opencall/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { ulid } from "ulid";
 import { createDocServer } from "./doc-server";
-import { createApiHandler } from "./api";
+import { createApiHandler, logServerError } from "./api";
 import { PersistentShowStore } from "./sessions";
 import * as authMod from "./auth";
 
@@ -112,13 +112,29 @@ async function resolveAuth(
   return row && row.rundownId === rundownId ? { role: "guest", label: "Guest" } : null;
 }
 
+// Crash-level errors land in the same journal the admin dashboard reads.
+process.on("uncaughtException", (err) => {
+  console.error("[sync] uncaught exception:", err);
+  logServerError(dbHandle, "process", err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[sync] unhandled rejection:", reason);
+  logServerError(dbHandle, "process", reason);
+});
+
 // HTTP: JSON API for the web app (dev-open; real auth in the hardening pass).
 const handleApi = createApiHandler(dbHandle);
 const httpServer = createServer(async (req, res) => {
-  const handled = await handleApi(req, res);
-  if (!handled) {
-    res.statusCode = 404;
-    res.end("not found");
+  try {
+    const handled = await handleApi(req, res);
+    if (!handled) {
+      res.statusCode = 404;
+      res.end("not found");
+    }
+  } catch (err) {
+    logServerError(dbHandle, "server", err, { url: `${req.method} ${req.url}` });
+    if (!res.headersSent) res.statusCode = 500;
+    res.end("server error");
   }
 });
 

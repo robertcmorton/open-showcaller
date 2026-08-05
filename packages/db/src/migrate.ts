@@ -139,6 +139,16 @@ export async function ensureSchema(db: Db): Promise<void> {
     ALTER TABLE events ADD COLUMN IF NOT EXISTS image1 text;
     ALTER TABLE events ADD COLUMN IF NOT EXISTS image2 text;
     CREATE UNIQUE INDEX IF NOT EXISTS teams_company_token_unique ON teams (company_token);
+    CREATE TABLE IF NOT EXISTS error_logs (
+      id text PRIMARY KEY,
+      at timestamptz NOT NULL DEFAULT now(),
+      source text NOT NULL,
+      message text NOT NULL,
+      stack text,
+      url text,
+      user_agent text,
+      context jsonb
+    );
     CREATE TABLE IF NOT EXISTS user_rundown_prefs (
       user_id text NOT NULL REFERENCES users(id),
       rundown_id text NOT NULL REFERENCES rundowns(id),

@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { and, eq, ne, inArray } from "drizzle-orm";
+import { and, desc, eq, ne, inArray } from "drizzle-orm";
 import { ulid } from "ulid";
 import { authContext, bearerToken, canManageEvent, canSeeEvent, resolveBearer, resolveJoinCode, teamIdForEvent, teamIdForRundown } from "./auth";
 import { serializeCsv } from "@opencall/core";
@@ -18,6 +18,31 @@ import * as Y from "yjs";
  * Minimal JSON API for event/rundown/template management (dev-open CORS;
  * real auth arrives with the accounts hardening pass).
  */
+/**
+ * Fire-and-forget server error journal: everything lands in error_logs so
+ * problems can be reviewed (and fixed) from the admin dashboard later.
+ */
+export function logServerError(
+  handle: DbHandle,
+  source: "server" | "process" | "client",
+  err: unknown,
+  extra: { url?: string; userAgent?: string; context?: Record<string, unknown> } = {},
+): void {
+  const message = (err instanceof Error ? err.message : String(err)).slice(0, 2000);
+  const stack = err instanceof Error && err.stack ? err.stack.slice(0, 8000) : null;
+  void handle.db
+    .insert(schema.errorLogs)
+    .values({ id: ulid(), source, message, stack, url: extra.url?.slice(0, 500), userAgent: extra.userAgent?.slice(0, 300), context: extra.context })
+    .catch((e) => console.error("[sync] error-log write failed:", e));
+}
+
+// Client error reports are unauthenticated by design (view screens must be able
+// to report) — a coarse budget keeps a misbehaving page from flooding the table.
+let clientErrorBudget = 60;
+setInterval(() => {
+  clientErrorBudget = 60;
+}, 60_000).unref();
+
 export function createApiHandler(handle: DbHandle) {
   const { db } = handle;
 
@@ -172,6 +197,50 @@ export function createApiHandler(handle: DbHandle) {
             canManage: ctx.grants.some((g) => g.kind !== "view"),
           });
         else json(res, 200, { role: null });
+        return true;
+      }
+
+      // ── Error log ──
+      // Browsers report their errors here; admins review and clear below.
+      if (req.method === "POST" && pathname === "/client-errors") {
+        const body = await readJson(req).catch(() => ({}) as Record<string, unknown>);
+        if (clientErrorBudget > 0 && typeof body.message === "string" && body.message.trim()) {
+          clientErrorBudget -= 1;
+          logServerError(handle, "client", new Error(String(body.message).slice(0, 2000)), {
+            url: typeof body.url === "string" ? body.url : undefined,
+            userAgent: req.headers["user-agent"],
+            context: typeof body.stack === "string" ? { stack: body.stack.slice(0, 8000) } : undefined,
+          });
+        }
+        res.statusCode = 204;
+        res.end();
+        return true;
+      }
+
+      if (req.method === "GET" && pathname === "/errors") {
+        if (!(await requireAdmin())) return true;
+        const limit = Math.min(500, Math.max(1, Number(url.searchParams.get("limit") ?? 200)));
+        const rows = await db.query.errorLogs.findMany({ orderBy: desc(schema.errorLogs.at), limit });
+        json(
+          res,
+          200,
+          rows.map((r) => ({
+            id: r.id,
+            at: r.at.toISOString(),
+            source: r.source,
+            message: r.message,
+            stack: r.stack ?? (r.context as { stack?: string } | null)?.stack ?? null,
+            url: r.url,
+            userAgent: r.userAgent,
+          })),
+        );
+        return true;
+      }
+
+      if (req.method === "DELETE" && pathname === "/errors") {
+        if (!(await requireAdmin())) return true;
+        await db.delete(schema.errorLogs);
+        json(res, 200, {});
         return true;
       }
 
@@ -595,7 +664,12 @@ export function createApiHandler(handle: DbHandle) {
             : [];
           doc = buildRundownDoc(
             rows,
-            { name, plannedStartSec, use24h: event.use24h },
+            {
+              name,
+              plannedStartSec,
+              use24h: event.use24h,
+              roleColumnKey: typeof body.roleColumnKey === "string" && body.roleColumnKey ? body.roleColumnKey : null,
+            },
             extraColumns,
             extraColumns.length > 0, // importer path: mirror the source sheet's columns exactly
             importRoles,
@@ -873,6 +947,7 @@ export function createApiHandler(handle: DbHandle) {
         return true;
       }
     } catch (err) {
+      logServerError(handle, "server", err, { url: `${req.method} ${pathname}` });
       json(res, 500, { error: String(err) });
       return true;
     }

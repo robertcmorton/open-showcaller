@@ -195,6 +195,20 @@ export const showTransitions = pgTable("show_transitions", {
   actorUserId: text("actor_user_id").references(() => users.id),
 });
 
+// ── Error log (server-kept; reviewed from the admin dashboard) ─────────────────
+
+export const errorLogs = pgTable("error_logs", {
+  id: id().primaryKey(),
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  /** Where it happened: server (API), process (crash-level), client (browser). */
+  source: text("source").notNull(),
+  message: text("message").notNull(),
+  stack: text("stack"),
+  url: text("url"),
+  userAgent: text("user_agent"),
+  context: jsonb("context").$type<Record<string, unknown>>(),
+});
+
 // ── Per-user personalization (never in the CRDT) ───────────────────────────────
 
 export const userRundownPrefs = pgTable(
