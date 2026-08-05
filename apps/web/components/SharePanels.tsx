@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type SnapshotSummary } from "../lib/api";
+import { api, copyViewOnlyLink, type SnapshotSummary } from "../lib/api";
 import type { ColumnDef } from "@opencall/db/doc";
 
 const panelStyle: React.CSSProperties = {
@@ -80,7 +80,19 @@ export function JoinCodesPanel({ rundownId, onClose }: { rundownId: string; onCl
   return (
     <div className="panel" style={panelStyle}>
       <strong>Join codes — enter on the landing page or open the copied URL. Caller → console, editor → edit, follower → view.</strong>
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button
+          className="btn btn-sm btn-primary"
+          title="Copies a URL that opens this rundown read-only — hand it to camera operators and crew"
+          onClick={() =>
+            void copyViewOnlyLink(rundownId).then((url) => {
+              reload();
+              window.alert(`View-only link copied:\n\n${url}\n\nAnyone with it can watch this rundown live.`);
+            })
+          }
+        >
+          Copy view-only link
+        </button>
         {(["follower", "editor", "caller"] as const).map((role) => (
           <button key={role} className="btn btn-sm" onClick={() => void api.createJoinCode(rundownId, role).then(reload)}>
             + {role} code

@@ -21,6 +21,31 @@ export default function Landing() {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginBusy, setLoginBusy] = useState(false);
+
+  const submitLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !password) return;
+    setLoginBusy(true);
+    setLoginError(null);
+    api
+      .login(email.trim(), password)
+      .then(({ token }) => {
+        setAdminToken(token);
+        router.push("/admin");
+      })
+      .catch((err) => {
+        setLoginError(
+          err instanceof Error && err.message.includes("429")
+            ? "Too many attempts — wait a minute and try again."
+            : "Invalid email or password.",
+        );
+        setLoginBusy(false);
+      });
+  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,6 +136,35 @@ export default function Landing() {
           <strong>editor</strong> codes open the editor without transport, <strong>crew</strong> codes open the
           read-only view. Personal, company, and admin tokens (<code>usr_…</code>, <code>co_…</code>) sign you in to
           the dashboard.
+        </p>
+      </form>
+
+      <form onSubmit={submitLogin} className="panel" style={{ width: "min(420px, 92vw)", display: "grid", gap: 10 }}>
+        <label className="field-label" style={{ margin: 0 }}>
+          Sign in with an account
+        </label>
+        <input
+          className="input"
+          type="email"
+          autoComplete="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <input
+          className="input"
+          type="password"
+          autoComplete="current-password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        {loginError && <div style={{ color: "var(--over)", fontSize: "var(--fs-sm)" }}>{loginError}</div>}
+        <button className="btn" type="submit" disabled={loginBusy || !email.trim() || !password}>
+          {loginBusy ? "Signing in…" : "Sign in"}
+        </button>
+        <p style={{ margin: 0, color: "var(--text-3)", fontSize: "var(--fs-xs)" }}>
+          Accounts are created by your admin. No password yet? Your personal access token works in the box above.
         </p>
       </form>
 

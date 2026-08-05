@@ -1,7 +1,21 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { and, desc, eq, ne, inArray } from "drizzle-orm";
 import { ulid } from "ulid";
-import { authContext, bearerToken, canManageEvent, canSeeEvent, resolveBearer, resolveJoinCode, teamIdForEvent, teamIdForRundown } from "./auth";
+import {
+  authContext,
+  bearerToken,
+  canManageEvent,
+  canSeeEvent,
+  createSession,
+  hashPassword,
+  resolveBearer,
+  resolveJoinCode,
+  revokeSession,
+  revokeUserSessions,
+  teamIdForEvent,
+  teamIdForRundown,
+  verifyPassword,
+} from "./auth";
 import { serializeCsv } from "@opencall/core";
 import {
   buildRundownDoc,
@@ -41,6 +55,12 @@ export function logServerError(
 let clientErrorBudget = 60;
 setInterval(() => {
   clientErrorBudget = 60;
+}, 60_000).unref();
+
+// Login attempts share a coarse per-process budget to slow brute-forcing.
+let loginBudget = 30;
+setInterval(() => {
+  loginBudget = 30;
 }, 60_000).unref();
 
 export function createApiHandler(handle: DbHandle) {
@@ -200,6 +220,90 @@ export function createApiHandler(handle: DbHandle) {
         return true;
       }
 
+      // ── Accounts: password login & sessions ──
+      if (req.method === "POST" && pathname === "/auth/login") {
+        if (loginBudget <= 0) {
+          json(res, 429, { error: "too many attempts — wait a minute" });
+          return true;
+        }
+        loginBudget -= 1;
+        const body = await readJson(req);
+        const email = String(body.email ?? "").trim().toLowerCase();
+        const password = String(body.password ?? "");
+        const user = email ? await db.query.users.findFirst({ where: eq(schema.users.email, email) }) : null;
+        // One indistinct error for unknown email and wrong password alike.
+        if (!user || !verifyPassword(password, user.passwordHash)) {
+          json(res, 401, { error: "invalid email or password" });
+          return true;
+        }
+        const session = await createSession(handle, user.id, req.headers["user-agent"]);
+        json(res, 200, { token: session.token, expiresAt: session.expiresAt.toISOString(), name: user.name });
+        return true;
+      }
+
+      if (req.method === "POST" && pathname === "/auth/logout") {
+        const token = bearerToken(req);
+        if (token?.startsWith("ses_")) await revokeSession(handle, token);
+        json(res, 200, {});
+        return true;
+      }
+
+      if (req.method === "POST" && pathname === "/auth/change-password") {
+        const token = bearerToken(req);
+        const ctx = await resolveBearer(handle, token);
+        // Password changes are for signed-in ACCOUNTS (session or personal token);
+        // resolveBearer folds admin-grant users into "admin", so look the user up directly.
+        const body = await readJson(req);
+        const current = String(body.current ?? "");
+        const next = String(body.next ?? "");
+        let userId: string | null = null;
+        if (token?.startsWith("ses_")) {
+          const session = await db.query.authSessions.findFirst({ where: eq(schema.authSessions.token, token) });
+          if (session && !session.revokedAt && session.expiresAt >= new Date()) userId = session.userId;
+        } else if (token && ctx) {
+          const user = await db.query.users.findFirst({ where: eq(schema.users.accessToken, token) });
+          userId = user?.id ?? null;
+        }
+        if (!userId) {
+          json(res, 401, { error: "sign in first" });
+          return true;
+        }
+        if (next.length < 8) {
+          json(res, 400, { error: "new password must be at least 8 characters" });
+          return true;
+        }
+        const user = await db.query.users.findFirst({ where: eq(schema.users.id, userId) });
+        if (user?.passwordHash && !verifyPassword(current, user.passwordHash)) {
+          json(res, 401, { error: "current password is wrong" });
+          return true;
+        }
+        await db.update(schema.users).set({ passwordHash: hashPassword(next) }).where(eq(schema.users.id, userId));
+        // Every other session dies with the old password; this one stays.
+        if (token?.startsWith("ses_")) {
+          await revokeUserSessions(handle, userId);
+          await db.update(schema.authSessions).set({ revokedAt: null }).where(eq(schema.authSessions.token, token));
+        } else {
+          await revokeUserSessions(handle, userId);
+        }
+        json(res, 200, {});
+        return true;
+      }
+
+      if (req.method === "POST" && /^\/users\/[^/]+\/set-password$/.test(pathname)) {
+        if (!(await requireAdmin())) return true;
+        const id = pathname.split("/")[2]!;
+        const body = await readJson(req);
+        const password = String(body.password ?? "");
+        if (password.length < 8) {
+          json(res, 400, { error: "password must be at least 8 characters" });
+          return true;
+        }
+        await db.update(schema.users).set({ passwordHash: hashPassword(password) }).where(eq(schema.users.id, id));
+        await revokeUserSessions(handle, id); // old sessions die with the old password
+        json(res, 200, { id });
+        return true;
+      }
+
       // ── Error log ──
       // Browsers report their errors here; admins review and clear below.
       if (req.method === "POST" && pathname === "/client-errors") {
@@ -257,6 +361,7 @@ export function createApiHandler(handle: DbHandle) {
             name: u.name,
             email: u.email,
             accessToken: u.accessToken,
+            hasPassword: u.passwordHash != null,
             grants: grants.filter((g) => g.userId === u.id).map((g) => ({ kind: g.kind, targetId: g.targetId })),
           })),
         );
@@ -273,11 +378,17 @@ export function createApiHandler(handle: DbHandle) {
         }
         const id = ulid();
         const token = `usr_${ulid().toLowerCase()}`;
+        const password = String(body.password ?? "");
+        if (password && password.length < 8) {
+          json(res, 400, { error: "password must be at least 8 characters" });
+          return true;
+        }
         await db.insert(schema.users).values({
           id,
           name,
-          email: String(body.email ?? `${id.toLowerCase()}@local`).trim() || `${id.toLowerCase()}@local`,
+          email: String(body.email ?? `${id.toLowerCase()}@local`).trim().toLowerCase() || `${id.toLowerCase()}@local`,
           accessToken: token,
+          passwordHash: password ? hashPassword(password) : null,
         });
         const grants = Array.isArray(body.grants) ? (body.grants as { kind: string; targetId?: string }[]) : [];
         for (const g of grants) {
@@ -318,6 +429,7 @@ export function createApiHandler(handle: DbHandle) {
         if (!(await requireAdmin())) return true;
         const id = pathname.split("/")[2]!;
         await db.delete(schema.userGrants).where(eq(schema.userGrants.userId, id));
+        await db.delete(schema.authSessions).where(eq(schema.authSessions.userId, id));
         await db.delete(schema.users).where(eq(schema.users.id, id));
         json(res, 200, { id });
         return true;

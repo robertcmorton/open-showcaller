@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   api,
   ApiError,
+  copyViewOnlyLink,
   csvToSeedRows,
   getAdminToken,
   setAdminToken,
@@ -166,35 +167,73 @@ function CreateRundownForm({
 
 function TokenGate({ onUnlocked }: { onUnlocked: () => void }) {
   const [token, setToken] = useState("");
-  return (
-    <form
-      className="panel"
-      style={{ maxWidth: 420, margin: "10vh auto", display: "grid", gap: 12 }}
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!token.trim()) return;
-        setAdminToken(token.trim());
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const login = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !password) return;
+    setBusy(true);
+    setError(null);
+    void api
+      .login(email.trim(), password)
+      .then(({ token: session }) => {
+        setAdminToken(session);
         onUnlocked();
-      }}
-    >
-      <div>
-        <h2 style={{ margin: "0 0 4px", fontSize: "1.05rem" }}>Admin access</h2>
-        <p style={{ margin: 0, color: "var(--text-2)", fontSize: "var(--fs-sm)" }}>
-          This server requires the admin token (the <code>ADMIN_TOKEN</code> it was deployed with).
-        </p>
-      </div>
-      <input
-        className="input"
-        type="password"
-        autoFocus
-        placeholder="Admin token"
-        value={token}
-        onChange={(e) => setToken(e.target.value)}
-      />
-      <button className="btn btn-primary" type="submit">
-        Unlock
-      </button>
-    </form>
+      })
+      .catch(() => {
+        setError("Invalid email or password.");
+        setBusy(false);
+      });
+  };
+
+  return (
+    <div style={{ maxWidth: 420, margin: "10vh auto", display: "grid", gap: 14 }}>
+      <form
+        className="panel"
+        style={{ display: "grid", gap: 12 }}
+        onSubmit={login}
+      >
+        <div>
+          <h2 style={{ margin: "0 0 4px", fontSize: "1.05rem" }}>Sign in</h2>
+          <p style={{ margin: 0, color: "var(--text-2)", fontSize: "var(--fs-sm)" }}>
+            This server is locked. Sign in with your account, or use a token below.
+          </p>
+        </div>
+        <input className="input" type="email" autoFocus autoComplete="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input className="input" type="password" autoComplete="current-password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        {error && <div style={{ color: "var(--over)", fontSize: "var(--fs-sm)" }}>{error}</div>}
+        <button className="btn btn-primary" type="submit" disabled={busy || !email.trim() || !password}>
+          {busy ? "Signing in…" : "Sign in"}
+        </button>
+      </form>
+      <form
+        className="panel"
+        style={{ display: "grid", gap: 10 }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!token.trim()) return;
+          setAdminToken(token.trim());
+          onUnlocked();
+        }}
+      >
+        <label className="field-label" style={{ margin: 0 }}>
+          Or use a token (admin, company, or personal)
+        </label>
+        <input
+          className="input"
+          type="password"
+          placeholder="Token"
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+        />
+        <button className="btn" type="submit" disabled={!token.trim()}>
+          Unlock with token
+        </button>
+      </form>
+    </div>
   );
 }
 
@@ -422,21 +461,51 @@ export default function AdminPage() {
         </SideNavSection>
       )}
       <SideNavSection heading="Credentials">
+        {me?.role === "user" && (
+          <div style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", padding: "2px 9px" }}>
+            Signed in as {me.name}
+          </div>
+        )}
+        {me?.role === "user" && (
+          <button
+            type="button"
+            className="menu-item"
+            onClick={() => {
+              const current = window.prompt("Current password (leave empty if you never had one)");
+              if (current === null) return;
+              const next = window.prompt("New password (at least 8 characters)");
+              if (!next) return;
+              void api
+                .changePassword(current, next)
+                .then(() => window.alert("Password changed. Other signed-in devices were signed out."))
+                .catch((err) => window.alert(String(err)));
+            }}
+          >
+            <span className="check" />
+            Change password…
+          </button>
+        )}
         {getAdminToken() ? (
           <button
             type="button"
             className="menu-item"
             onClick={() => {
-              setAdminToken(null);
-              reload();
+              // Sessions are revoked server-side; plain tokens are just forgotten.
+              const bearer = getAdminToken();
+              const done = () => {
+                setAdminToken(null);
+                reload();
+              };
+              if (bearer?.startsWith("ses_")) void api.logout().catch(() => undefined).then(done);
+              else done();
             }}
           >
             <span className="check" />
-            Forget token
+            Sign out
           </button>
         ) : (
           <div style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", padding: "2px 9px" }}>
-            Dev-open server — no token needed.
+            Dev-open server — no sign-in needed.
           </div>
         )}
       </SideNavSection>
@@ -790,6 +859,17 @@ export default function AdminPage() {
                       </Link>
                     ))}
                     <span className="hide-mobile" style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+                      <button
+                        className="btn btn-sm"
+                        title="Copy a URL that opens this rundown read-only — for camera operators and crew"
+                        onClick={() =>
+                          void copyViewOnlyLink(r.id).then((url) =>
+                            window.alert(`View-only link copied:\n\n${url}\n\nAnyone with it can watch this rundown live.`),
+                          )
+                        }
+                      >
+                        Copy view link
+                      </button>
                       <button className="btn btn-sm btn-ghost" onClick={() => rename("rundown", r.id, r.name)}>
                         Rename
                       </button>
@@ -809,6 +889,18 @@ export default function AdminPage() {
                       />
                     </span>
                     <MobileActions>
+                      <button
+                        type="button"
+                        className="menu-item"
+                        onClick={() =>
+                          void copyViewOnlyLink(r.id).then((url) =>
+                            window.alert(`View-only link copied:\n\n${url}`),
+                          )
+                        }
+                      >
+                        <span className="check" />
+                        Copy view link
+                      </button>
                       <button type="button" className="menu-item" onClick={() => rename("rundown", r.id, r.name)}>
                         <span className="check" />
                         Rename

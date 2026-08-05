@@ -29,11 +29,12 @@ export function UsersPanel({
   events: EventSummary[];
 }) {
   const [users, setUsers] = useState<
-    { id: string; name: string; email: string; accessToken: string | null; grants: { kind: string; targetId: string }[] }[]
+    { id: string; name: string; email: string; accessToken: string | null; hasPassword: boolean; grants: { kind: string; targetId: string }[] }[]
   >([]);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [grants, setGrants] = useState<GrantDraft[]>([]);
   const [draftKind, setDraftKind] = useState<GrantDraft["kind"]>("view");
   const [draftTarget, setDraftTarget] = useState("");
@@ -57,14 +58,25 @@ export function UsersPanel({
 
   const create = () => {
     if (!name.trim() || grants.length === 0) return;
-    void api.createUser({ name: name.trim(), email: email.trim() || undefined, grants }).then(({ accessToken }) => {
-      window.alert(`User created. Their personal access token (share it securely):\n\n${accessToken}\n\nThey enter it on the Admin Access page.`);
-      setName("");
-      setEmail("");
-      setGrants([]);
-      setCreating(false);
-      reload();
-    });
+    if (password && password.length < 8) {
+      window.alert("Password must be at least 8 characters (or leave it empty).");
+      return;
+    }
+    void api
+      .createUser({ name: name.trim(), email: email.trim() || undefined, password: password || undefined, grants })
+      .then(({ accessToken }) => {
+        window.alert(
+          password
+            ? `User created. They sign in with their email and password.\n\nBackup access token (share securely if needed):\n${accessToken}`
+            : `User created. Their personal access token (share it securely):\n\n${accessToken}\n\nThey enter it on the sign-in page — or set a password so they can sign in with email.`,
+        );
+        setName("");
+        setEmail("");
+        setPassword("");
+        setGrants([]);
+        setCreating(false);
+        reload();
+      });
   };
 
   return (
@@ -85,7 +97,14 @@ export function UsersPanel({
         <div className="panel" style={{ margin: "10px 0", display: "grid", gap: 10 }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <input className="input" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-            <input className="input" placeholder="Email (optional)" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input className="input" placeholder="Email (needed for password sign-in)" value={email} onChange={(e) => setEmail(e.target.value)} style={{ minWidth: 230 }} />
+            <input
+              className="input"
+              type="password"
+              placeholder="Password (optional, min 8)"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <select className="input" value={draftKind} onChange={(e) => setDraftKind(e.target.value as GrantDraft["kind"])}>
@@ -151,6 +170,9 @@ export function UsersPanel({
           >
             <strong style={{ minWidth: 140 }}>{u.name}</strong>
             <span style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)" }}>{u.email}</span>
+            <span className="chip" title={u.hasPassword ? "Signs in with email + password" : "Token-only — set a password to enable email sign-in"}>
+              {u.hasPassword ? "password ✓" : "no password"}
+            </span>
             <span style={{ flex: 1, display: "flex", gap: 4, flexWrap: "wrap" }}>
               {u.grants.map((g, i) => (
                 <span key={i} className="chip">
@@ -174,6 +196,23 @@ export function UsersPanel({
               }
             >
               Rotate
+            </button>
+            <button
+              className="btn btn-sm btn-ghost"
+              title={u.hasPassword ? "Reset this user's password (signs out their devices)" : "Set a password so they can sign in with email"}
+              onClick={() => {
+                const pw = window.prompt(`${u.hasPassword ? "New" : "Set"} password for ${u.name} (min 8 characters)`);
+                if (!pw) return;
+                void api
+                  .setUserPassword(u.id, pw)
+                  .then(() => {
+                    window.alert(`Password ${u.hasPassword ? "reset" : "set"} for ${u.name}. Their other sessions were signed out.`);
+                    reload();
+                  })
+                  .catch((err) => window.alert(String(err)));
+              }}
+            >
+              {u.hasPassword ? "Reset password" : "Set password"}
             </button>
             <button className="btn btn-sm btn-danger" onClick={() => void api.deleteUser(u.id).then(reload)}>
               Delete

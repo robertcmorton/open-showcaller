@@ -42,6 +42,18 @@ export const teams = pgTable("teams", {
   createdAt: createdAt(),
 });
 
+/** Password-login sessions: a `ses_…` bearer token per signed-in browser, revocable server-side. */
+export const authSessions = pgTable("auth_sessions", {
+  id: id().primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id),
+  token: text("token").notNull().unique(),
+  createdAt: createdAt(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  userAgent: text("user_agent"),
+});
+
 export const teamRoles = ["owner", "admin", "editor", "viewer"] as const;
 
 /** Access grants: what a user controls. kind admin | company | event | view. */

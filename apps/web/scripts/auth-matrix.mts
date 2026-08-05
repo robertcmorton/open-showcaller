@@ -231,6 +231,76 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   conn.provider.destroy();
 }
 
+// ── Accounts: password login & sessions ───────────────────────────────────────
+{
+  const account = (await req("/users", ADMIN, {
+    method: "POST",
+    body: JSON.stringify({
+      name: "Matrix Account",
+      email: "matrix.account@example.com",
+      password: "correct-horse-9",
+      grants: [{ kind: "view", targetId: eventA.body.id }],
+    }),
+  })).body as { id: string; accessToken: string };
+
+  check("login: wrong password → 401", (await req("/auth/login", null, { method: "POST", body: JSON.stringify({ email: "matrix.account@example.com", password: "wrong" }) })).status === 401);
+  check("login: unknown email → 401", (await req("/auth/login", null, { method: "POST", body: JSON.stringify({ email: "nobody@example.com", password: "whatever1" }) })).status === 401);
+
+  const login = await req("/auth/login", null, { method: "POST", body: JSON.stringify({ email: "Matrix.Account@Example.com", password: "correct-horse-9" }) });
+  check("login: correct (case-insensitive email) → ses_ token", login.status === 200 && String(login.body.token).startsWith("ses_"), login.body);
+  const session: string = login.body.token;
+
+  const me = await req("/me", session);
+  check("session: /me → user with view grant", me.body?.role === "user" && me.body?.canManage === false, me.body);
+  const ev = await req("/events", session);
+  check("session: events scoped like the grant", (ev.body as any[]).length === 1 && (ev.body as any[])[0].name === "Matrix Event A", ev.body);
+  const show = await showChannel(rdA.body.id, session, true);
+  check("session: show channel → follower, cmd rejected", show.welcome?.role === "follower" && show.cmdReply?.t === "cmd_error", show);
+
+  const users = await req("/users", ADMIN);
+  const row = (users.body as any[]).find((u) => u.id === account.id);
+  check("users list: hasPassword true, hash never returned", row?.hasPassword === true && !JSON.stringify(users.body).includes("scrypt$"), row);
+
+  // A second session dies when the admin resets the password; and logout kills the first.
+  const second = (await req("/auth/login", null, { method: "POST", body: JSON.stringify({ email: "matrix.account@example.com", password: "correct-horse-9" }) })).body.token as string;
+  await req(`/users/${account.id}/set-password`, ADMIN, { method: "POST", body: JSON.stringify({ password: "new-password-77" }) });
+  check("admin reset: existing sessions revoked", (await req("/me", second)).body?.role === null);
+  const relogin = await req("/auth/login", null, { method: "POST", body: JSON.stringify({ email: "matrix.account@example.com", password: "new-password-77" }) });
+  check("admin reset: new password works", relogin.status === 200, relogin.body);
+  const s3: string = relogin.body.token;
+
+  // change-password keeps the current session but kills others.
+  const s4 = (await req("/auth/login", null, { method: "POST", body: JSON.stringify({ email: "matrix.account@example.com", password: "new-password-77" }) })).body.token as string;
+  const change = await req("/auth/change-password", s3, { method: "POST", body: JSON.stringify({ current: "new-password-77", next: "final-password-5" }) });
+  check("change-password: accepted", change.status === 200, change.body);
+  check("change-password: current session survives", (await req("/me", s3)).body?.role === "user");
+  check("change-password: other session revoked", (await req("/me", s4)).body?.role === null);
+  check("change-password: wrong current → 401", (await req("/auth/change-password", s3, { method: "POST", body: JSON.stringify({ current: "nope", next: "whatever-123" }) })).status === 401);
+
+  await req("/auth/logout", s3, { method: "POST" });
+  check("logout: session dead", (await req("/me", s3)).body?.role === null);
+
+  await req(`/users/${account.id}`, ADMIN, { method: "DELETE" });
+}
+
+// ── View-only link (follower join code shared as a URL to camera ops) ─────────
+{
+  const created = await req(`/rundowns/${rdA.body.id}/join-codes`, ADMIN, { method: "POST", body: JSON.stringify({ role: "follower" }) });
+  const code: string = created.body.code;
+  const resolved = await req(`/codes/${encodeURIComponent(code)}`, null);
+  check("view link: code resolves publicly → follower", resolved.status === 200 && resolved.body?.role === "follower" && resolved.body?.rundownId === rdA.body.id, resolved.body);
+  const adminConn = docConnect(rdA.body.id, ADMIN);
+  const opConn = docConnect(rdA.body.id, code);
+  await sleep(1500);
+  check("view link: doc opens with just the code", opConn.state.authed && !opConn.state.failed, opConn.state);
+  const before = adminConn.doc.getMap("meta").get("versionLabel");
+  opConn.doc.getMap("meta").set("versionLabel", "CAMERA-OP-WRITE");
+  await sleep(1500);
+  check("view link: code holder cannot write", adminConn.doc.getMap("meta").get("versionLabel") === before, adminConn.doc.getMap("meta").get("versionLabel"));
+  adminConn.provider.destroy();
+  opConn.provider.destroy();
+}
+
 // ── Cleanup fixtures ──────────────────────────────────────────────────────────
 for (const u of [viewer, eventMgr, companyMgr, superUser]) await req(`/users/${u.id}`, ADMIN, { method: "DELETE" });
 await req(`/events/${eventB.body.id}`, ADMIN, { method: "DELETE" });

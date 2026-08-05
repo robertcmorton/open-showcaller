@@ -106,11 +106,21 @@ export const api = {
       canManage?: boolean;
       grants?: { kind: string; targetId: string }[];
     }>("/me"),
+  login: (email: string, password: string) =>
+    request<{ token: string; expiresAt: string; name: string }>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+  logout: () => request<Record<string, never>>("/auth/logout", { method: "POST" }),
+  changePassword: (current: string, next: string) =>
+    request<Record<string, never>>("/auth/change-password", { method: "POST", body: JSON.stringify({ current, next }) }),
+  setUserPassword: (id: string, password: string) =>
+    request<{ id: string }>(`/users/${id}/set-password`, { method: "POST", body: JSON.stringify({ password }) }),
   users: () =>
-    request<{ id: string; name: string; email: string; accessToken: string | null; grants: { kind: string; targetId: string }[] }[]>(
+    request<{ id: string; name: string; email: string; accessToken: string | null; hasPassword: boolean; grants: { kind: string; targetId: string }[] }[]>(
       "/users",
     ),
-  createUser: (body: { name: string; email?: string; grants: { kind: string; targetId?: string }[] }) =>
+  createUser: (body: { name: string; email?: string; password?: string; grants: { kind: string; targetId?: string }[] }) =>
     request<{ id: string; accessToken: string }>("/users", { method: "POST", body: JSON.stringify(body) }),
   patchUser: (id: string, body: { name?: string; grants?: { kind: string; targetId?: string }[] }) =>
     request<{ id: string }>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
@@ -178,6 +188,21 @@ export const api = {
   deleteRundown: (id: string) => request<Record<string, never>>(`/rundowns/${id}`, { method: "DELETE" }),
   duplicateRundown: (id: string) => request<{ id: string }>(`/rundowns/${id}/duplicate`, { method: "POST" }),
 };
+
+/**
+ * One-click share: a view-only URL for a rundown (camera operators, crew).
+ * Reuses the rundown's existing follower join code or mints one, then copies
+ * `/view/<id>?code=…` to the clipboard. Anyone with the link can watch —
+ * revoke by rotating join codes.
+ */
+export async function copyViewOnlyLink(rundownId: string): Promise<string> {
+  const codes = await api.joinCodes(rundownId);
+  let code = codes.find((c) => c.role === "follower")?.joinCode ?? null;
+  if (!code) code = (await api.createJoinCode(rundownId, "follower")).code;
+  const url = `${window.location.origin}/view/${rundownId}?code=${encodeURIComponent(code)}`;
+  await navigator.clipboard.writeText(url);
+  return url;
+}
 
 /**
  * CSV → seed rows. Header row required; "Title" and "Duration" are structural,

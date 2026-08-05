@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-06 (accounts: password sign-in & sessions · one-click view links)
+- **Real sign-in**: users now log in with **email + password** on the landing page or the admin gate. Passwords are scrypt-hashed; logins issue revocable 30-day sessions that work everywhere the old tokens did (API, show channel, document channel) with the same grant enforcement. Sign out revokes the session server-side; changing a password (or an admin resetting one) signs out every other device. Admins set an optional password at user creation, see who has one, and can reset it; personal access tokens remain as a backup credential. Login attempts are rate-limited.
+- **One-click view-only links**: a **Copy view link** button on every rundown (dashboard and Join codes panel) copies a URL that opens the rundown read-only — hand it to camera operators and crew; no account needed, revocable via join codes.
+- The access-control matrix grew to **50 checks**, now covering the full session lifecycle (login, scoping, revocation on reset/change/logout) and the view-link path (public code resolve, read-only doc enforcement).
+
 ### Changed — 2026-08-06 (self-hosting guide for humans and AI assistants)
 - **The README now carries a complete self-hosting guide**: architecture and port table, full environment-variable reference (build-time vs runtime), three deployment paths (Docker Compose on a VPS, any PaaS, bare Node), first-run setup, and copy-paste verification checks — plus a **"Deploying with an AI assistant" section** with a ready-to-paste prompt so tools like Claude or ChatGPT can spin up an instance end-to-end from the README alone.
 - `docs/DEPLOYMENT.md` security status brought up to date: the deployment is locked (admin token gates the API and both websocket channels; the credential hierarchy and the 33-check access matrix are documented). The previous "not yet authenticated" warning was stale.

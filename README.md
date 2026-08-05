@@ -111,8 +111,8 @@ Requires Node 20+ and pnpm 9+. Reverse-proxy `https://app.example.com` → :3000
 
 1. Open the web URL → **Admin dashboard** → paste your `ADMIN_TOKEN` at the gate.
 2. Create an **event company** (its token is the showcaller credential for that company), then events and rundowns — or import a run sheet straight from XLSX/CSV/PDF.
-3. Create **users** under *Users & access* in the sidebar (admin-only): each gets a personal `usr_…` token with grants — full admin, one company, one event, or view-only. People sign in by pasting their token on the landing page.
-4. For per-show crew access without accounts, generate **join codes** (caller / editor / follower) from a rundown's *Join codes* panel; crew enter the 6-character code on the landing page.
+3. Create **users** under *Users & access* in the sidebar (admin-only): give each an email, a password, and grants — full admin, one company, one event, or view-only. They sign in with email + password on the landing page (each also gets a personal `usr_…` backup token).
+4. For per-show crew access without accounts, use a rundown's *Join codes* panel: **Copy view-only link** hands camera operators and crew a URL that opens the rundown read-only, and caller/editor/follower codes can be typed on the landing page.
 5. Check *Error log* in the admin sidebar occasionally — server, process, and browser errors all land there.
 
 ### Verify a deployment

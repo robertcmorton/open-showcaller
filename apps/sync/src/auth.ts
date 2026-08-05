@@ -1,5 +1,7 @@
 import type { IncomingMessage } from "node:http";
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
+import { ulid } from "ulid";
 import { schema, type DbHandle } from "@opencall/db";
 
 /**
@@ -19,6 +21,73 @@ import { schema, type DbHandle } from "@opencall/db";
 
 export const adminToken = (): string | null => process.env.ADMIN_TOKEN || null;
 export const isOpenAccess = (): boolean => adminToken() === null;
+
+// ── Passwords & sessions ──────────────────────────────────────────────────────
+// scrypt from node:crypto — no extra dependencies. Format: scrypt$salt$hash.
+
+const SCRYPT_KEYLEN = 64;
+
+export function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString("base64url");
+  const hash = scryptSync(password, salt, SCRYPT_KEYLEN).toString("base64url");
+  return `scrypt$${salt}$${hash}`;
+}
+
+export function verifyPassword(password: string, stored: string | null): boolean {
+  if (!stored) return false;
+  const [scheme, salt, hash] = stored.split("$");
+  if (scheme !== "scrypt" || !salt || !hash) return false;
+  const candidate = scryptSync(password, salt, SCRYPT_KEYLEN);
+  const expected = Buffer.from(hash, "base64url");
+  return candidate.length === expected.length && timingSafeEqual(candidate, expected);
+}
+
+export const SESSION_DAYS = 30;
+
+/** Issues a login session for a user; the `ses_…` token is the bearer credential. */
+export async function createSession(handle: DbHandle, userId: string, userAgent?: string): Promise<{ token: string; expiresAt: Date }> {
+  const token = `ses_${randomBytes(24).toString("base64url")}`;
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 3600 * 1000);
+  await handle.db.insert(schema.authSessions).values({
+    id: ulid(),
+    userId,
+    token,
+    expiresAt,
+    lastSeenAt: new Date(),
+    userAgent: userAgent?.slice(0, 300),
+  });
+  return { token, expiresAt };
+}
+
+/** Revokes one session by its token (sign-out). */
+export async function revokeSession(handle: DbHandle, token: string): Promise<void> {
+  await handle.db
+    .update(schema.authSessions)
+    .set({ revokedAt: new Date() })
+    .where(eq(schema.authSessions.token, token));
+}
+
+/** Revokes every session a user holds (password reset, account removal). */
+export async function revokeUserSessions(handle: DbHandle, userId: string): Promise<void> {
+  await handle.db
+    .update(schema.authSessions)
+    .set({ revokedAt: new Date() })
+    .where(eq(schema.authSessions.userId, userId));
+}
+
+/** A valid, unexpired, unrevoked session → its user id. */
+async function resolveSession(handle: DbHandle, token: string): Promise<string | null> {
+  const session = await handle.db.query.authSessions.findFirst({ where: eq(schema.authSessions.token, token) });
+  if (!session || session.revokedAt || session.expiresAt < new Date()) return null;
+  // Rolling last-seen, throttled to once an hour to keep reads cheap.
+  if (!session.lastSeenAt || Date.now() - session.lastSeenAt.getTime() > 3600_000) {
+    await handle.db
+      .update(schema.authSessions)
+      .set({ lastSeenAt: new Date() })
+      .where(eq(schema.authSessions.id, session.id));
+  }
+  return session.userId;
+}
 
 export interface UserGrant {
   kind: "admin" | "company" | "event" | "view";
@@ -55,13 +124,19 @@ export async function resolveJoinCode(
   return null;
 }
 
-/** Resolves a bearer token to admin, a company, or a user account. */
+/** Resolves a bearer token to admin, a company, or a user account (via personal token or login session). */
 export async function resolveBearer(handle: DbHandle, token: string | null): Promise<AuthCtx> {
   if (!token) return null;
   if (token === adminToken()) return { kind: "admin" };
   const team = await handle.db.query.teams.findFirst({ where: eq(schema.teams.companyToken, token) });
   if (team) return { kind: "company", teamId: team.id, teamName: team.name };
-  const user = await handle.db.query.users.findFirst({ where: eq(schema.users.accessToken, token) });
+  let user = null;
+  if (token.startsWith("ses_")) {
+    const userId = await resolveSession(handle, token);
+    if (userId) user = await handle.db.query.users.findFirst({ where: eq(schema.users.id, userId) });
+  } else {
+    user = await handle.db.query.users.findFirst({ where: eq(schema.users.accessToken, token) });
+  }
   if (user) {
     const grants = await handle.db.query.userGrants.findMany({ where: eq(schema.userGrants.userId, user.id) });
     if (grants.some((g) => g.kind === "admin")) return { kind: "admin" };
