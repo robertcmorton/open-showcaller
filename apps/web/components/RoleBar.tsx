@@ -78,6 +78,12 @@ export function RolePicker({
         style={
           myRole
             ? {
+                maxWidth: 150,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                display: "inline-block",
+                lineHeight: "24px",
                 borderColor: roles.find((r) => r.name.toLowerCase() === myRole.toLowerCase())?.color ?? "#2dd4bf",
                 color: roles.find((r) => r.name.toLowerCase() === myRole.toLowerCase())?.color ?? "#2dd4bf",
                 background: `${roles.find((r) => r.name.toLowerCase() === myRole.toLowerCase())?.color ?? "#2dd4bf"}1a`,
@@ -216,7 +222,7 @@ export function RoleBar({
   let next: { row: ProjectedRow; startSec: number | null } | null = null;
   for (let i = Math.max(0, activeIndex) + 1; i < rows.length; i++) {
     const row = rows[i]!;
-    if (row.type === "group" || !rowMatchesRole(row, myRole)) continue;
+    if (row.type === "group" || row.skipped || !rowMatchesRole(row, myRole)) continue;
     next = { row, startSec: timing.rows[i]!.startSec };
     break;
   }

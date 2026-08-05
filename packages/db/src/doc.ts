@@ -234,6 +234,7 @@ export function projectRundownDoc(doc: Y.Doc): {
       hardStartSec: (row.get("hardStartSec") as number | null) ?? null,
       backtime: (row.get("backtime") as boolean | undefined) ?? false,
       durationMuted: (row.get("durationMuted") as boolean | undefined) ?? false,
+      skipped: (row.get("skipped") as boolean | undefined) ?? false,
       durationHidden: (row.get("durationHidden") as boolean | undefined) ?? false,
       title: cells["title"] ?? "",
       cells,

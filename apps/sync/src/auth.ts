@@ -20,9 +20,15 @@ import { schema, type DbHandle } from "@opencall/db";
 export const adminToken = (): string | null => process.env.ADMIN_TOKEN || null;
 export const isOpenAccess = (): boolean => adminToken() === null;
 
+export interface UserGrant {
+  kind: "admin" | "company" | "event" | "view";
+  targetId: string;
+}
+
 export type AuthCtx =
   | { kind: "admin" }
   | { kind: "company"; teamId: string; teamName: string }
+  | { kind: "user"; userId: string; name: string; grants: UserGrant[] }
   | { kind: "code"; role: "caller" | "editor" | "follower"; rundownId: string }
   | null;
 
@@ -49,13 +55,49 @@ export async function resolveJoinCode(
   return null;
 }
 
-/** Resolves a bearer token to admin or a company (never a code). */
+/** Resolves a bearer token to admin, a company, or a user account. */
 export async function resolveBearer(handle: DbHandle, token: string | null): Promise<AuthCtx> {
   if (!token) return null;
   if (token === adminToken()) return { kind: "admin" };
   const team = await handle.db.query.teams.findFirst({ where: eq(schema.teams.companyToken, token) });
   if (team) return { kind: "company", teamId: team.id, teamName: team.name };
+  const user = await handle.db.query.users.findFirst({ where: eq(schema.users.accessToken, token) });
+  if (user) {
+    const grants = await handle.db.query.userGrants.findMany({ where: eq(schema.userGrants.userId, user.id) });
+    if (grants.some((g) => g.kind === "admin")) return { kind: "admin" };
+    return {
+      kind: "user",
+      userId: user.id,
+      name: user.name,
+      grants: grants.map((g) => ({ kind: g.kind as UserGrant["kind"], targetId: g.targetId })),
+    };
+  }
   return null;
+}
+
+/** Can this context CHANGE the given event (and everything below it)? */
+export async function canManageEvent(handle: DbHandle, ctx: AuthCtx, eventId: string): Promise<boolean> {
+  if (ctx?.kind === "admin") return true;
+  if (ctx?.kind === "company") return (await teamIdForEvent(handle, eventId)) === ctx.teamId;
+  if (ctx?.kind === "user") {
+    if (ctx.grants.some((g) => g.kind === "event" && g.targetId === eventId)) return true;
+    const teamId = await teamIdForEvent(handle, eventId);
+    return teamId != null && ctx.grants.some((g) => g.kind === "company" && g.targetId === teamId);
+  }
+  return false;
+}
+
+/** Can this context at least SEE the given event? */
+export async function canSeeEvent(handle: DbHandle, ctx: AuthCtx, eventId: string, teamId: string): Promise<boolean> {
+  if (ctx?.kind === "admin") return true;
+  if (ctx?.kind === "company") return teamId === ctx.teamId;
+  if (ctx?.kind === "user")
+    return ctx.grants.some(
+      (g) =>
+        (g.kind === "company" && g.targetId === teamId) ||
+        ((g.kind === "event" || g.kind === "view") && g.targetId === eventId),
+    );
+  return false;
 }
 
 /** Full request auth context. `rundownId` scopes join-code checks. */

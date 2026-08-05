@@ -19,6 +19,12 @@ export interface PlanRow {
   backtime?: boolean;
   /** Excluded from cascade math (contributes 0) while keeping its display value. */
   durationMuted?: boolean;
+  /**
+   * Skipped live (show running behind): the row stays visible but its duration
+   * leaves the cascade, so downstream times catch back up to the original
+   * anchors. Transport steps over it.
+   */
+  skipped?: boolean;
   /** Display-only flag; does not affect math. */
   durationHidden?: boolean;
 }

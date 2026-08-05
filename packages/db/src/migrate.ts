@@ -127,6 +127,14 @@ export async function ensureSchema(db: Db): Promise<void> {
       actor_user_id text REFERENCES users(id)
     );
     ALTER TABLE teams ADD COLUMN IF NOT EXISTS company_token text;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS access_token text;
+    CREATE UNIQUE INDEX IF NOT EXISTS users_access_token_unique ON users (access_token);
+    CREATE TABLE IF NOT EXISTS user_grants (
+      user_id text NOT NULL REFERENCES users(id),
+      kind text NOT NULL,
+      target_id text NOT NULL DEFAULT '',
+      PRIMARY KEY (user_id, kind, target_id)
+    );
     ALTER TABLE teams ADD COLUMN IF NOT EXISTS logo text;
     ALTER TABLE events ADD COLUMN IF NOT EXISTS image1 text;
     ALTER TABLE events ADD COLUMN IF NOT EXISTS image2 text;

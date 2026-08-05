@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-05 (user database, timing reconciliation, live skip, roles column, mobile)
+- **User database with per-user access**: admins create users from the dashboard, each with a personal access token and precise grants — full admin, an entire event company, a single event, or **view-only** access to an event. Grants govern the dashboard (users see only their events), the API, the show channel (managers call, viewers follow), and the document channel (view grants are read-only). Tokens are copyable and rotatable; users sign in by pasting their token on the access page.
+- **Timing reconciliation wizard**: when a sheet imports with TIME and DURATION columns that don't add up, a "⚠ N timing gaps — Reconcile" chip appears. It walks the showcaller through each disagreement one at a time — absorb the gap into the preceding duration, un-anchor the disagreeing time, or mark the gap intentional (a genuine hold).
+- **Skip items live**: select rows and hit **Skip** while the show runs behind — the row stays visible (struck through) but leaves the timing cascade and the transport steps over it, so the show catches back up to the original anchored times. Un-skip the same way.
+- **Roles column auto-populated on import**: every detected role that appears in a row lands in a "Roles" column (items can carry several), colour-coded like everywhere else.
+- **Import band-drift rescue extended to times and durations** with joint proximity-scored assignment (times and durations can masquerade as each other — "0:15:00" parses as a time — so the two targets are resolved together, never crossed). A 15-page real production sheet now imports with 75 correctly anchored rows.
+- **Mobile pass**: the run sheet scrolls horizontally inside its own container, toolbars wrap, the big timer and role bar scale down, and the side panel never auto-opens over content on small screens. Picking a role no longer shifts the toolbar layout.
+
 ### Added — 2026-08-05 (role detection on import · counter bar · Sync Cue)
 - **Importing a run sheet now detects the assigned roles automatically** (PA, VTR, GFX, DJ, LED, locations, brand loops — any short value that repeats across cells, excluding times and durations) and **assigns each a distinct colour**. The roles are stored on the rundown: every mention is colour-coded in the grid, the "My role" picker offers them one-click with their colours, and the personal row highlight and bottom bar adopt your role's colour. Detected roles are shown as coloured chips in the import preview.
 - **A counter bar now fills left-to-right under the big centre-top timer**, showing approximately how much of the active item has elapsed (amber in the final stretch, red on overrun).

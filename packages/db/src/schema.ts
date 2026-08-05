@@ -27,6 +27,7 @@ export const users = pgTable("users", {
   id: id().primaryKey(),
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
+  accessToken: text("access_token").unique(),
   passwordHash: text("password_hash"),
   imageUrl: text("image_url"),
   createdAt: createdAt(),
@@ -42,6 +43,19 @@ export const teams = pgTable("teams", {
 });
 
 export const teamRoles = ["owner", "admin", "editor", "viewer"] as const;
+
+/** Access grants: what a user controls. kind admin | company | event | view. */
+export const grantKinds = ["admin", "company", "event", "view"] as const;
+
+export const userGrants = pgTable(
+  "user_grants",
+  {
+    userId: text("user_id").notNull().references(() => users.id),
+    kind: text("kind", { enum: grantKinds }).notNull(),
+    targetId: text("target_id").notNull().default(""),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.kind, t.targetId] })],
+);
 
 export const teamMembers = pgTable(
   "team_members",

@@ -263,8 +263,12 @@ export function classifyRows(grid: string[][], headerIndex: number, mapping: Col
       const value = (row[col] ?? "").trim();
       if (!value) return;
       if (target.kind === "title") title = title ? `${title} ${value}` : value;
-      else if (target.kind === "start") startRaw = value;
-      else if (target.kind === "duration") durationRaw = value;
+      else if (target.kind === "start") {
+        if (!startRaw || (parseTimeLoose(startRaw) == null && parseTimeLoose(value) != null)) startRaw = value;
+      } else if (target.kind === "duration") {
+        if (!durationRaw || (parseDurationLoose(durationRaw) == null && parseDurationLoose(value) != null))
+          durationRaw = value;
+      }
       else if (target.kind === "department") {
         cells[target.key] = cells[target.key] ? `${cells[target.key]}\n${value}` : value;
         departmentContent = true;
@@ -311,28 +315,59 @@ export function planImport(grid: string[][]): {
   // A data sample lets untitled columns be identified by their contents.
   const mapping = mapColumns(headers, dataRows.slice(0, 60));
 
-  // Centered headers (common in PDFs) put the header text in a different
-  // x-band than the left-aligned data below it, leaving the title column
-  // nearly empty. When that happens and a nearby untitled column is rich in
-  // text, treat that column as title too — titles accumulate across both.
-  const titleAt = mapping.findIndex((t) => t.kind === "title");
-  if (titleAt >= 0 && dataRows.length > 0) {
-    const coverage = (col: number): number => dataRows.filter((r) => (r[col] ?? "").trim()).length;
-    const titleCoverage = coverage(titleAt);
-    if (titleCoverage / dataRows.length < 0.3) {
+  // Centered/right-aligned columns (common in PDF layouts) put header text in
+  // a different x-band than the data beneath, leaving the mapped column nearly
+  // empty while the values sit in an untitled neighbour. Rescue each
+  // structural target by ALSO mapping the data-rich neighbour to it; values
+  // accumulate and the first parseable one wins.
+  if (dataRows.length > 0) {
+    const coverage = (col: number, parses?: (v: string) => boolean): number =>
+      dataRows.filter((r) => {
+        const v = (r[col] ?? "").trim();
+        return v && (!parses || parses(v));
+      }).length;
+
+    // Times and durations can both parse as each other ("0:15:00" is a valid
+    // time, "2:00:00PM" leaks as a 2-hour duration), so the two targets are
+    // rescued JOINTLY: each candidate band is scored by parse coverage minus a
+    // distance penalty from the declared header, and a band claimed by one
+    // target is excluded from the other. Reading order does the rest — the
+    // time band always sits nearer the TIME header than the duration band.
+    const claimed = new Set<number>();
+    const rescue = (
+      kind: "title" | "start" | "duration",
+      parses: ((v: string) => boolean) | undefined,
+      reach: number,
+    ) => {
+      const at = mapping.findIndex((t) => t.kind === kind);
+      if (at < 0) return;
+      const declared = coverage(at, parses);
+      if (declared / dataRows.length >= 0.3) return; // the declared column works
+      const penalty = Math.max(1, dataRows.length * 0.08);
       let bestCol = -1;
+      let bestScore = -Infinity;
       let bestCoverage = 0;
       mapping.forEach((t, i) => {
-        if (t.kind !== "department" || !t.key.startsWith("column-")) return;
-        if (Math.abs(i - titleAt) > 2) return;
-        const c = coverage(i);
-        if (c > bestCoverage) {
-          bestCoverage = c;
+        if (t.kind !== "department" || !t.key.startsWith("column-") || claimed.has(i)) return;
+        const dist = Math.abs(i - at);
+        if (dist > reach) return;
+        const c = coverage(i, parses);
+        const score = c - dist * penalty;
+        if (score > bestScore) {
+          bestScore = score;
           bestCol = i;
+          bestCoverage = c;
         }
       });
-      if (bestCol >= 0 && bestCoverage > titleCoverage * 2) mapping[bestCol] = { kind: "title" };
-    }
+      if (bestCol >= 0 && bestCoverage > Math.max(declared * 2, dataRows.length * 0.1)) {
+        mapping[bestCol] = { kind };
+        claimed.add(bestCol);
+      }
+    };
+
+    rescue("start", (v) => parseTimeLoose(v) != null, 3);
+    rescue("duration", (v) => parseDurationLoose(v) != null, 3);
+    rescue("title", undefined, 2);
   }
   return { headerIndex, headers, mapping, rows: classifyRows(grid, headerIndex, mapping) };
 }

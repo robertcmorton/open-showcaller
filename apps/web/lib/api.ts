@@ -88,7 +88,26 @@ export interface JoinCodeSummary {
 
 export const api = {
   events: (includeArchived = false) => request<EventSummary[]>(`/events${includeArchived ? "?archived=1" : ""}`),
-  me: () => request<{ role: "admin" | "company" | null; devOpen?: boolean; teamId?: string; teamName?: string }>("/me"),
+  me: () =>
+    request<{
+      role: "admin" | "company" | "user" | null;
+      devOpen?: boolean;
+      teamId?: string;
+      teamName?: string;
+      name?: string;
+      canManage?: boolean;
+      grants?: { kind: string; targetId: string }[];
+    }>("/me"),
+  users: () =>
+    request<{ id: string; name: string; email: string; accessToken: string | null; grants: { kind: string; targetId: string }[] }[]>(
+      "/users",
+    ),
+  createUser: (body: { name: string; email?: string; grants: { kind: string; targetId?: string }[] }) =>
+    request<{ id: string; accessToken: string }>("/users", { method: "POST", body: JSON.stringify(body) }),
+  patchUser: (id: string, body: { name?: string; grants?: { kind: string; targetId?: string }[] }) =>
+    request<{ id: string }>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  rotateUserToken: (id: string) => request<{ id: string; accessToken: string }>(`/users/${id}/rotate-token`, { method: "POST" }),
+  deleteUser: (id: string) => request<{ id: string }>(`/users/${id}`, { method: "DELETE" }),
   archiveEvent: (id: string, archived: boolean) =>
     request<{ id: string }>(`/events/${id}/archive`, { method: "POST", body: JSON.stringify({ archived }) }),
   archiveRundown: (id: string, archived: boolean) =>

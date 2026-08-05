@@ -17,6 +17,7 @@ import {
 import { api, setActiveJoinCode } from "../lib/api";
 import { projectRundownDoc, type ColumnDef, type ProjectedRow } from "@opencall/db/doc";
 import { CuePool } from "./CuePool";
+import { ReconcilePanel, findTimingGaps } from "./ReconcilePanel";
 import { KeyTimesEditor } from "./KeyTimes";
 import { CellEditor } from "./CellEditor";
 import { GuestPassPanel, HistoryPanel, JoinCodesPanel } from "./SharePanels";
@@ -62,7 +63,7 @@ function SortableRow({
   return (
     <tr
       ref={setNodeRef}
-      className={`${row.type === "group" ? "group-row" : ""} ${row.type === "milestone" ? "milestone-row" : ""} ${selected ? "selected" : ""} ${active ? "active-row" : ""} ${next ? "next-row" : ""} ${active && paused ? "paused" : ""} ${mine ? "my-role-row" : ""}`}
+      className={`${row.type === "group" ? "group-row" : ""} ${row.type === "milestone" ? "milestone-row" : ""} ${selected ? "selected" : ""} ${active ? "active-row" : ""} ${next ? "next-row" : ""} ${active && paused ? "paused" : ""} ${mine ? "my-role-row" : ""} ${row.skipped ? "skipped-row" : ""}`}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
@@ -178,6 +179,7 @@ export function RundownEditor({
   const [editingTime, setEditingTime] = useState<string | null>(null); // rowId
   const [durationPopover, setDurationPopover] = useState<string | null>(null); // rowId
   const [panel, setPanel] = useState<"guest" | "history" | "join" | null>(null);
+  const [reconciling, setReconciling] = useState(false);
   const [hiddenCols, setHiddenCols] = useState<ReadonlySet<string>>(new Set());
   const [showZero, setShowZero] = useState(false);
   const [followScroll, setFollowScroll] = useState(true);
@@ -246,6 +248,7 @@ export function RundownEditor({
     return rows.slice(at + 1).find((r) => r.type === "cue")?.id ?? null;
   })();
   const isPaused = channel.show?.state === "paused";
+  const timingGaps = findTimingGaps(rows, timing);
   const myRoleRows = myRole ? new Set(rows.filter((r) => rowMatchesRole(r, myRole)).map((r) => r.id)) : null;
   const myRoleColor = myRole
     ? (roles.find((r) => r.name.toLowerCase() === myRole.toLowerCase())?.color ?? "#2dd4bf")
@@ -626,7 +629,12 @@ export function RundownEditor({
       </header>
 
       <div className="no-print" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-        {isShow && <TransportBar channel={channel} orderedRowIds={rows.map((r) => r.id)} />}
+        {isShow && (
+          <TransportBar
+            channel={channel}
+            orderedRowIds={rows.filter((r) => !r.skipped || r.id === activeRowId).map((r) => r.id)}
+          />
+        )}
         {canEditContent && (
           <>
             <button className="btn" onClick={() => addRow("cue")}>
@@ -639,6 +647,16 @@ export function RundownEditor({
               {Icon.plus} Milestone
             </button>
           </>
+        )}
+        {canEditContent && timingGaps.length > 0 && !reconciling && (
+          <button
+            className="btn btn-sm"
+            style={{ borderColor: "var(--warn)", color: "var(--warn)", background: "var(--warn-soft)" }}
+            title="Anchored times don't agree with the durations between them — resolve one by one"
+            onClick={() => setReconciling(true)}
+          >
+            ⚠ {timingGaps.length} timing gap{timingGaps.length === 1 ? "" : "s"} — Reconcile
+          </button>
         )}
         <Dropdown label={<>{Icon.columns} Columns</>}>
           <div className="menu-heading">Show columns</div>
@@ -691,6 +709,20 @@ export function RundownEditor({
               </button>
               <button className="btn btn-sm" onClick={toggleGroupSelected}>
                 Group
+              </button>
+              <button
+                className="btn btn-sm"
+                title="Skip: keeps the row visible but removes it from timing and transport — the show catches back up to the original anchors"
+                onClick={() =>
+                  doc.transact(() =>
+                    selected.forEach((id) => {
+                      const yRow = yRows.get(id);
+                      yRow?.set("skipped", !(yRow.get("skipped") as boolean | undefined));
+                    }),
+                  )
+                }
+              >
+                Skip
               </button>
               {[
                 ["rgba(229,72,77,0.16)", "Red"],
@@ -760,6 +792,17 @@ export function RundownEditor({
         )}
       </div>
 
+      {reconciling && (
+        <ReconcilePanel
+          doc={doc}
+          rows={rows}
+          timing={timing}
+          gaps={timingGaps}
+          use24h={meta.use24h}
+          onClose={() => setReconciling(false)}
+        />
+      )}
+
       {panel === "guest" && (
         <div className="no-print">
           <GuestPassPanel rundownId={rundownId} columns={columns} onClose={() => setPanel(null)} />
@@ -777,6 +820,7 @@ export function RundownEditor({
       )}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <div className="grid-scroll">
         <table className="rundown-grid">
           <thead>
             <tr>
@@ -887,6 +931,7 @@ export function RundownEditor({
             </tbody>
           </SortableContext>
         </table>
+        </div>
       </DndContext>
 
       <CuePool doc={doc} mode={mode} channel={channel} />

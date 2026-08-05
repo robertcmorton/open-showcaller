@@ -15,6 +15,7 @@ import { Dropdown, Icon } from "../../components/ui";
 import { ImportPanel } from "../../components/ImportPanel";
 import { SideNavSection, WithSideNav } from "../../components/SideNav";
 import { pickImage } from "../../lib/pickImage";
+import { UsersPanel } from "../../components/UsersPanel";
 
 function CreateEventForm({ onCreated, teamId }: { onCreated: () => void; teamId?: string }) {
   const [open, setOpen] = useState(false);
@@ -293,7 +294,7 @@ export default function AdminPage() {
   const [error, setError] = useState(false);
   const [locked, setLocked] = useState(false);
   const [importFor, setImportFor] = useState<string | null>(null); // eventId
-  const [me, setMe] = useState<{ role: "admin" | "company" | null; teamName?: string } | null>(null);
+  const [me, setMe] = useState<{ role: "admin" | "company" | "user" | null; teamName?: string; name?: string; canManage?: boolean } | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [companies, setCompanies] = useState<{ id: string; name: string; companyToken: string | null; logo: string | null; eventCount: number }[]>([]);
 
@@ -404,7 +405,7 @@ export default function AdminPage() {
             <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em", margin: 0 }}>
               OpenCall{" "}
               <span style={{ color: "var(--text-3)", fontWeight: 500 }}>
-                {me?.role === "company" ? me.teamName : "admin"}
+                {me?.role === "company" ? me.teamName : me?.role === "user" ? me.name : "admin"}
               </span>
             </h1>
             <p style={{ color: "var(--text-2)", margin: "2px 0 0", fontSize: "var(--fs-sm)" }}>
@@ -442,6 +443,8 @@ export default function AdminPage() {
             <div className="skeleton" style={{ height: 110 }} />
           </div>
         )}
+
+        {me?.role === "admin" && <UsersPanel companies={companies} events={events ?? []} />}
 
         <div style={{ display: "grid", gap: 20 }}>
           {groups.map((group) => (

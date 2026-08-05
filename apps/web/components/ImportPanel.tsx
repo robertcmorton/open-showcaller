@@ -100,6 +100,15 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
   };
 
   const doImport = () => {
+    // Auto-assign: every detected role that appears in a row's cells lands in
+    // its "Roles" column (an item can carry several).
+    const rolesFor = (r: ClassifiedRow): string => {
+      const hay = `${r.title}\n${Object.values(r.cells).join("\n")}`.toLowerCase();
+      return roles
+        .filter((role) => hay.includes(role.name.toLowerCase()))
+        .map((role) => role.name)
+        .join(", ");
+    };
     const seedRows: SeedRow[] = importable.map((r) => {
       if (r.kind === "banner") return { type: "group", title: r.title };
       if (r.kind === "milestone") {
@@ -114,12 +123,13 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
           cells: r.cells,
         };
       }
+      const assigned = rolesFor(r);
       return {
         type: "cue",
         title: r.title,
         durationSec: r.durationSec,
         hardStartSec: r.startSec,
-        cells: r.cells,
+        cells: assigned ? { ...r.cells, roles: assigned } : r.cells,
       };
     });
     // The rundown mirrors the sheet: every department column with data, in
@@ -127,13 +137,17 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
     const usedKeys = new Set(importable.flatMap((r) => Object.keys(r.cells)));
     const clampWidth = (w: number | null | undefined): number | undefined =>
       w ? Math.min(420, Math.max(80, w)) : undefined;
-    const customColumns = mapping
+    const roleColumn: { key: string; title: string; width?: number }[] =
+      roles.length > 0 ? [{ key: "roles", title: "Roles", width: 140 }] : [];
+    const customColumns = roleColumn.concat(
+      mapping
       .map((t, i) => ({ t, i }))
       .filter(
         (x): x is { t: Extract<ColumnTarget, { kind: "department" }>; i: number } =>
           x.t.kind === "department" && usedKeys.has(x.t.key),
       )
-      .map(({ t, i }) => ({ key: t.key, title: t.title, width: clampWidth(widths[i]) }));
+      .map(({ t, i }) => ({ key: t.key, title: t.title, width: clampWidth(widths[i]) })),
+    );
     setBusy(true);
     api
       .createRundown({ eventId, name: name.trim() || "Imported rundown", rows: seedRows, columns: customColumns, roles })

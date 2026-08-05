@@ -70,6 +70,23 @@ async function resolveAuth(
     const bearer = await authMod.resolveBearer(dbHandle, auth.token);
     if (bearer?.kind === "company" && (await authMod.teamIdForRundown(dbHandle, rundownId)) === bearer.teamId)
       return { role: "caller", label: bearer.teamName };
+    // User accounts: managers call, view-grants follow.
+    if (bearer?.kind === "user") {
+      const rundown = await dbHandle.db.query.rundowns.findFirst({
+        where: eq(schema.rundowns.id, rundownId),
+        columns: { eventId: true },
+      });
+      if (rundown) {
+        if (await authMod.canManageEvent(dbHandle, bearer, rundown.eventId))
+          return { role: "caller", label: bearer.name };
+        const event = await dbHandle.db.query.events.findFirst({
+          where: eq(schema.events.id, rundown.eventId),
+          columns: { teamId: true },
+        });
+        if (event && (await authMod.canSeeEvent(dbHandle, bearer, rundown.eventId, event.teamId)))
+          return { role: "follower", label: bearer.name };
+      }
+    }
     return null;
   }
   if (auth.kind === "join") {

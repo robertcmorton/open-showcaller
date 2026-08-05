@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { and, eq, ne, inArray } from "drizzle-orm";
 import { ulid } from "ulid";
-import { authContext, bearerToken, resolveBearer, resolveJoinCode, teamIdForEvent, teamIdForRundown } from "./auth";
+import { authContext, bearerToken, canManageEvent, canSeeEvent, resolveBearer, resolveJoinCode, teamIdForEvent, teamIdForRundown } from "./auth";
 import { serializeCsv } from "@opencall/core";
 import {
   buildRundownDoc,
@@ -62,30 +62,34 @@ export function createApiHandler(handle: DbHandle) {
       return false;
     };
 
-    /** Admin or the company that owns the event. */
+    const eventIdForRundown = async (rundownId: string): Promise<string | null> => {
+      const r = await db.query.rundowns.findFirst({ where: eq(schema.rundowns.id, rundownId), columns: { eventId: true } });
+      return r?.eventId ?? null;
+    };
+
+    /** Anyone who may CHANGE this event: admin, owning company, or a user granted it. */
     const requireEventAccess = async (eventId: string): Promise<boolean> => {
       const ctx = await authContext(handle, req);
-      if (ctx?.kind === "admin") return true;
-      if (ctx?.kind === "company" && (await teamIdForEvent(handle, eventId)) === ctx.teamId) return true;
-      json(res, 401, { error: "company access required" });
+      if (await canManageEvent(handle, ctx, eventId)) return true;
+      json(res, 401, { error: "management access required" });
       return false;
     };
 
-    /** Structural rundown changes: admin or the owning company (editors change content, not structure). */
+    /** Structural rundown changes (editors change content, not structure). */
     const requireRundownManage = async (rundownId: string): Promise<boolean> => {
       const ctx = await authContext(handle, req);
-      if (ctx?.kind === "admin") return true;
-      if (ctx?.kind === "company" && (await teamIdForRundown(handle, rundownId)) === ctx.teamId) return true;
-      json(res, 401, { error: "company access required" });
+      const eventId = await eventIdForRundown(rundownId);
+      if (eventId && (await canManageEvent(handle, ctx, eventId))) return true;
+      json(res, 401, { error: "management access required" });
       return false;
     };
 
-    /** Rundown-scoped panels/content: admin, owning company, or a caller/editor code. */
+    /** Rundown-scoped panels/content: managers, or a caller/editor code. */
     const requireEditor = async (rundownId: string): Promise<boolean> => {
       const ctx = await authContext(handle, req, rundownId);
-      if (ctx?.kind === "admin") return true;
-      if (ctx?.kind === "company" && (await teamIdForRundown(handle, rundownId)) === ctx.teamId) return true;
       if (ctx?.kind === "code" && ctx.rundownId === rundownId && ctx.role !== "follower") return true;
+      const eventId = await eventIdForRundown(rundownId);
+      if (eventId && (await canManageEvent(handle, ctx, eventId))) return true;
       json(res, 401, { error: "editor access required" });
       return false;
     };
@@ -128,18 +132,22 @@ export function createApiHandler(handle: DbHandle) {
       // ── Cross-show endpoints (admin) ──
       if (req.method === "GET" && pathname === "/live") {
         const ctx = await authContext(handle, req);
-        if (ctx?.kind !== "admin" && ctx?.kind !== "company") {
-          json(res, 401, { error: "admin or company token required" });
+        if (ctx?.kind !== "admin" && ctx?.kind !== "company" && ctx?.kind !== "user") {
+          json(res, 401, { error: "access token required" });
           return true;
         }
         let sessions = await db.query.showSessions.findMany({
           where: ne(schema.showSessions.state, "ended"),
           columns: { rundownId: true, state: true, startedAt: true },
         });
-        if (ctx.kind === "company") {
+        if (ctx.kind !== "admin") {
           const scoped: typeof sessions = [];
-          for (const session of sessions)
-            if ((await teamIdForRundown(handle, session.rundownId)) === ctx.teamId) scoped.push(session);
+          for (const session of sessions) {
+            const evId = await eventIdForRundown(session.rundownId);
+            if (!evId) continue;
+            const ev = await db.query.events.findFirst({ where: eq(schema.events.id, evId), columns: { teamId: true } });
+            if (ev && (await canSeeEvent(handle, ctx, evId, ev.teamId))) scoped.push(session);
+          }
           sessions = scoped;
         }
         json(res, 200, sessions.map((s) => ({ ...s, startedAt: s.startedAt.toISOString() })));
@@ -156,7 +164,93 @@ export function createApiHandler(handle: DbHandle) {
         if (!ctx) json(res, 200, { role: null });
         else if (ctx.kind === "admin") json(res, 200, { role: "admin" });
         else if (ctx.kind === "company") json(res, 200, { role: "company", teamId: ctx.teamId, teamName: ctx.teamName });
+        else if (ctx.kind === "user")
+          json(res, 200, {
+            role: "user",
+            name: ctx.name,
+            grants: ctx.grants,
+            canManage: ctx.grants.some((g) => g.kind !== "view"),
+          });
         else json(res, 200, { role: null });
+        return true;
+      }
+
+      // ── Users & access (admin only): who controls what ──
+      if (req.method === "GET" && pathname === "/users") {
+        if (!(await requireAdmin())) return true;
+        const users = await db.query.users.findMany();
+        const grants = await db.query.userGrants.findMany();
+        json(
+          res,
+          200,
+          users.map((u) => ({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            accessToken: u.accessToken,
+            grants: grants.filter((g) => g.userId === u.id).map((g) => ({ kind: g.kind, targetId: g.targetId })),
+          })),
+        );
+        return true;
+      }
+
+      if (req.method === "POST" && pathname === "/users") {
+        if (!(await requireAdmin())) return true;
+        const body = await readJson(req);
+        const name = String(body.name ?? "").trim();
+        if (!name) {
+          json(res, 400, { error: "name required" });
+          return true;
+        }
+        const id = ulid();
+        const token = `usr_${ulid().toLowerCase()}`;
+        await db.insert(schema.users).values({
+          id,
+          name,
+          email: String(body.email ?? `${id.toLowerCase()}@local`).trim() || `${id.toLowerCase()}@local`,
+          accessToken: token,
+        });
+        const grants = Array.isArray(body.grants) ? (body.grants as { kind: string; targetId?: string }[]) : [];
+        for (const g of grants) {
+          if (!["admin", "company", "event", "view"].includes(g.kind)) continue;
+          await db.insert(schema.userGrants).values({ userId: id, kind: g.kind as never, targetId: String(g.targetId ?? "") });
+        }
+        json(res, 201, { id, accessToken: token });
+        return true;
+      }
+
+      if (req.method === "PATCH" && /^\/users\/[^/]+$/.test(pathname)) {
+        if (!(await requireAdmin())) return true;
+        const id = pathname.split("/")[2]!;
+        const body = await readJson(req);
+        if (typeof body.name === "string" && body.name.trim())
+          await db.update(schema.users).set({ name: body.name.trim() }).where(eq(schema.users.id, id));
+        if (Array.isArray(body.grants)) {
+          await db.delete(schema.userGrants).where(eq(schema.userGrants.userId, id));
+          for (const g of body.grants as { kind: string; targetId?: string }[]) {
+            if (!["admin", "company", "event", "view"].includes(g.kind)) continue;
+            await db.insert(schema.userGrants).values({ userId: id, kind: g.kind as never, targetId: String(g.targetId ?? "") });
+          }
+        }
+        json(res, 200, { id });
+        return true;
+      }
+
+      if (req.method === "POST" && /^\/users\/[^/]+\/rotate-token$/.test(pathname)) {
+        if (!(await requireAdmin())) return true;
+        const id = pathname.split("/")[2]!;
+        const token = `usr_${ulid().toLowerCase()}`;
+        await db.update(schema.users).set({ accessToken: token }).where(eq(schema.users.id, id));
+        json(res, 200, { id, accessToken: token });
+        return true;
+      }
+
+      if (req.method === "DELETE" && /^\/users\/[^/]+$/.test(pathname)) {
+        if (!(await requireAdmin())) return true;
+        const id = pathname.split("/")[2]!;
+        await db.delete(schema.userGrants).where(eq(schema.userGrants.userId, id));
+        await db.delete(schema.users).where(eq(schema.users.id, id));
+        json(res, 200, { id });
         return true;
       }
 
@@ -388,16 +482,17 @@ export function createApiHandler(handle: DbHandle) {
 
       if (req.method === "GET" && pathname === "/events") {
         const ctx = await authContext(handle, req);
-        if (ctx?.kind !== "admin" && ctx?.kind !== "company") {
-          json(res, 401, { error: "admin or company token required" });
+        if (ctx?.kind !== "admin" && ctx?.kind !== "company" && ctx?.kind !== "user") {
+          json(res, 401, { error: "access token required" });
           return true;
         }
         const includeArchived = url.searchParams.get("archived") === "1";
-        const events = (await db.query.events.findMany()).filter(
-          (e) =>
-            (ctx.kind === "admin" || e.teamId === ctx.teamId) &&
-            (includeArchived || !e.archivedAt),
-        );
+        const all = await db.query.events.findMany();
+        const events = [] as typeof all;
+        for (const e of all) {
+          if (!includeArchived && e.archivedAt) continue;
+          if (await canSeeEvent(handle, ctx, e.id, e.teamId)) events.push(e);
+        }
         const rundowns = await db.query.rundowns.findMany({
           columns: { id: true, eventId: true, name: true, description: true, showDate: true, archivedAt: true },
         });

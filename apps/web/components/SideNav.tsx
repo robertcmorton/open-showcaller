@@ -19,10 +19,11 @@ export function WithSideNav({
   settings?: ReactNode;
   children: ReactNode;
 }) {
-  // Closed by default — opens only when this browser explicitly opened it before.
+  // Closed by default — opens only when this browser explicitly opened it
+  // before, and never auto-opens on small screens (it overlays the content).
   const [open, setOpen] = useState(false);
   useEffect(() => {
-    setOpen(localStorage.getItem("oc:sidenav") === "1");
+    setOpen(window.innerWidth > 760 && localStorage.getItem("oc:sidenav") === "1");
   }, []);
   const toggle = () => {
     const next = !open;

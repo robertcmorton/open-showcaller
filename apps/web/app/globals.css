@@ -1095,3 +1095,85 @@ kbd {
     display: none;
   }
 }
+
+/* ---------- Skipped rows (live catch-up) ---------- */
+
+.rundown-grid tr.skipped-row td {
+  opacity: 0.38;
+  text-decoration: line-through;
+  text-decoration-color: var(--over);
+}
+.rundown-grid tr.skipped-row td.mono {
+  text-decoration: line-through;
+}
+
+/* ---------- Grid scroll container (mobile + narrow windows) ---------- */
+
+.grid-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.grid-scroll .rundown-grid {
+  min-width: 680px;
+}
+
+/* ---------- Mobile ---------- */
+
+@media (max-width: 760px) {
+  .with-sidenav,
+  .with-sidenav.sidenav-closed {
+    padding-left: 0;
+  }
+  .rundown-grid {
+    font-size: 0.76rem;
+  }
+  .rundown-grid td,
+  .rundown-grid th {
+    padding: 5px 6px;
+    min-width: 64px;
+  }
+  .btn {
+    height: 30px;
+    padding: 0 9px;
+    font-size: 0.74rem;
+  }
+  .big-timer {
+    padding: 4px 14px 6px;
+    max-width: 92vw;
+  }
+  .big-timer .bt-time {
+    font-size: 1.5rem;
+  }
+  .big-timer .bt-label {
+    max-width: 70vw;
+  }
+  .role-bar {
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    padding: 8px 10px;
+  }
+  .role-bar .rb-title {
+    max-width: 80vw;
+  }
+  .role-bar .rb-count {
+    font-size: 1.2rem;
+  }
+  .role-bar.on-air {
+    padding: 14px 10px;
+  }
+  .selection-bar {
+    flex-wrap: wrap;
+  }
+  .header-clock {
+    font-size: 0.8rem;
+  }
+  .menu {
+    max-width: 92vw;
+  }
+  .panel {
+    padding: 12px;
+  }
+  .sync-cue {
+    right: 10px;
+  }
+}

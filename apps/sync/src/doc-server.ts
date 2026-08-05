@@ -2,7 +2,7 @@ import { Server, type Hocuspocus } from "@hocuspocus/server";
 import * as Y from "yjs";
 import { eq } from "drizzle-orm";
 import { schema, type DbHandle } from "@opencall/db";
-import { adminToken, isOpenAccess, resolveBearer, resolveJoinCode, teamIdForRundown } from "./auth";
+import { adminToken, canManageEvent, canSeeEvent, isOpenAccess, resolveBearer, resolveJoinCode, teamIdForRundown } from "./auth";
 
 /**
  * Yjs document sync with Postgres/PGlite write-through. Hocuspocus debounces
@@ -24,6 +24,23 @@ export function createDocServer(handle: DbHandle): Hocuspocus {
       if (token) {
         const bearer = await resolveBearer(handle, token);
         if (bearer?.kind === "company" && (await teamIdForRundown(handle, documentName)) === bearer.teamId) return;
+        if (bearer?.kind === "user") {
+          const rundown = await handle.db.query.rundowns.findFirst({
+            where: eq(schema.rundowns.id, documentName),
+            columns: { eventId: true },
+          });
+          if (rundown) {
+            if (await canManageEvent(handle, bearer, rundown.eventId)) return;
+            const event = await handle.db.query.events.findFirst({
+              where: eq(schema.events.id, rundown.eventId),
+              columns: { teamId: true },
+            });
+            if (event && (await canSeeEvent(handle, bearer, rundown.eventId, event.teamId))) {
+              connection.readOnly = true;
+              return;
+            }
+          }
+        }
         const resolved = await resolveJoinCode(handle, token, documentName);
         if (resolved) {
           if (resolved.role === "follower") connection.readOnly = true;
