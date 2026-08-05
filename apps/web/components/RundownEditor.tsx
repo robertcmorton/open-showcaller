@@ -104,6 +104,7 @@ function cloneRow(source: Y.Map<unknown>, newId: string): Y.Map<unknown> {
 }
 
 const HIDDEN_COLS_KEY = (rundownId: string) => `oc:hiddencols:${rundownId}`;
+const COL_WIDTHS_KEY = (rundownId: string) => `oc:colwidths:${rundownId}`;
 
 /**
  * The unmissable clock: fixed centre-top while the show runs. Counts down the
@@ -181,6 +182,9 @@ export function RundownEditor({
   const [panel, setPanel] = useState<"guest" | "history" | "join" | null>(null);
   const [reconciling, setReconciling] = useState(false);
   const [hiddenCols, setHiddenCols] = useState<ReadonlySet<string>>(new Set());
+  // Per-user column width overrides (drag the header edges); imported sheets
+  // still provide the starting widths.
+  const [colWidths, setColWidths] = useState<Record<string, number>>({});
   const [showZero, setShowZero] = useState(false);
   const [followScroll, setFollowScroll] = useState(true);
   const [myRole, setMyRole] = useState<string | null>(null);
@@ -200,6 +204,8 @@ export function RundownEditor({
     try {
       const raw = localStorage.getItem(HIDDEN_COLS_KEY(rundownId));
       if (raw) setHiddenCols(new Set(JSON.parse(raw) as string[]));
+      const widths = localStorage.getItem(COL_WIDTHS_KEY(rundownId));
+      if (widths) setColWidths(JSON.parse(widths) as Record<string, number>);
       setShowZero(localStorage.getItem(`oc:zerocol:${rundownId}`) === "1");
       setMyRole(localStorage.getItem(`oc:myrole:${rundownId}`));
     } catch {
@@ -214,6 +220,51 @@ export function RundownEditor({
     setHiddenCols(next);
     localStorage.setItem(HIDDEN_COLS_KEY(rundownId), JSON.stringify([...next]));
   };
+
+  /** Drag a header's right edge to resize its column; stored per browser. */
+  const startResize = (e: React.PointerEvent, key: string): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    const th = (e.target as HTMLElement).closest("th");
+    if (!th) return;
+    const startW = th.getBoundingClientRect().width;
+    const startX = e.clientX;
+    let last = Math.round(startW);
+    const move = (ev: PointerEvent) => {
+      last = Math.min(720, Math.max(56, Math.round(startW + ev.clientX - startX)));
+      setColWidths((prev) => ({ ...prev, [key]: last }));
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      setColWidths((prev) => {
+        const next = { ...prev, [key]: last };
+        localStorage.setItem(COL_WIDTHS_KEY(rundownId), JSON.stringify(next));
+        return next;
+      });
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
+  /** Double-click a handle: back to the column's natural / imported width. */
+  const resetWidth = (key: string): void => {
+    setColWidths((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      localStorage.setItem(COL_WIDTHS_KEY(rundownId), JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const resizeHandle = (key: string) => (
+    <span
+      className="col-resize no-print"
+      title="Drag to resize — double-click to reset"
+      onPointerDown={(e) => startResize(e, key)}
+      onDoubleClick={() => resetWidth(key)}
+    />
+  );
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -841,19 +892,23 @@ export function RundownEditor({
           <thead>
             <tr>
               <th />
-              <th>Title</th>
-              <th>Start</th>
-              <th>Duration</th>
+              <th style={{ width: colWidths["title"] }}>Title{resizeHandle("title")}</th>
+              <th style={{ width: colWidths["start"] }}>Start{resizeHandle("start")}</th>
+              <th style={{ width: colWidths["duration"] }}>Duration{resizeHandle("duration")}</th>
               {showZero && <th title="Countdown to the next anchored time">Zero</th>}
-              {richColumns.map((c) => (
-                <th
-                  key={c.id}
-                  className={richColClass(c)}
-                  style={c.width ? { width: c.width, minWidth: Math.min(c.width, 140) } : undefined}
-                >
-                  {c.title}
-                </th>
-              ))}
+              {richColumns.map((c) => {
+                const w = colWidths[c.key] ?? c.width;
+                return (
+                  <th
+                    key={c.id}
+                    className={richColClass(c)}
+                    style={w ? { width: w, minWidth: Math.min(w, 140) } : undefined}
+                  >
+                    {c.title}
+                    {resizeHandle(c.key)}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <SortableContext items={rows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
