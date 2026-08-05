@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-06 (locked-server access audit · mobile dashboard)
+- **Access-control test matrix**: a committed script exercises 33 checks against a locked server — per-credential event scoping in the API, caller/follower roles on the show channel, and read-only doc enforcement for view grants (a viewer's write is rejected server-side while a manager's propagates). All 33 pass.
+- **The dashboard now works properly on phones**: each company, event, and rundown collapses its action buttons into a single ⋯ menu (rename, dates, location, images, archive, duplicate, tokens, delete — with the same two-tap confirmation for destructive actions). Show/Edit/View and the companion-screen links stay one tap away; desktop is unchanged.
+
 ### Added — 2026-08-05 (wrapped-row merge · role column · error log · mobile simplification)
 - **Resizable columns**: drag the right edge of any column header in the rundown grid to set its width — per person, per rundown, remembered by the browser; double-click the handle to restore the natural (or imported) width.
 - **PDF imports now produce one row per sheet item.** PDF text extraction yields one grid line per visual line, so items with wrapped cells arrived as several mostly-empty rows. The importer now recognises the sheet's item-number column and merges every continuation line into its item — using each line's vertical position to attach it to the nearer numbered row (cells are vertically centred, so a wrapped cell's top lines sit *above* the item number). A 15-page real sheet went from 388 fragmented rows to 78 rows mirroring the source exactly, every one anchored to its printed time.

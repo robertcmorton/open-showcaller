@@ -1150,7 +1150,13 @@ kbd {
 
 /* ---------- Mobile ---------- */
 
-/* Visible only on small screens (the "All columns" toggle). */
+.admin-main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+}
+
+/* Visible only on small screens (the "All columns" toggle, per-entity ⋯ menus). */
 .mobile-only {
   display: none !important;
 }
@@ -1161,6 +1167,12 @@ kbd {
   }
   .hide-mobile {
     display: none !important;
+  }
+  .admin-main {
+    padding: 1.1rem 0.8rem;
+  }
+  .admin-main h1 {
+    font-size: 1.2rem;
   }
   /* Phones show the essentials: title, start, duration, and the role column.
      The "All columns" toggle brings the full sheet back (with side-scroll). */
