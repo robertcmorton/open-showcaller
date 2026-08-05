@@ -318,18 +318,37 @@ export interface LineMeta {
   y: number;
 }
 
+/** The table's ruled horizontal lines on one page — authoritative row boundaries. */
+export interface RowLines {
+  page: number;
+  ys: number[];
+}
+
 /**
  * PDF text extraction emits one grid row per VISUAL LINE, so a sheet item
  * whose cells wrap (a four-line WHAT column) arrives as several rows — most
  * of them empty shells. Real sheets number their items, and that column is
  * the row boundary: numbered lines start logical rows, every other line is a
  * continuation of a neighbouring item, cell lines joined with newlines.
- * Because PDF cells are vertically CENTRED, a wrapped cell's top lines sit
- * ABOVE the item number — with `lineMeta` each continuation attaches to the
- * nearer numbered line by y distance instead of blindly to the previous one.
- * Without a credible item-number column the grid is returned untouched.
+ *
+ * Attachment, in order of authority: (1) `rowLines` — the table's actual
+ * ruled borders; two lines between the same pair of rules are the same
+ * physical row. A ruled row with NO item number is a section banner when it
+ * carries title-column content alone (kept as its own row); otherwise it is
+ * a SUB-ROW of a merged item (sheets rule the WHO/WHAT lines inside one
+ * item) and joins the previous numbered row. (2) `lineMeta` y-distance to
+ * the nearer numbered line (cells are vertically centred, so a wrapped
+ * cell's top lines sit ABOVE the item number). (3) The previous numbered
+ * line. Without a credible item-number column the grid is returned
+ * untouched.
  */
-export function mergeWrappedRows(grid: string[][], headerIndex: number, lineMeta?: LineMeta[]): string[][] {
+export function mergeWrappedRows(
+  grid: string[][],
+  headerIndex: number,
+  lineMeta?: LineMeta[],
+  rowLines?: RowLines[],
+  mapping?: ColumnTarget[],
+): string[][] {
   const headerRow = grid[headerIndex] ?? [];
   const dataRows = grid.slice(headerIndex + 1);
   if (dataRows.length === 0) return grid;
@@ -373,12 +392,69 @@ export function mergeWrappedRows(grid: string[][], headerIndex: number, lineMeta
   }
   if (numbered.length === 0) return grid;
 
+  // Physical-row bands from the ruled lines: band = which inter-rule gap a
+  // line's y falls into. Two lines in the same band share a table row.
+  const boundsByPage = new Map<number, number[]>();
+  for (const b of rowLines ?? []) {
+    if (b.ys.length > 0) boundsByPage.set(b.page, [...b.ys].sort((x, y) => y - x));
+  }
+  const bandOf = (i: number): string | null => {
+    const m = lineMeta?.[i];
+    if (!m) return null;
+    const ys = boundsByPage.get(m.page);
+    if (!ys) return null;
+    let k = 0;
+    while (k < ys.length && ys[k]! > m.y) k++;
+    return `${m.page}:${k}`;
+  };
+  const itemByBand = new Map<string, number>();
+  for (const n of numbered) {
+    const band = bandOf(n);
+    if (band != null && !itemByBand.has(band)) itemByBand.set(band, itemOf.get(n)!);
+  }
+
+  // Does this line look like a section banner? Title-column content and
+  // nothing in any data column (times, durations, departments).
+  const titleOnly = (i: number): boolean => {
+    if (!mapping) return true; // no mapping knowledge — keep the row standalone
+    let title = false;
+    for (let c = 0; c < (grid[i]?.length ?? 0); c++) {
+      if (!(grid[i]![c] ?? "").trim()) continue;
+      const kind = mapping[c]?.kind ?? "skip";
+      if (kind === "title") title = true;
+      else if (kind !== "skip") return false;
+    }
+    return title;
+  };
+
   const itemLines: number[][] = numbered.map((i) => [i]);
+  const soloBands = new Map<string, number[]>(); // banner rows, merged per band
   const standalone: number[] = []; // unattachable lines, kept as their own rows
   let prevNum: number | null = null;
   for (const i of lineIdxs) {
     if (itemOf.has(i)) {
       prevNum = i;
+      continue;
+    }
+    const band = bandOf(i);
+    if (band != null) {
+      const owner = itemByBand.get(band);
+      if (owner != null) {
+        itemLines[owner]!.push(i);
+        continue;
+      }
+      // Numberless ruled row: a banner keeps its own row; anything else is a
+      // sub-row of the item above (ruled WHO/WHAT lines inside one item).
+      if (titleOnly(i)) {
+        const lines = soloBands.get(band) ?? [];
+        lines.push(i);
+        soloBands.set(band, lines);
+        continue;
+      }
+      const nextNum = numbered.find((n) => n > i);
+      const target = prevNum != null ? itemOf.get(prevNum)! : nextNum != null ? itemOf.get(nextNum)! : null;
+      if (target != null) itemLines[target]!.push(i);
+      else standalone.push(i);
       continue;
     }
     const nextNum = numbered.find((n) => n > i);
@@ -391,8 +467,6 @@ export function mergeWrappedRows(grid: string[][], headerIndex: number, lineMeta
         if (!pm || pm.page !== m.page || Math.abs(m.y - nm.y) < Math.abs(m.y - pm.y))
           target = itemOf.get(nextNum)!;
       }
-    } else if (target == null && nextNum != null && !lineMeta) {
-      target = null; // no positions, nothing before — keep standalone
     }
     if (target == null) standalone.push(i);
     else itemLines[target]!.push(i);
@@ -410,8 +484,14 @@ export function mergeWrappedRows(grid: string[][], headerIndex: number, lineMeta
     return out;
   };
 
-  const merged = [...standalone.map((i) => [...grid[i]!]), ...itemLines.map(build)];
-  return [...grid.slice(0, headerIndex + 1), ...merged];
+  // Sheet order is preserved: each unit (item, banner band, or standalone
+  // line) lands where its first line appeared.
+  const units: { at: number; rows: () => string[] }[] = [
+    ...itemLines.map((lines, idx) => ({ at: Math.min(...lines), rows: () => build(itemLines[idx]!) })),
+    ...[...soloBands.values()].map((lines) => ({ at: Math.min(...lines), rows: () => build(lines) })),
+    ...standalone.map((i) => ({ at: i, rows: () => [...grid[i]!] })),
+  ].sort((a, b) => a.at - b.at);
+  return [...grid.slice(0, headerIndex + 1), ...units.map((u) => u.rows())];
 }
 
 /** Headers that mark the sheet's own role/assignment column (labels vary per production house). */
@@ -432,7 +512,7 @@ export function findRoleColumn(headers: string[], mapping: ColumnTarget[]): stri
 /** One-call pipeline: grid in, header + mapping + classified rows out. */
 export function planImport(
   grid: string[][],
-  opts: { headerIndex?: number; mergeWrapped?: boolean; lineMeta?: LineMeta[] } = {},
+  opts: { headerIndex?: number; mergeWrapped?: boolean; lineMeta?: LineMeta[]; rowLines?: RowLines[] } = {},
 ): {
   grid: string[][];
   headerIndex: number;
@@ -501,7 +581,9 @@ export function planImport(
     rescue("duration", (v) => parseDurationLoose(v) != null, 3);
     rescue("title", undefined, 2);
   }
-  const finalGrid = opts.mergeWrapped ? mergeWrappedRows(grid, headerIndex, opts.lineMeta) : grid;
+  const finalGrid = opts.mergeWrapped
+    ? mergeWrappedRows(grid, headerIndex, opts.lineMeta, opts.rowLines, mapping)
+    : grid;
   return {
     grid: finalGrid,
     headerIndex,

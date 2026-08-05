@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-06 (PDF row boundaries from the table's ruled lines · admin sub-pages)
+- **PDF imports now read the table's actual ruled lines** from the document's drawing layer and use them as authoritative row boundaries. This fixes the last merge imperfections: bottom lines of tall rows no longer bleed into the next short row, ruled sub-rows inside one item (per-line WHO/WHAT rules) join their item, and **unnumbered section banners survive as their own section rows** instead of being absorbed — a real sheet recovered four match-phase banners that earlier imports swallowed. Pages without detectable rules fall back to the previous nearest-item heuristic.
+- **Users & access and the Error log now live on their own pages** (`/admin/users`, `/admin/errors`), linked from the sidebar, instead of stacking on top of the events dashboard.
+
 ### Added — 2026-08-06 (accounts: password sign-in & sessions · one-click view links)
 - **Real sign-in**: users now log in with **email + password** on the landing page or the admin gate. Passwords are scrypt-hashed; logins issue revocable 30-day sessions that work everywhere the old tokens did (API, show channel, document channel) with the same grant enforcement. Sign out revokes the session server-side; changing a password (or an admin resetting one) signs out every other device. Admins set an optional password at user creation, see who has one, and can reset it; personal access tokens remain as a backup credential. Login attempts are rate-limited.
 - **One-click view-only links**: a **Copy view link** button on every rundown (dashboard and Join codes panel) copies a URL that opens the rundown read-only — hand it to camera operators and crew; no account needed, revocable via join codes.

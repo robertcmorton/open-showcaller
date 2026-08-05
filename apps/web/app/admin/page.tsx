@@ -16,8 +16,7 @@ import { Dropdown, Icon } from "../../components/ui";
 import { ImportPanel } from "../../components/ImportPanel";
 import { SideNavSection, WithSideNav } from "../../components/SideNav";
 import { pickImage } from "../../lib/pickImage";
-import { UsersPanel } from "../../components/UsersPanel";
-import { ErrorLogPanel } from "../../components/ErrorLogPanel";
+import { AdminNavSection } from "../../components/AdminNav";
 
 function CreateEventForm({ onCreated, teamId }: { onCreated: () => void; teamId?: string }) {
   const [open, setOpen] = useState(false);
@@ -368,8 +367,6 @@ export default function AdminPage() {
   const [importFor, setImportFor] = useState<string | null>(null); // eventId
   const [me, setMe] = useState<{ role: "admin" | "company" | "user" | null; teamName?: string; name?: string; canManage?: boolean } | null>(null);
   const [showArchived, setShowArchived] = useState(false);
-  const [showUsers, setShowUsers] = useState(false);
-  const [showErrors, setShowErrors] = useState(false);
   const [companies, setCompanies] = useState<{ id: string; name: string; companyToken: string | null; logo: string | null; eventCount: number }[]>([]);
 
   const reload = useCallback(() => {
@@ -448,18 +445,7 @@ export default function AdminPage() {
           Show archived
         </button>
       </SideNavSection>
-      {me?.role === "admin" && (
-        <SideNavSection heading="Admin">
-          <button type="button" className="menu-item" onClick={() => setShowUsers((s) => !s)}>
-            <span className="check">{showUsers && "✓"}</span>
-            Users &amp; access
-          </button>
-          <button type="button" className="menu-item" onClick={() => setShowErrors((s) => !s)}>
-            <span className="check">{showErrors && "✓"}</span>
-            Error log
-          </button>
-        </SideNavSection>
-      )}
+      {me?.role === "admin" && <AdminNavSection />}
       <SideNavSection heading="Credentials">
         {me?.role === "user" && (
           <div style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", padding: "2px 9px" }}>
@@ -560,8 +546,6 @@ export default function AdminPage() {
           </div>
         )}
 
-        {me?.role === "admin" && showUsers && <UsersPanel companies={companies} events={events ?? []} />}
-        {me?.role === "admin" && showErrors && <ErrorLogPanel onClose={() => setShowErrors(false)} />}
 
         <div style={{ display: "grid", gap: 20 }}>
           {groups.map((group) => (

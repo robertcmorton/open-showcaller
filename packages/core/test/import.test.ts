@@ -245,3 +245,94 @@ describe("mergeWrappedRows", () => {
     expect(names.every((n) => !n.includes("tracks"))).toBe(true);
   });
 });
+
+describe("mergeWrappedRows with ruled-line boundaries", () => {
+  // Row layout (page 0, y descending). Rules at 100/88/50/38/26:
+  //   [100..88]  item 1 (one line)
+  //   [88..50]   item 2 — tall: number on its 2nd line, 2 more lines BELOW
+  //              the midpoint to item 3 (previously mis-attached forward)
+  //   [50..38]   an unnumbered ALL-CAPS banner row (its own row)
+  //   [38..26]   item 3 (one line)
+  const grid = [
+    ["ITEM", "TIME", "ACTION", "WHAT"],
+    ["1", "5:00:00PM", "Open", "walk in"],          // y 94
+    ["", "", "", "wrapped a"],                       // y 82
+    ["2", "5:10:00PM", "Long segment", "wrapped b"], // y 74
+    ["", "", "", "wrapped c"],                       // y 62
+    ["", "", "", "wrapped d"],                       // y 54  (nearer item 3's line!)
+    ["", "", "MAIN SHOW", ""],                       // y 44  banner band
+    ["3", "5:30:00PM", "Kick", "boom"],              // y 32
+    ["4", "5:40:00PM", "A", ""],                     // pad to reach the ≥5 integers bar
+    ["5", "5:41:00PM", "B", ""],
+    ["6", "5:42:00PM", "C", ""],
+    ["7", "5:43:00PM", "D", ""],
+  ];
+  const lineMeta = [
+    { page: 0, y: 200 },
+    { page: 0, y: 94 },
+    { page: 0, y: 82 },
+    { page: 0, y: 74 },
+    { page: 0, y: 62 },
+    { page: 0, y: 54 },
+    { page: 0, y: 44 },
+    { page: 0, y: 32 },
+    { page: 0, y: 20 },
+    { page: 0, y: 16 },
+    { page: 0, y: 12 },
+    { page: 0, y: 8 },
+  ];
+  const rowLines = [{ page: 0, ys: [100, 88, 50, 38, 26] }];
+
+  it("groups by physical row, keeps unnumbered banner rows, preserves order", () => {
+    const merged = mergeWrappedRows(grid, 0, lineMeta, rowLines);
+    // header + item1 + item2 + banner + items 3..7
+    expect(merged.length).toBe(9);
+    expect(merged[2]![3]).toBe("wrapped a\nwrapped b\nwrapped c\nwrapped d"); // ALL of item 2's lines
+    expect(merged[3]![2]).toBe("MAIN SHOW"); // banner survives as its own row, in place
+    expect(merged[4]![0]).toBe("3");
+    expect(merged[4]![3]).toBe("boom"); // nothing leaked into item 3
+  });
+
+  it("still classifies the banner as a section after the merge", () => {
+    const { rows } = planImport(grid, { mergeWrapped: true, lineMeta, rowLines });
+    const banner = rows.find((r) => r.title === "MAIN SHOW");
+    expect(banner?.kind).toBe("banner");
+  });
+});
+
+describe("mergeWrappedRows: ruled sub-rows inside one item", () => {
+  // Sheets rule the WHO/WHAT lines INSIDE a merged item: bands without a
+  // number that carry data-column content join the item above; only
+  // title-only bands stay standalone.
+  const grid = [
+    ["ITEM", "TIME", "ACTION", "WHO", "WHAT"],
+    ["1", "6:30:00PM", "Music Fill", "AUDIO", "track list"],  // y 94
+    ["", "", "", "GFX", "holding loop"],                       // y 82 — own band!
+    ["", "", "", "GFX", "title card"],                         // y 70 — own band!
+    ["2", "6:50:00PM", "Toss seg", "HOST", "prerecord"],       // y 58
+    ["3", "6:55:00PM", "A", "", ""],
+    ["4", "6:56:00PM", "B", "", ""],
+    ["5", "6:57:00PM", "C", "", ""],
+  ];
+  const lineMeta = [
+    { page: 0, y: 200 },
+    { page: 0, y: 94 },
+    { page: 0, y: 82 },
+    { page: 0, y: 70 },
+    { page: 0, y: 58 },
+    { page: 0, y: 46 },
+    { page: 0, y: 34 },
+    { page: 0, y: 22 },
+  ];
+  // Rules split item 1 into three inner sub-rows.
+  const rowLines = [{ page: 0, ys: [100, 88, 76, 64, 52, 40, 28, 16] }];
+
+  it("joins ruled sub-rows to the item above them", () => {
+    const { rows } = planImport(grid, { mergeWrapped: true, lineMeta, rowLines });
+    const item1 = rows.find((r) => r.title === "Music Fill");
+    expect(item1?.cells.who).toBe("AUDIO\nGFX\nGFX");
+    expect(item1?.cells.what).toBe("track list\nholding loop\ntitle card");
+    const item2 = rows.find((r) => r.title === "Toss seg");
+    expect(item2?.cells.who).toBe("HOST");
+  });
+});

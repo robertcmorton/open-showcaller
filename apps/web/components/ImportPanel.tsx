@@ -64,6 +64,7 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
   const [name, setName] = useState("");
   const [rawGrid, setRawGrid] = useState<string[][] | null>(null); // as extracted, pre-merge
   const [lineMeta, setLineMeta] = useState<{ page: number; y: number }[] | undefined>(undefined);
+  const [rowLines, setRowLines] = useState<{ page: number; ys: number[] }[] | undefined>(undefined);
   const [isPdf, setIsPdf] = useState(false);
   const [grid, setGrid] = useState<string[][] | null>(null);
   const [headerIndex, setHeaderIndex] = useState(0);
@@ -89,8 +90,9 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
     pdf: boolean,
     forcedHeaderIndex?: number,
     meta?: { page: number; y: number }[],
+    rules?: { page: number; ys: number[] }[],
   ) => {
-    const plan = planImport(source, { headerIndex: forcedHeaderIndex, mergeWrapped: pdf, lineMeta: meta });
+    const plan = planImport(source, { headerIndex: forcedHeaderIndex, mergeWrapped: pdf, lineMeta: meta, rowLines: rules });
     setGrid(plan.grid);
     setHeaderIndex(plan.headerIndex);
     setHeaders(plan.headers);
@@ -102,12 +104,13 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
     setBusy(true);
     try {
       const pdf = /\.pdf$/i.test(file.name);
-      const { grid: extracted, widths: extractedWidths, lineMeta: meta } = await extractGrid(file);
+      const { grid: extracted, widths: extractedWidths, lineMeta: meta, rowLines: rules } = await extractGrid(file);
       setRawGrid(extracted);
       setLineMeta(meta);
+      setRowLines(rules);
       setIsPdf(pdf);
       setWidths(extractedWidths);
-      applyPlan(extracted, pdf, undefined, meta);
+      applyPlan(extracted, pdf, undefined, meta, rules);
       setName(file.name.replace(/\.(xlsx|xls|csv|pdf)$/i, ""));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -261,7 +264,7 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
                 onChange={(e) => {
                   if (!rawGrid) return;
                   const idx = Math.min(rawGrid.length - 1, Math.max(0, Number(e.target.value) - 1));
-                  applyPlan(rawGrid, isPdf, idx, lineMeta);
+                  applyPlan(rawGrid, isPdf, idx, lineMeta, rowLines);
                 }}
               />
             </div>
