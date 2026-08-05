@@ -165,8 +165,13 @@ export function buildRundownDoc(
 export interface ProjectedRow extends PlanRow {
   title: string;
   cells: Record<string, string>; // columnKey → plain text
+  /** columnKey → the cell's XML, present only when it carries formatting marks. */
+  cellsRich?: Record<string, string>;
   color?: string;
 }
+
+/** Marks the cell editor can produce — a cell mentioning one renders rich. */
+const RICH_MARK = /<(bold|italic|underline|strike|highlight|link|strong|em|u|s|mark)[\s/>]/;
 
 /** Project a rundown Y.Doc into plain rows for the timing engine and renderers. */
 export function projectRundownDoc(doc: Y.Doc): {
@@ -224,11 +229,16 @@ export function projectRundownDoc(doc: Y.Doc): {
     if (!row) continue; // reconciliation: dangling id ignored
 
     const cells: Record<string, string> = {};
+    let cellsRich: Record<string, string> | undefined;
     const cellMap = row.get("cells") as Y.Map<Y.XmlFragment> | undefined;
     cellMap?.forEach((fragment, colId) => {
       const key = keyById.get(colId);
-      // DOM-free plain-text projection: serialize and strip tags.
-      if (key) cells[key] = fragment.toString().replace(/<[^>]+>/g, "");
+      if (!key) return;
+      // DOM-free plain-text projection: paragraph breaks become newlines,
+      // every other tag is stripped.
+      const xml = fragment.toString();
+      cells[key] = xml.replace(/<\/paragraph>/g, "\n").replace(/<[^>]+>/g, "").replace(/\n$/, "");
+      if (RICH_MARK.test(xml)) (cellsRich ??= {})[key] = xml;
     });
 
     rows.push({
@@ -242,6 +252,7 @@ export function projectRundownDoc(doc: Y.Doc): {
       durationHidden: (row.get("durationHidden") as boolean | undefined) ?? false,
       title: cells["title"] ?? "",
       cells,
+      cellsRich,
       color: row.get("color") as string | undefined,
     });
   }

@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Fixed — 2026-08-06 (cell formatting now visible outside the editor)
+- **Bold, italic, underline, strikethrough, and highlight applied in a cell now actually show in the grid** — formatting was stored but stripped by the plain-text projection the moment the editor closed. Formatted cells render their marks (through a strict allowlist — nothing document-authored can inject markup); plain cells keep their role colour-coding. Multi-paragraph cells also keep their line breaks in the grid and CSV export now.
+
 ### Added — 2026-08-06 (PDF export)
 - **Export PDF** in the rundown's Output menu downloads a real PDF file — A4 landscape with a repeating table header, the rundown name/version/planned times and key times atop every page, page-numbered footers, anchored times marked with `*`, group rows as full-width dark bands, row highlight colours preserved, skipped rows greyed, and column widths matching the on-screen layout (including personal resizes). Generated entirely in the browser; the print dialog remains available as "Print".
 

@@ -26,6 +26,7 @@ import { LiveReadouts, TransportBar } from "./TransportBar";
 import { Dropdown, HeaderClock, Icon } from "./ui";
 import { SideNavSection, WithSideNav } from "./SideNav";
 import { RoleBar, RolePicker, highlightRoles, rowMatchesRole } from "./RoleBar";
+import { RichCellText } from "./RichCellText";
 import { useShowChannel } from "../lib/showChannel";
 import { useLiveTiming } from "../lib/useLiveTiming";
 import { useRundownDoc } from "../lib/useRundownDoc";
@@ -510,13 +511,15 @@ export function RundownEditor({
           </td>
         );
     }
+    // A formatted cell renders its marks; plain cells get role colouring.
+    const richXml = rowRecord.cellsRich?.[column.key];
     return (
       <td
         key={column.id}
         className={richColClass(column)}
         onDoubleClick={canEditContent ? () => setActiveCell({ rowId: rowRecord.id, columnId: column.id }) : undefined}
       >
-        {highlightRoles(rowRecord.cells[column.key] ?? "", roles)}
+        {richXml ? <RichCellText xml={richXml} /> : highlightRoles(rowRecord.cells[column.key] ?? "", roles)}
       </td>
     );
   };
