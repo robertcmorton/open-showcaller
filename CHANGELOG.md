@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Changed — 2026-08-06 (self-hosting guide for humans and AI assistants)
+- **The README now carries a complete self-hosting guide**: architecture and port table, full environment-variable reference (build-time vs runtime), three deployment paths (Docker Compose on a VPS, any PaaS, bare Node), first-run setup, and copy-paste verification checks — plus a **"Deploying with an AI assistant" section** with a ready-to-paste prompt so tools like Claude or ChatGPT can spin up an instance end-to-end from the README alone.
+- `docs/DEPLOYMENT.md` security status brought up to date: the deployment is locked (admin token gates the API and both websocket channels; the credential hierarchy and the 33-check access matrix are documented). The previous "not yet authenticated" warning was stale.
+
 ### Added — 2026-08-06 (locked-server access audit · mobile dashboard)
 - **Access-control test matrix**: a committed script exercises 33 checks against a locked server — per-credential event scoping in the API, caller/follower roles on the show channel, and read-only doc enforcement for view grants (a viewer's write is rejected server-side while a manager's propagates). All 33 pass.
 - **The dashboard now works properly on phones**: each company, event, and rundown collapses its action buttons into a single ⋯ menu (rename, dates, location, images, archive, duplicate, tokens, delete — with the same two-tap confirmation for destructive actions). Show/Edit/View and the companion-screen links stay one tap away; desktop is unchanged.

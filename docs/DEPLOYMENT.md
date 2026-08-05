@@ -30,6 +30,8 @@ Sync service variables: `DATABASE_URL=${{Postgres.DATABASE_URL}}` (PORT is Railw
 - Deploys use Railway's Railpack builder (tsx runtime), not the repo Dockerfiles; the Dockerfiles remain for self-hosting via `docker-compose.yml`.
 - Costs: Railway trial credit first, then roughly $5–10/mo for the three services at hobby usage.
 
-## ⚠️ Security status
+## Security status
 
-The management HTTP API and the `/doc` channel are **not yet authenticated** — anyone with the sync URL can read/write data. Join codes gate the show channel only. Treat the deployment as demo-only until API gating lands (top hardening priority). Do not store sensitive production data before then.
+The deployment is **locked**: `ADMIN_TOKEN` is set on the sync service (with `ALLOW_DEV_JOIN=0`), which gates the management API, the show channel, and the `/doc` channel. Credentials form a hierarchy — admin token → per-company showcaller tokens → per-user accounts with grants (admin / company / event / view-only; view grants get read-only docs) → per-rundown join codes. A 33-check access-control matrix (`apps/web/scripts/auth-matrix.mts`) verifies the enforcement against a locked instance; run it before releases that touch auth. Interim limitation: credentials are bearer tokens (no passwords/sessions yet — tracked as the "real accounts" hardening task).
+
+Self-hosting instructions for any platform (Docker Compose, PaaS, bare Node) — written to be executable by AI assistants — live in the README's **Self-hosting** section.
