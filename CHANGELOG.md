@@ -11,6 +11,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.5.0] — 2026-08-07
+
+### Added
+- **Follow clock**: the show can now run itself off the TIME column. With the toggle on, every cue goes active at exactly its scheduled moment — each handover re-syncs to the event-local clock, so drift can never accumulate across items — and when a cue's time is up the next row takes over automatically. Manual moves while following self-correct within a second; switching the toggle off restores full manual control instantly. Verified against a 2,040-cue sheet of 30-second items: the show locked onto the correct cue for the current time and stepped through boundaries to the second, unattended.
+
 ## [0.4.0] — 2026-08-07
 
 ### Added — 2026-08-07 (show chrome overhaul · one-click re-import · multi-role · undo · clock sync)

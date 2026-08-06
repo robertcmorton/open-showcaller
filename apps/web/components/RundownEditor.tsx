@@ -197,6 +197,11 @@ export function RundownEditor({
   const [followScroll, setFollowScroll] = useState(true);
   // A user can hold several roles at once (Camera 1 AND PA). Stored per browser.
   const [myRoles, setMyRoles] = useState<string[]>([]);
+  // Clock-follow: the show advances ITSELF along the TIME column — every cue
+  // starts at its scheduled moment (re-synced to the event clock per item, so
+  // drift can never accumulate), and when a cue's window ends the next row
+  // becomes active automatically.
+  const [clockFollow, setClockFollow] = useState(false);
   // Ticks the event-local clock cursor along the TIME column.
   const [, setNowTick] = useState(0);
   useEffect(() => {
@@ -236,6 +241,7 @@ export function RundownEditor({
       const widths = localStorage.getItem(COL_WIDTHS_KEY(rundownId));
       if (widths) setColWidths(JSON.parse(widths) as Record<string, number>);
       setShowZero(localStorage.getItem(`oc:zerocol:${rundownId}`) === "1");
+      setClockFollow(localStorage.getItem(`oc:clockfollow:${rundownId}`) === "1");
       const storedRoles = localStorage.getItem(`oc:myrole:${rundownId}`);
       if (storedRoles) {
         try {
@@ -351,17 +357,49 @@ export function RundownEditor({
     }
 
   // The event-local clock's position along the TIME column: the last row whose
-  // (anchored or cascaded) start has passed. Marked in the grid; while the
-  // show runs the caller can jump straight to it.
-  const nowSec = zoneSecondsOfDay(channel.serverNow(), channel.timezone);
-  let clockRowId: string | null = null;
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i]!;
-    if (r.type === "group" || r.skipped) continue;
-    if (r.untimed && r.hardStartSec == null) continue;
-    const start = timing.rows[i]!.startSec;
-    if (start != null && start <= nowSec) clockRowId = r.id;
-  }
+  // (anchored or cascaded) start has passed. Marked in the grid; clock-follow
+  // drives the live show to it.
+  const clockTarget = (rowList: ProjectedRow[], t: typeof timing, tz: string | null | undefined): string | null => {
+    const now = zoneSecondsOfDay(channel.serverNow(), tz);
+    let target: string | null = null;
+    for (let i = 0; i < rowList.length; i++) {
+      const r = rowList[i]!;
+      if (r.type === "group" || r.skipped) continue;
+      if (r.untimed && r.hardStartSec == null) continue;
+      const start = t.rows[i]!.startSec;
+      if (start != null && start <= now) target = r.id;
+    }
+    return target;
+  };
+  const clockRowId = clockTarget(rows, timing, channel.timezone);
+
+  // Clock-follow engine: once a second, if the scheduled row for "now" differs
+  // from the active row, jump there. Each boundary re-locks the show to the
+  // clock — a 30-second item hands over to the next item at EXACTLY its
+  // scheduled moment, and late/early manual moves self-correct.
+  const clockFollowRef = useRef({ rows, timing, timezone: channel.timezone, activeRowId, running: false });
+  clockFollowRef.current = {
+    rows,
+    timing,
+    timezone: channel.timezone,
+    activeRowId,
+    running: channel.show?.state === "running",
+  };
+  const channelRef = useRef(channel);
+  channelRef.current = channel;
+  useEffect(() => {
+    if (!clockFollow || !isShow) return;
+    const tick = () => {
+      const s = clockFollowRef.current;
+      if (!s.running) return;
+      const target = clockTarget(s.rows, s.timing, s.timezone);
+      if (target && target !== s.activeRowId) channelRef.current.sendCmd("jump", target);
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clockFollow, isShow]);
 
   const yRows = doc.getMap<Y.Map<unknown>>("rows");
   const yOrder = doc.getArray<string>("rowOrder");
@@ -844,14 +882,18 @@ export function RundownEditor({
             orderedRowIds={rows.filter((r) => !r.skipped || r.id === activeRowId).map((r) => r.id)}
           />
         )}
-        {isShow && channel.show?.state === "running" && clockRowId && clockRowId !== activeRowId && (
+        {isShow && (
           <button
-            className="btn btn-sm"
-            style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
-            title="Jump the live show to where the event clock sits in the TIME column"
-            onClick={() => channel.sendCmd("jump", clockRowId)}
+            className={`btn btn-sm ${clockFollow ? "is-on" : ""}`}
+            style={clockFollow ? { borderColor: "var(--warn)", color: "var(--warn)", background: "var(--warn-soft)" } : undefined}
+            title="Run the show off the TIME column: every item starts at its scheduled moment (re-synced to the event clock each cue), and when an item's time is up the next row goes active automatically"
+            onClick={() => {
+              const next = !clockFollow;
+              setClockFollow(next);
+              localStorage.setItem(`oc:clockfollow:${rundownId}`, next ? "1" : "0");
+            }}
           >
-            ◷ Sync to clock
+            ◷ {clockFollow ? "Following clock" : "Follow clock"}
           </button>
         )}
         {canEditContent && (
