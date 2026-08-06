@@ -594,6 +594,53 @@ export function planImport(
   };
 }
 
+// ── Unparseable-cell repair suggestions ───────────────────────────────────────
+
+/**
+ * Suggests a fixed spelling for a time cell that failed to parse — wrong
+ * separators ("7.30", "7;30"), glued digits ("730pm", "1930"), or a time
+ * buried in prose ("TBC 7:30pm"). Returns a string that parses, or null.
+ */
+export function suggestTimeFix(raw: string): string | null {
+  const s = raw.trim();
+  if (s === "" || parseTimeLoose(s) != null) return null;
+  const sep = s.match(/(\d{1,2})\s*[:.;hH]\s*(\d{2})(?:\s*[:.;]\s*(\d{2}))?\s*(am|pm)?/i);
+  if (sep) {
+    const cand = `${sep[1]}:${sep[2]}${sep[3] ? `:${sep[3]}` : ""}${sep[4] ? ` ${sep[4].toLowerCase()}` : ""}`;
+    if (parseTimeLoose(cand) != null) return cand;
+  }
+  const glued = s.match(/\b(\d{3,4})\s*(am|pm)?\b/i);
+  if (glued) {
+    const digits = glued[1]!;
+    const cand = `${digits.slice(0, digits.length - 2)}:${digits.slice(-2)}${glued[2] ? ` ${glued[2].toLowerCase()}` : ""}`;
+    if (parseTimeLoose(cand) != null) return cand;
+  }
+  return null;
+}
+
+/**
+ * Suggests a fixed spelling for a duration cell that failed to parse —
+ * "2.30" → "2:30", a duration buried in prose ("approx 5 mins TBC"), or a
+ * bare number (treated as minutes). Returns a string that parses, or null.
+ */
+export function suggestDurationFix(raw: string): string | null {
+  const s = raw.trim().toLowerCase();
+  if (s === "" || parseDurationLoose(s) != null) return null;
+  const sep = s.match(/^(\d{1,3})\s*[.;]\s*(\d{2})$/);
+  if (sep) {
+    const cand = `${sep[1]}:${sep[2]}`;
+    if (parseDurationLoose(cand) != null) return cand;
+  }
+  const worded = s.match(/(\d+)\s*(hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)\b/);
+  if (worded) {
+    const cand = `${worded[1]} ${worded[2]}`;
+    if (parseDurationLoose(cand) != null) return cand;
+  }
+  const bare = s.match(/^\D*?(\d{1,3})\D*$/);
+  if (bare) return `${bare[1]}:00`; // a lone number in a duration column is minutes
+  return null;
+}
+
 // ── Role detection ────────────────────────────────────────────────────────────
 
 /** Distinct, readable highlight colours assigned to detected roles in order. */

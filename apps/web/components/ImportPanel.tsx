@@ -7,7 +7,11 @@ import {
   findRoleColumn,
   formatDuration,
   formatTimeOfDay,
+  parseDurationLoose,
+  parseTimeLoose,
   planImport,
+  suggestDurationFix,
+  suggestTimeFix,
   type ClassifiedRow,
   type ColumnTarget,
 } from "@opencall/core";
@@ -49,6 +53,58 @@ const valueToTarget = (value: string, header: string, index: number): ColumnTarg
   return { kind: "skip" };
 };
 
+interface CellIssue {
+  key: string;
+  rowNumber: number;
+  title: string;
+  kind: "start" | "duration";
+  raw: string;
+  suggestion: string | null;
+  sourceIndex: number;
+}
+
+/** One unparseable cell: raw value, an editable suggested fix, apply/clear/keep. */
+function IssueFixRow({
+  issue,
+  onApply,
+  onKeep,
+}: {
+  issue: CellIssue;
+  onApply: (issue: CellIssue, value: string) => void;
+  onKeep: () => void;
+}) {
+  const [value, setValue] = useState(issue.suggestion ?? "");
+  const parses = issue.kind === "start" ? parseTimeLoose(value) != null : parseDurationLoose(value) != null;
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: "var(--fs-sm)" }}>
+      <span style={{ color: "var(--text-3)", minWidth: 52 }}>Row {issue.rowNumber}</span>
+      <span style={{ minWidth: 120, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {issue.title || "—"}
+      </span>
+      <span className="chip">{issue.kind === "start" ? "START" : "DURATION"}</span>
+      <code style={{ color: "var(--over)", background: "var(--over-soft)", padding: "2px 6px", borderRadius: 4 }}>{issue.raw}</code>
+      <span style={{ color: "var(--text-3)" }}>→</span>
+      <input
+        className="input mono"
+        style={{ width: 110, padding: "3px 8px" }}
+        placeholder={issue.kind === "start" ? "e.g. 7:30 pm" : "e.g. 5:00"}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        title={issue.suggestion ? `Suggested: ${issue.suggestion}` : "No automatic suggestion — type the intended value"}
+      />
+      <button className="btn btn-sm btn-primary" disabled={!parses} title={parses ? "Replace the cell with this value" : "Doesn't parse yet"} onClick={() => onApply(issue, value)}>
+        Apply
+      </button>
+      <button className="btn btn-sm btn-ghost" title="Import this cell as empty" onClick={() => onApply(issue, "")}>
+        Clear
+      </button>
+      <button className="btn btn-sm btn-ghost" title="Leave it — the cell imports empty but the text stays visible here" onClick={onKeep}>
+        Keep as is
+      </button>
+    </div>
+  );
+}
+
 const KIND_STYLE: Record<ClassifiedRow["kind"], { label: string; color: string }> = {
   cue: { label: "cue", color: "var(--accent-text)" },
   milestone: { label: "milestone", color: "var(--warn)" },
@@ -80,7 +136,41 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
     [grid, headerIndex, mapping],
   );
   const importable = rows.filter((r) => r.kind !== "spacer");
-  const warnings = rows.filter((r) => r.startRaw || r.durationRaw).length;
+  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
+  // Every cell that failed to parse, with a repair suggestion — fixable one by one.
+  const issues = useMemo(() => {
+    const out: { key: string; rowNumber: number; title: string; kind: "start" | "duration"; raw: string; suggestion: string | null; sourceIndex: number }[] = [];
+    let n = 0;
+    for (const r of rows) {
+      if (r.kind === "spacer") continue;
+      n += 1;
+      if (r.startRaw)
+        out.push({ key: `${r.sourceIndex}:start`, rowNumber: n, title: r.title, kind: "start", raw: r.startRaw, suggestion: suggestTimeFix(r.startRaw), sourceIndex: r.sourceIndex });
+      if (r.durationRaw)
+        out.push({ key: `${r.sourceIndex}:duration`, rowNumber: n, title: r.title, kind: "duration", raw: r.durationRaw, suggestion: suggestDurationFix(r.durationRaw), sourceIndex: r.sourceIndex });
+    }
+    return out.filter((i) => !dismissed.has(i.key));
+  }, [rows, dismissed]);
+  const warnings = issues.length;
+
+  /** Rewrites the offending line inside the source cell; empty removes it. */
+  const applyFix = (issue: (typeof issues)[number], value: string) => {
+    if (!grid) return;
+    const col = mapping.findIndex((t) => t.kind === issue.kind);
+    if (col < 0) return;
+    const next = grid.map((row) => [...row]);
+    const cell = next[issue.sourceIndex]?.[col] ?? "";
+    const lines = cell.split("\n");
+    const li = lines.findIndex((l) => l.trim() === issue.raw);
+    if (li >= 0) {
+      if (value.trim() === "") lines.splice(li, 1);
+      else lines[li] = value.trim();
+      next[issue.sourceIndex]![col] = lines.join("\n");
+    } else {
+      next[issue.sourceIndex]![col] = value.trim();
+    }
+    setGrid(next);
+  };
   // The sheet's own role column (WHO, ROLE…) is the roster when it exists.
   const roleKey = useMemo(() => findRoleColumn(headers, mapping), [headers, mapping]);
   const roles = useMemo(() => detectRoles(importable, 12, roleKey), [importable, roleKey]);
@@ -173,6 +263,8 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
       .map(({ t, i }) => ({ key: t.key, title: t.title, width: clampWidth(widths[i]) })),
     );
     setBusy(true);
+    // The sheet's own first time becomes the planned start.
+    const firstStart = importable.find((r) => r.startSec != null)?.startSec ?? null;
     api
       .createRundown({
         eventId,
@@ -181,6 +273,7 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
         columns: customColumns,
         roles,
         roleColumnKey: roleKey ?? (roles.length > 0 ? "roles" : null),
+        plannedStartSec: firstStart,
       })
       .then(({ id }) => onDone(id))
       .catch((err) => {
@@ -272,7 +365,7 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
               {importable.length} rows ({importable.filter((r) => r.kind === "milestone").length} milestones,{" "}
               {importable.filter((r) => r.kind === "banner").length} sections)
               {warnings > 0 && (
-                <span style={{ color: "var(--warn)" }}> · {warnings} cells couldn’t be parsed — shown below</span>
+                <span style={{ color: "var(--warn)" }}> · {warnings} cell{warnings === 1 ? "" : "s"} couldn’t be parsed — fix below</span>
               )}
             </span>
             <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
@@ -284,6 +377,22 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
               </button>
             </div>
           </div>
+
+          {issues.length > 0 && (
+            <div className="panel" style={{ display: "grid", gap: 8, borderColor: "var(--warn)" }}>
+              <strong style={{ fontSize: "var(--fs-sm)" }}>
+                {issues.length} cell{issues.length === 1 ? "" : "s"} couldn’t be parsed — fix, clear, or keep each one
+              </strong>
+              {issues.slice(0, 12).map((issue) => (
+                <IssueFixRow key={issue.key} issue={issue} onApply={applyFix} onKeep={() => setDismissed(new Set([...dismissed, issue.key]))} />
+              ))}
+              {issues.length > 12 && (
+                <span style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)" }}>
+                  Showing the first 12 — fixing these reveals the rest.
+                </span>
+              )}
+            </div>
+          )}
 
           {roles.length > 0 && (
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>

@@ -695,10 +695,52 @@ export function RundownEditor({
         <KeyTimesEditor doc={doc} keyTimes={keyTimes} use24h={meta.use24h} canEdit={canEditContent} />
         <div className="hide-mobile">
           <div className="header-label">Planned</div>
-          <div className="header-clock mono">
+          <div
+            className="header-clock mono"
+            style={canEditContent ? { cursor: "pointer" } : undefined}
+            title={canEditContent ? "Click to change the planned start time (an anchored first row overrides it)" : undefined}
+            onClick={() => {
+              if (!canEditContent) return;
+              const raw = window.prompt(
+                "Planned start time",
+                timing.startSec != null ? formatTimeOfDay(timing.startSec, true) : "9:00 am",
+              );
+              if (raw === null) return;
+              const sec = parseTimeOfDay(raw.trim());
+              if (sec == null) {
+                window.alert(`Couldn't read "${raw}" as a time — try e.g. 7:30 pm or 19:30.`);
+                return;
+              }
+              doc.getMap("meta").set("plannedStartSec", sec);
+            }}
+          >
             {timing.startSec != null ? formatTimeOfDay(timing.startSec, meta.use24h) : "—"} · dur{" "}
             {formatDuration(timing.totalDurationSec)} · end{" "}
-            {timing.endSec != null ? formatTimeOfDay(timing.endSec, meta.use24h) : "—"}
+            {(() => {
+              // The last timed item without a duration gets a 30-minute
+              // assumption so the show still shows an approximate end.
+              let lastIdx = -1;
+              for (let i = rows.length - 1; i >= 0; i--) {
+                const r = rows[i]!;
+                if (r.type !== "group" && !r.skipped && timing.rows[i]!.startSec != null) {
+                  lastIdx = i;
+                  break;
+                }
+              }
+              // A trailing item with no duration leaves the end open — assume 30
+              // minutes, unless the item itself IS the ending (Full time, End…).
+              const endish = /\b(end|ends|finish|close|out|full ?time|wrap)\b/i;
+              const openEnded =
+                lastIdx >= 0 &&
+                rows[lastIdx]!.durationSec == null &&
+                !rows[lastIdx]!.durationMuted &&
+                !endish.test(rows[lastIdx]!.title);
+              if (openEnded) {
+                const approx = timing.rows[lastIdx]!.startSec! + 30 * 60;
+                return <span title="The last item has no duration — assuming 30 minutes">≈{formatTimeOfDay(approx, meta.use24h)}</span>;
+              }
+              return timing.endSec != null ? formatTimeOfDay(timing.endSec, meta.use24h) : "—";
+            })()}
           </div>
         </div>
         <LiveReadouts live={live} use24h={meta.use24h} />
@@ -912,7 +954,7 @@ export function RundownEditor({
         <table className="rundown-grid">
           <thead>
             <tr>
-              <th />
+              <th style={{ width: colWidths["rownum"] }}>{resizeHandle("rownum")}</th>
               <th style={{ width: colWidths["title"] }}>Title{resizeHandle("title")}</th>
               <th style={{ width: colWidths["start"] }}>Start{resizeHandle("start")}</th>
               <th style={{ width: colWidths["duration"] }}>Duration{resizeHandle("duration")}</th>

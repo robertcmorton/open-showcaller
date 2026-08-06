@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-06 (import fix-it list · planned timing from the sheet · row-number resize)
+- **Unparseable import cells get a fix-it list.** Instead of only flagging "N cells couldn't be parsed", the preview now lists each failed START/DURATION cell with the row, the offending text, and an **auto-suggested repair** (wrong separators like "19h30", durations buried in prose like "approx 5 mins TBC", bare numbers treated as minutes). Fix each one in place — Apply (validated live), Clear (import empty), or Keep as is.
+- **Imported rundowns take their planned start from the sheet's own first time** instead of defaulting to 9:00 AM. The planned start in the rundown header is now **click-to-edit**, and when the final item has no duration the header shows an **approximate end (≈) assuming 30 minutes** — unless that item is itself the ending (Full time, End…), which stays exact.
+- **The row-number column is resizable** like every other column.
+
 ### Fixed — 2026-08-06 (cell formatting now visible outside the editor)
 - **Bold, italic, underline, strikethrough, and highlight applied in a cell now actually show in the grid** — formatting was stored but stripped by the plain-text projection the moment the editor closed. Formatted cells render their marks (through a strict allowlist — nothing document-authored can inject markup); plain cells keep their role colour-coding. Multi-paragraph cells also keep their line breaks in the grid and CSV export now.
 

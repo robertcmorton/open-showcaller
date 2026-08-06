@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyRows, detectHeaderRow, detectRoles, findRoleColumn, mapColumns, mergeWrappedRows, parseDurationLoose, parseTimeLoose, planImport } from "../src/import";
+import { classifyRows, detectHeaderRow, detectRoles, findRoleColumn, mapColumns, mergeWrappedRows, parseDurationLoose, parseTimeLoose, planImport, suggestDurationFix, suggestTimeFix } from "../src/import";
 
 describe("parseDurationLoose", () => {
   it("parses worded durations", () => {
@@ -334,5 +334,22 @@ describe("mergeWrappedRows: ruled sub-rows inside one item", () => {
     expect(item1?.cells.what).toBe("track list\nholding loop\ntitle card");
     const item2 = rows.find((r) => r.title === "Toss seg");
     expect(item2?.cells.who).toBe("HOST");
+  });
+});
+
+describe("unparseable-cell repair suggestions", () => {
+  it("repairs common time typos", () => {
+    expect(suggestTimeFix("19h30")).toBe("19:30");
+    expect(suggestTimeFix("7;30 pm")).toBe("7:30 pm");
+    expect(suggestTimeFix("TBC 7:30pm approx")).toBe("7:30 pm");
+    expect(suggestTimeFix("730pm")).toBe("7:30 pm");
+    expect(suggestTimeFix("Sau")).toBeNull();
+    expect(suggestTimeFix("16:00:00")).toBeNull(); // already parses — nothing to fix
+  });
+  it("repairs common duration typos", () => {
+    expect(suggestDurationFix("2.30")).toBe("2:30");
+    expect(suggestDurationFix("approx 5 mins TBC")).toBe("5 mins");
+    expect(suggestDurationFix("¬5¬")).toBe("5:00"); // bare number = minutes
+    expect(suggestDurationFix("1m30s")).toBeNull(); // already parses
   });
 });
