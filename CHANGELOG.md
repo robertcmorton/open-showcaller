@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-06 (installable app: PNG icons + service worker)
+- **OpenCall now installs properly as an app.** PNG icons at every size platforms expect — an apple-touch icon for iOS home screens (iOS ignores SVG manifests), 192/512 manifest icons, and a padded maskable variant for Android launchers — plus a conservative service worker: navigations fall back to a cached shell when offline and hashed build assets are cached, while live show data (WebSockets, API) is never intercepted, so crew can never see stale show state. Also fixed the manifest still calling the app by its old short name.
+
 ### Changed — 2026-08-06 (generated database migrations)
 - **Schema changes are now generated drizzle-kit migrations** (`packages/db/drizzle/`), applied automatically at boot and tracked in a `schema_migrations` journal — a fresh database builds itself from the baseline, an up-to-date one is a no-op, and databases created before this scheme are baselined in place (after a one-time idempotent catch-up) without touching data. Operators still never run a migration command. Developers: edit `src/schema.ts`, run `pnpm --filter @opencall/db generate`, commit the SQL.
 
