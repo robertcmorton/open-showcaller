@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as Y from "yjs";
 import { ulid } from "ulid";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
@@ -13,6 +13,7 @@ import {
   parseDurationShorthand,
   parseTimeOfDay,
   serializeCsv,
+  zoneSecondsOfDay,
 } from "@opencall/core";
 import { api, setActiveJoinCode } from "../lib/api";
 import { exportRundownPdf } from "../lib/exportPdf";
@@ -25,7 +26,7 @@ import { GuestPassPanel, HistoryPanel, JoinCodesPanel } from "./SharePanels";
 import { LiveReadouts, TransportBar } from "./TransportBar";
 import { Dropdown, HeaderClock, Icon } from "./ui";
 import { SideNavSection, WithSideNav } from "./SideNav";
-import { RoleBar, RolePicker, highlightRoles, rowMatchesRole } from "./RoleBar";
+import { RoleBar, RolePicker, highlightRoles, matchingRole } from "./RoleBar";
 import { RichCellText } from "./RichCellText";
 import { useShowChannel } from "../lib/showChannel";
 import { useLiveTiming } from "../lib/useLiveTiming";
@@ -38,7 +39,7 @@ const CUE_TYPE_CHIPS = ["AUDIO", "GFX", "VTR", "LED", "PA", "MC", "GA", "DJ", "C
 
 function SortableRow({
   row,
-  index,
+  displayNumber,
   children,
   selected,
   active,
@@ -46,11 +47,13 @@ function SortableRow({
   paused,
   mine,
   mineColor,
+  clockMark,
   disabled,
   onSelect,
 }: {
   row: ProjectedRow;
-  index: number;
+  /** Mirrors the source sheet's numbering on imports; sequential otherwise; blank when the sheet had none. */
+  displayNumber: string;
   children: React.ReactNode;
   selected: boolean;
   active: boolean;
@@ -58,6 +61,8 @@ function SortableRow({
   paused: boolean;
   mine: boolean;
   mineColor: string;
+  /** Event-local "now" sits at this row per the TIME column. */
+  clockMark: boolean;
   disabled: boolean;
   onSelect: (e: React.MouseEvent) => void;
 }) {
@@ -65,7 +70,8 @@ function SortableRow({
   return (
     <tr
       ref={setNodeRef}
-      className={`${row.type === "group" ? "group-row" : ""} ${row.type === "milestone" ? "milestone-row" : ""} ${selected ? "selected" : ""} ${active ? "active-row" : ""} ${next ? "next-row" : ""} ${active && paused ? "paused" : ""} ${mine ? "my-role-row" : ""} ${row.skipped ? "skipped-row" : ""}`}
+      className={`${row.type === "group" ? "group-row" : ""} ${row.type === "milestone" ? "milestone-row" : ""} ${selected ? "selected" : ""} ${active ? "active-row" : ""} ${next ? "next-row" : ""} ${active && paused ? "paused" : ""} ${mine ? "my-role-row" : ""} ${row.skipped ? "skipped-row" : ""} ${clockMark ? "clock-row" : ""}`}
+      title={clockMark ? "Event time is here per the TIME column" : undefined}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
@@ -75,7 +81,7 @@ function SortableRow({
       }}
     >
       <td className="row-number mono" onClick={onSelect} {...attributes} {...listeners}>
-        {index + 1}
+        {displayNumber}
       </td>
       {children}
     </tr>
@@ -189,7 +195,14 @@ export function RundownEditor({
   const [colWidths, setColWidths] = useState<Record<string, number>>({});
   const [showZero, setShowZero] = useState(false);
   const [followScroll, setFollowScroll] = useState(true);
-  const [myRole, setMyRole] = useState<string | null>(null);
+  // A user can hold several roles at once (Camera 1 AND PA). Stored per browser.
+  const [myRoles, setMyRoles] = useState<string[]>([]);
+  // Ticks the event-local clock cursor along the TIME column.
+  const [, setNowTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setNowTick((n) => n + 1), 15000);
+    return () => window.clearInterval(id);
+  }, []);
   // Phones show only the essentials (title/start/duration + the role column);
   // this opts back into the full sheet.
   const [mobileAllCols, setMobileAllCols] = useState(false);
@@ -201,6 +214,20 @@ export function RundownEditor({
   }, []);
   const timeInputRef = useRef<HTMLInputElement>(null);
 
+  // The grid scrolls internally beneath the sticky top bar; its height is
+  // whatever the viewport leaves after the measured bar.
+  const topbarRef = useRef<HTMLDivElement>(null);
+  const [gridMaxH, setGridMaxH] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    const el = topbarRef.current;
+    if (!el) return;
+    const measure = () => setGridMaxH(`calc(100vh - ${Math.ceil(el.getBoundingClientRect().height) + 14}px)`);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   // Per-user column visibility, loaded after mount to avoid hydration mismatch.
   useEffect(() => {
     try {
@@ -209,7 +236,15 @@ export function RundownEditor({
       const widths = localStorage.getItem(COL_WIDTHS_KEY(rundownId));
       if (widths) setColWidths(JSON.parse(widths) as Record<string, number>);
       setShowZero(localStorage.getItem(`oc:zerocol:${rundownId}`) === "1");
-      setMyRole(localStorage.getItem(`oc:myrole:${rundownId}`));
+      const storedRoles = localStorage.getItem(`oc:myrole:${rundownId}`);
+      if (storedRoles) {
+        try {
+          const parsed = JSON.parse(storedRoles) as unknown;
+          setMyRoles(Array.isArray(parsed) ? (parsed as string[]) : [storedRoles]);
+        } catch {
+          setMyRoles([storedRoles]); // pre-multi-role value: a bare string
+        }
+      }
     } catch {
       /* ignore */
     }
@@ -305,15 +340,61 @@ export function RundownEditor({
   })();
   const isPaused = channel.show?.state === "paused";
   const timingGaps = findTimingGaps(rows, timing);
-  const myRoleRows = myRole
-    ? new Set(rows.filter((r) => rowMatchesRole(r, myRole, meta.roleColumnKey)).map((r) => r.id))
-    : null;
-  const myRoleColor = myRole
-    ? (roles.find((r) => r.name.toLowerCase() === myRole.toLowerCase())?.color ?? "#2dd4bf")
-    : "#2dd4bf";
+  const roleColorFor = (name: string): string =>
+    roles.find((r) => r.name.toLowerCase() === name.toLowerCase())?.color ?? "#2dd4bf";
+  // rowId → the colour of MY role this row involves (rows can match different roles).
+  const myRowColors = new Map<string, string>();
+  if (myRoles.length > 0)
+    for (const r of rows) {
+      const match = matchingRole(r, myRoles, meta.roleColumnKey);
+      if (match) myRowColors.set(r.id, roleColorFor(match));
+    }
+
+  // The event-local clock's position along the TIME column: the last row whose
+  // (anchored or cascaded) start has passed. Marked in the grid; while the
+  // show runs the caller can jump straight to it.
+  const nowSec = zoneSecondsOfDay(channel.serverNow(), channel.timezone);
+  let clockRowId: string | null = null;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]!;
+    if (r.type === "group" || r.skipped) continue;
+    if (r.untimed && r.hardStartSec == null) continue;
+    const start = timing.rows[i]!.startSec;
+    if (start != null && start <= nowSec) clockRowId = r.id;
+  }
 
   const yRows = doc.getMap<Y.Map<unknown>>("rows");
   const yOrder = doc.getArray<string>("rowOrder");
+
+  // Undo/redo over structural row edits — delete a row (live or not), then
+  // take it back. Scoped to rows + order; cell text has its own history.
+  const undoMgr = useMemo(() => new Y.UndoManager([yRows, yOrder], { captureTimeout: 400 }), [doc]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [, undoTick] = useState(0);
+  useEffect(() => {
+    const bump = () => undoTick((n) => n + 1);
+    undoMgr.on("stack-item-added", bump);
+    undoMgr.on("stack-item-popped", bump);
+    undoMgr.on("stack-cleared", bump);
+    return () => {
+      undoMgr.off("stack-item-added", bump);
+      undoMgr.off("stack-item-popped", bump);
+      undoMgr.off("stack-cleared", bump);
+      undoMgr.destroy();
+    };
+  }, [undoMgr]);
+  useEffect(() => {
+    if (!canEditContent) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      const target = e.target as HTMLElement;
+      if (target.closest("input, textarea, [contenteditable=true]")) return; // cell/text editing keeps native undo
+      e.preventDefault();
+      if (e.shiftKey) undoMgr.redo();
+      else undoMgr.undo();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [undoMgr, canEditContent]);
 
   const getFragment = (rowId: string, columnId: string): Y.XmlFragment | null => {
     const yRow = yRows.get(rowId);
@@ -672,16 +753,9 @@ export function RundownEditor({
 
   return (
     <WithSideNav title={meta.name} settings={settings}>
-    <div style={{ padding: "1.25rem 1.5rem" }}>
-      {live && activeRow && (
-        <BigTimer
-          live={live}
-          paused={isPaused ?? false}
-          title={activeRow.title}
-          plannedSec={activeRow.durationSec}
-        />
-      )}
-      <header className="no-print" style={{ display: "flex", alignItems: "center", gap: "1.75rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+    <div style={{ padding: "0.6rem 1.5rem 1.25rem" }}>
+      <div className="show-topbar no-print" ref={topbarRef}>
+      <header style={{ display: "flex", alignItems: "center", gap: "1.5rem", marginBottom: "0.6rem", flexWrap: "wrap" }}>
         <h1 style={{ fontSize: "1.15rem", fontWeight: 650, margin: 0, letterSpacing: "-0.01em" }}>{meta.name}</h1>
         {mode !== "show" && <span className="chip">{mode === "edit" ? "EDIT — no transport" : "VIEW ONLY"}</span>}
         <button
@@ -747,6 +821,14 @@ export function RundownEditor({
             })()}
           </div>
         </div>
+        {live && activeRow && (
+          <BigTimer
+            live={live}
+            paused={isPaused ?? false}
+            title={activeRow.title}
+            plannedSec={activeRow.durationSec}
+          />
+        )}
         <LiveReadouts live={live} use24h={meta.use24h} />
         <div style={{ marginLeft: "auto", display: "flex", gap: 16, alignItems: "center" }}>
           <span className={`status-dot hide-mobile ${connected ? "ok" : ""}`}>doc</span>
@@ -762,8 +844,34 @@ export function RundownEditor({
             orderedRowIds={rows.filter((r) => !r.skipped || r.id === activeRowId).map((r) => r.id)}
           />
         )}
+        {isShow && channel.show?.state === "running" && clockRowId && clockRowId !== activeRowId && (
+          <button
+            className="btn btn-sm"
+            style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
+            title="Jump the live show to where the event clock sits in the TIME column"
+            onClick={() => channel.sendCmd("jump", clockRowId)}
+          >
+            ◷ Sync to clock
+          </button>
+        )}
         {canEditContent && (
           <>
+            <button
+              className="btn btn-sm"
+              disabled={undoMgr.undoStack.length === 0}
+              title="Undo the last row change (⌘Z) — including deletes, live or not"
+              onClick={() => undoMgr.undo()}
+            >
+              ↺ Undo
+            </button>
+            <button
+              className="btn btn-sm"
+              disabled={undoMgr.redoStack.length === 0}
+              title="Redo (⇧⌘Z)"
+              onClick={() => undoMgr.redo()}
+            >
+              ↻
+            </button>
             <button className="btn" onClick={() => addRow("cue")}>
               {Icon.plus} Row
             </button>
@@ -827,10 +935,10 @@ export function RundownEditor({
           <RolePicker
             rows={rows}
             roles={roles}
-            myRole={myRole}
-            onChange={(role) => {
-              setMyRole(role);
-              if (role) localStorage.setItem(`oc:myrole:${rundownId}`, role);
+            myRoles={myRoles}
+            onChange={(next) => {
+              setMyRoles(next);
+              if (next.length > 0) localStorage.setItem(`oc:myrole:${rundownId}`, JSON.stringify(next));
               else localStorage.removeItem(`oc:myrole:${rundownId}`);
             }}
           />
@@ -899,6 +1007,7 @@ export function RundownEditor({
           )}
         </div>
       </div>
+      </div>
 
       <div className="print-only print-header">
         <div>
@@ -954,7 +1063,7 @@ export function RundownEditor({
       )}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-        <div className={`grid-scroll ${mobileAllCols ? "mobile-show-all" : ""}`}>
+        <div className={`grid-scroll ${mobileAllCols ? "mobile-show-all" : ""}`} style={{ maxHeight: gridMaxH }}>
         <table className="rundown-grid">
           <thead>
             <tr>
@@ -980,19 +1089,24 @@ export function RundownEditor({
           </thead>
           <SortableContext items={rows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
             <tbody>
-              {rows.map((rowRecord, i) => {
+              {(() => {
+                // Imported sheets keep THEIR numbering (blank where the sheet
+                // had none); manual rundowns count sequentially.
+                const mirrored = rows.some((r) => r.sourceNumber != null);
+                return rows.map((rowRecord, i) => {
                 const t = timing.rows[i]!;
                 return (
                   <SortableRow
                     key={rowRecord.id}
                     row={rowRecord}
-                    index={i}
+                    displayNumber={mirrored ? (rowRecord.sourceNumber ?? "") : String(i + 1)}
                     selected={selected.has(rowRecord.id)}
                     active={activeRowId === rowRecord.id}
                     next={nextRowId === rowRecord.id}
                     paused={isPaused ?? false}
-                    mine={myRoleRows?.has(rowRecord.id) ?? false}
-                    mineColor={myRoleColor}
+                    mine={myRowColors.has(rowRecord.id)}
+                    mineColor={myRowColors.get(rowRecord.id) ?? "#2dd4bf"}
+                    clockMark={clockRowId === rowRecord.id && !activeRowId}
                     disabled={!canEditContent}
                     onSelect={(e) => canEditContent && selectRow(rowRecord.id, e)}
                   >
@@ -1076,7 +1190,8 @@ export function RundownEditor({
                     {richColumns.map((c) => renderRichCell(rowRecord, c))}
                   </SortableRow>
                 );
-              })}
+                });
+              })()}
             </tbody>
           </SortableContext>
         </table>
@@ -1084,11 +1199,11 @@ export function RundownEditor({
       </DndContext>
 
       <CuePool doc={doc} mode={mode} channel={channel} />
-      {myRole && activeRowId && <div style={{ height: 72 }} />}
+      {myRoles.length > 0 && activeRowId && <div style={{ height: 72 }} />}
       {activeRowId && !followScroll && (
         <button
           className="btn btn-primary sync-cue"
-          style={{ bottom: myRole ? 86 : 18 }}
+          style={{ bottom: myRoles.length > 0 ? 86 : 18 }}
           title="Jump back to the live cue and follow along again"
           onClick={() => {
             setFollowScroll(true);
@@ -1102,10 +1217,10 @@ export function RundownEditor({
           ⇣ Sync Cue
         </button>
       )}
-      {myRole && (
+      {myRoles.length > 0 && (
         <RoleBar
-          myRole={myRole}
-          roleColor={myRoleColor}
+          myRoles={myRoles}
+          roleColorFor={roleColorFor}
           roleColumnKey={meta.roleColumnKey}
           rows={rows}
           timing={timing}

@@ -4,7 +4,7 @@
  * channel) is WebSocket-based and always network-only — nothing here caches
  * API responses, so crew never see stale show state.
  */
-const CACHE = "opencall-shell-v1";
+const CACHE = "opencall-shell-v2";
 const SHELL = ["/"];
 
 self.addEventListener("install", (event) => {
@@ -27,9 +27,21 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return; // API/sync hosts: never intercepted
 
-  // Navigations: network first, cached shell as the offline fallback.
+  // Navigations: network first, cached shell as the offline fallback. Every
+  // successful load of "/" refreshes the fallback so it never references
+  // chunks from a long-gone deploy.
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match("/")));
+    event.respondWith(
+      fetch(request)
+        .then((res) => {
+          if (res.ok && url.pathname === "/") {
+            const copy = res.clone();
+            void caches.open(CACHE).then((cache) => cache.put("/", copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match("/")),
+    );
     return;
   }
 

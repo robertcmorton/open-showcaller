@@ -239,6 +239,8 @@ export interface ClassifiedRow {
   cells: Record<string, string>;
   /** Source row index in the original grid (for the preview). */
   sourceIndex: number;
+  /** The sheet's own number for this row (its ITEM/# cell), when it has one. */
+  sourceNumber?: string;
 }
 
 /**
@@ -317,6 +319,34 @@ export function classifyRows(grid: string[][], headerIndex: number, mapping: Col
   return out;
 }
 
+/**
+ * The sheet's own item/cue-number column: mostly pure integers with enough of
+ * them to matter. Drives wrapped-row merging AND the rundown's row numbering
+ * (which mirrors the sheet — see `sourceNumber`).
+ */
+export function detectNumberColumn(grid: string[][], headerIndex: number): number | null {
+  const dataRows = grid.slice(headerIndex + 1);
+  if (dataRows.length === 0) return null;
+  const columnCount = Math.max(...dataRows.map((r) => r.length), 0);
+  let best: number | null = null;
+  let bestInts = 0;
+  for (let c = 0; c < columnCount; c++) {
+    let nonEmpty = 0;
+    let ints = 0;
+    for (const row of dataRows) {
+      const v = (row[c] ?? "").trim();
+      if (!v) continue;
+      nonEmpty += 1;
+      if (/^\d+$/.test(v)) ints += 1;
+    }
+    if (ints >= 5 && ints / Math.max(1, nonEmpty) >= 0.8 && ints > bestInts) {
+      best = c;
+      bestInts = ints;
+    }
+  }
+  return best;
+}
+
 /** Page/vertical position of each extracted grid line (from the PDF extractor). */
 export interface LineMeta {
   page: number;
@@ -359,25 +389,9 @@ export function mergeWrappedRows(
   const dataRows = grid.slice(headerIndex + 1);
   if (dataRows.length === 0) return grid;
 
-  // The item-number column: mostly pure integers, enough of them to matter.
   const columnCount = Math.max(...dataRows.map((r) => r.length), 0);
-  let groupCol = -1;
-  let groupInts = 0;
-  for (let c = 0; c < columnCount; c++) {
-    let nonEmpty = 0;
-    let ints = 0;
-    for (const row of dataRows) {
-      const v = (row[c] ?? "").trim();
-      if (!v) continue;
-      nonEmpty += 1;
-      if (/^\d+$/.test(v)) ints += 1;
-    }
-    if (ints >= 5 && ints / Math.max(1, nonEmpty) >= 0.8 && ints > groupInts) {
-      groupCol = c;
-      groupInts = ints;
-    }
-  }
-  if (groupCol < 0) return grid;
+  const groupCol = detectNumberColumn(grid, headerIndex);
+  if (groupCol == null) return grid;
 
   // Data lines in order, page headers repeated by pagination dropped.
   const lineIdxs: number[] = [];
@@ -590,13 +604,23 @@ export function planImport(
   const finalGrid = opts.mergeWrapped
     ? mergeWrappedRows(grid, headerIndex, opts.lineMeta, opts.rowLines, mapping)
     : grid;
+  const rows = classifyRows(finalGrid, headerIndex, mapping);
+  // Row numbering mirrors the sheet: each row carries ITS OWN number (first
+  // line of it for merged rows); rows the sheet didn't number get none.
+  const numberCol = detectNumberColumn(finalGrid, headerIndex);
+  if (numberCol != null) {
+    for (const r of rows) {
+      const value = (finalGrid[r.sourceIndex]?.[numberCol] ?? "").split("\n")[0]!.trim();
+      if (/^\d+$/.test(value)) r.sourceNumber = value;
+    }
+  }
   return {
     grid: finalGrid,
     headerIndex,
     headers,
     mapping,
     roleColumnKey: findRoleColumn(headers, mapping),
-    rows: classifyRows(finalGrid, headerIndex, mapping),
+    rows,
   };
 }
 

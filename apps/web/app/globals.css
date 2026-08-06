@@ -459,7 +459,8 @@ input.inline-edit {
   background: var(--surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--r-lg);
-  overflow: hidden;
+  /* No overflow:hidden here — it would become the sticky-containment box and
+     break the pinned column headers. Corner rounding lives on .grid-scroll. */
 }
 .rundown-grid th {
   position: sticky;
@@ -929,12 +930,8 @@ kbd {
 
 /* ---------- Big live timer (center top while the show runs) ---------- */
 
+/* Embedded in the top bar — never covers other information. */
 .big-timer {
-  position: fixed;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 70;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -942,8 +939,7 @@ kbd {
   background: var(--overlay);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-overlay);
-  padding: 6px 26px 8px;
+  padding: 3px 20px 5px;
   pointer-events: none;
 }
 .big-timer .bt-label {
@@ -959,7 +955,7 @@ kbd {
 .big-timer .bt-time {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-size: 2.4rem;
+  font-size: 1.9rem;
   font-weight: 700;
   line-height: 1.1;
 }
@@ -1098,6 +1094,11 @@ kbd {
 
 /* ---------- Skipped rows (live catch-up) ---------- */
 
+/* The event clock's position along the TIME column: a "now line" above the row. */
+.rundown-grid tr.clock-row td {
+  border-top: 2px solid var(--warn);
+}
+
 .rundown-grid tr.skipped-row td {
   opacity: 0.38;
   text-decoration: line-through;
@@ -1109,15 +1110,29 @@ kbd {
 
 /* ---------- Grid scroll container (mobile + narrow windows) ---------- */
 
+/* The grid scrolls INSIDE this container (the show chrome above stays put),
+   which also lets the sticky column headers work. Height set inline from the
+   measured top-bar height. */
 .grid-scroll {
-  overflow-x: auto;
+  overflow: auto;
   -webkit-overflow-scrolling: touch;
+  border-radius: var(--r-lg);
+}
+
+/* Everything the caller needs while scrolling: title, timer, readouts,
+   transport. Sticky for when panels below force page scroll. */
+.show-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 45;
+  background: var(--bg);
+  margin: 0 -1.5rem;
+  padding: 0 1.5rem 2px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 /* Column resize handles: the grabbable right edge of each header cell. */
-.rundown-grid th {
-  position: relative;
-}
+/* (th is position: sticky — a positioned ancestor — so .col-resize anchors to it) */
 .col-resize {
   position: absolute;
   top: 0;

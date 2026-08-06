@@ -7,6 +7,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-07 (show chrome overhaul · one-click re-import · multi-role · undo · clock sync)
+- **Everything the caller needs stays on screen while scrolling**: the title, planned/item/show/projected-end readouts, the transport, and the column headers are all pinned — the run sheet scrolls beneath them. (The column headers were meant to pin all along; a styling rule had silently broken it.)
+- **The big item timer is embedded in the top bar** instead of floating over it — it no longer covers the planned time or anything else.
+- **Update import re-reads the sheet by itself**: imports now store the original file, so "Update import…" loads it, re-processes it with the current pipeline, and shows the refreshed preview in one click — no re-dropping. A newly dropped file replaces the stored one.
+- **Row numbers mirror the imported sheet** — each row shows the sheet's own number, and rows the sheet didn't number stay blank. Manual rundowns keep sequential numbering.
+- **Undo/redo for row edits** (toolbar buttons and ⌘Z/⇧⌘Z): delete rows live or during prep, then take it back.
+- **Multiple roles per user**: the role picker is now multi-select — every matching row highlights in the colour of the role it involves, and the bottom bar tracks the next item across all your roles. The picker opens as a true overlay with zero layout shift.
+- **Clock sync with the TIME column**: an amber "now line" marks where the event-local clock sits in the rundown, and while the show runs a **Sync to clock** button jumps the live position straight there. The top-right clock keeps showing event-location time.
+- **Unparseable-cell fixes show their context**: each issue says which timed row it follows and expands to a five-row excerpt of the sheet.
+- Browsers that crash on stale chunks after a redeploy now recover with one automatic reload, and the offline shell refreshes itself — the two production errors in the log came from exactly this.
+
 ### Added — 2026-08-06 (faithful times for sub-cues · Update import)
 - **Rows the source sheet leaves untimed no longer get invented times.** Cue-sheet-style documents time only their parent rows; the sub-cues beneath (reads, graphics, tracks) have blank TIME cells — but the grid used to fill them with cascade guesses whose durations drifted past the next real time. Imports of sparse-timed sheets now mark those rows **untimed**: they show "—" exactly like the source (double-click still sets a real time), and their durations remain visible but excluded from the running order. A real 450-row cue sheet now imports with its 85 sheet times anchored and every sub-cue blank, matching the printed sheet.
 - **Update import**: every rundown on the dashboard has an **Update import…** action — drop the run sheet again and the re-imported content **replaces the same rundown** (links, join codes, and view links keep working; the old content is snapshotted as "Before update" and every open screen refreshes to the new content). This is the upgrade path for rundowns imported before the latest pipeline improvements.

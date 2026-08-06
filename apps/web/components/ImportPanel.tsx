@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   classifyRows,
   detectRoles,
@@ -16,8 +16,16 @@ import {
   type ColumnTarget,
 } from "@opencall/core";
 import { DEFAULT_COLUMNS, type SeedRow } from "@opencall/db/doc";
-import { api } from "../lib/api";
+import { api, fetchRundownSource } from "../lib/api";
 import { extractGrid } from "../lib/importExtract";
+
+/** ArrayBuffer → base64 (chunked — sheets can be megabytes). */
+function bufferToB64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
 
 const TARGET_OPTIONS: { value: string; label: string }[] = [
   { value: "title", label: "Title" },
@@ -53,6 +61,13 @@ const valueToTarget = (value: string, header: string, index: number): ColumnTarg
   return { kind: "skip" };
 };
 
+interface RowSummary {
+  rowNumber: number;
+  title: string;
+  time: string;
+  dur: string;
+}
+
 interface CellIssue {
   key: string;
   rowNumber: number;
@@ -61,6 +76,8 @@ interface CellIssue {
   raw: string;
   suggestion: string | null;
   sourceIndex: number;
+  anchorBefore: RowSummary | null;
+  around: RowSummary[];
 }
 
 /** One unparseable cell: raw value, an editable suggested fix, apply/clear/keep. */
@@ -76,7 +93,8 @@ function IssueFixRow({
   const [value, setValue] = useState(issue.suggestion ?? "");
   const parses = issue.kind === "start" ? parseTimeLoose(value) != null : parseDurationLoose(value) != null;
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: "var(--fs-sm)" }}>
+    <div style={{ display: "grid", gap: 3, fontSize: "var(--fs-sm)" }}>
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
       <span style={{ color: "var(--text-3)", minWidth: 52 }}>Row {issue.rowNumber}</span>
       <span style={{ minWidth: 120, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {issue.title || "—"}
@@ -101,6 +119,27 @@ function IssueFixRow({
       <button className="btn btn-sm btn-ghost" title="Leave it — the cell imports empty but the text stays visible here" onClick={onKeep}>
         Keep as is
       </button>
+    </div>
+    <div style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", paddingLeft: 52 }}>
+      {issue.anchorBefore
+        ? `sits after row ${issue.anchorBefore.rowNumber} “${issue.anchorBefore.title.slice(0, 34)}” at ${issue.anchorBefore.time}`
+        : "sits before the first timed row"}
+      <details style={{ display: "inline-block", marginLeft: 10 }}>
+        <summary style={{ cursor: "pointer", display: "inline" }}>surrounding rows</summary>
+        <table style={{ margin: "4px 0 2px", borderCollapse: "collapse" }}>
+          <tbody>
+            {issue.around.map((s) => (
+              <tr key={s.rowNumber} style={s.rowNumber === issue.rowNumber ? { color: "var(--warn)", fontWeight: 600 } : undefined}>
+                <td style={{ padding: "1px 10px 1px 0" }}>{s.rowNumber}</td>
+                <td style={{ padding: "1px 10px 1px 0", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</td>
+                <td className="mono" style={{ padding: "1px 10px 1px 0" }}>{s.time}</td>
+                <td className="mono" style={{ padding: "1px 0" }}>{s.dur}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
+    </div>
     </div>
   );
 }
@@ -141,6 +180,10 @@ export function ImportPanel({
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [widths, setWidths] = useState<(number | null)[]>([]);
+  // The dropped file itself — stored with the rundown so future updates can
+  // re-read it with whatever the pipeline has learned since.
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
+  const [autoLoaded, setAutoLoaded] = useState<string | null>(null);
 
   const rows = useMemo(
     () => (grid ? classifyRows(grid, headerIndex, mapping) : []),
@@ -148,19 +191,35 @@ export function ImportPanel({
   );
   const importable = rows.filter((r) => r.kind !== "spacer");
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
-  // Every cell that failed to parse, with a repair suggestion — fixable one by one.
+  // Every cell that failed to parse, with a repair suggestion — fixable one by
+  // one, each shown with its surroundings so the fix can be judged in context.
   const issues = useMemo(() => {
-    const out: { key: string; rowNumber: number; title: string; kind: "start" | "duration"; raw: string; suggestion: string | null; sourceIndex: number }[] = [];
+    const summaries: { rowNumber: number; title: string; time: string; dur: string }[] = [];
+    const pending: { key: string; rowNumber: number; title: string; kind: "start" | "duration"; raw: string; suggestion: string | null; sourceIndex: number; at: number }[] = [];
     let n = 0;
     for (const r of rows) {
       if (r.kind === "spacer") continue;
       n += 1;
+      summaries.push({
+        rowNumber: n,
+        title: r.title || (r.kind === "banner" ? "— section —" : "—"),
+        time: r.startSec != null ? formatTimeOfDay(r.startSec, false) : r.startRaw ? `⚠ ${r.startRaw}` : "",
+        dur: r.durationSec != null ? formatDuration(r.durationSec) : r.durationRaw ? `⚠ ${r.durationRaw}` : "",
+      });
+      const at = summaries.length - 1;
       if (r.startRaw)
-        out.push({ key: `${r.sourceIndex}:start`, rowNumber: n, title: r.title, kind: "start", raw: r.startRaw, suggestion: suggestTimeFix(r.startRaw), sourceIndex: r.sourceIndex });
+        pending.push({ key: `${r.sourceIndex}:start`, rowNumber: n, title: r.title, kind: "start", raw: r.startRaw, suggestion: suggestTimeFix(r.startRaw), sourceIndex: r.sourceIndex, at });
       if (r.durationRaw)
-        out.push({ key: `${r.sourceIndex}:duration`, rowNumber: n, title: r.title, kind: "duration", raw: r.durationRaw, suggestion: suggestDurationFix(r.durationRaw), sourceIndex: r.sourceIndex });
+        pending.push({ key: `${r.sourceIndex}:duration`, rowNumber: n, title: r.title, kind: "duration", raw: r.durationRaw, suggestion: suggestDurationFix(r.durationRaw), sourceIndex: r.sourceIndex, at });
     }
-    return out.filter((i) => !dismissed.has(i.key));
+    return pending
+      .filter((i) => !dismissed.has(i.key))
+      .map(({ at, ...issue }) => ({
+        ...issue,
+        // The nearest TIMED row above (where in the show this sits) + a 5-row excerpt.
+        anchorBefore: [...summaries.slice(0, at)].reverse().find((s) => s.time && !s.time.startsWith("⚠")) ?? null,
+        around: summaries.slice(Math.max(0, at - 2), at + 3),
+      }));
   }, [rows, dismissed]);
   const warnings = issues.length;
 
@@ -211,6 +270,7 @@ export function ImportPanel({
       setRowLines(rules);
       setIsPdf(pdf);
       setWidths(extractedWidths);
+      setSourceFile(file);
       applyPlan(extracted, pdf, undefined, meta, rules);
       setName(file.name.replace(/\.(xlsx|xls|csv|pdf)$/i, ""));
     } catch (err) {
@@ -221,6 +281,27 @@ export function ImportPanel({
       setBusy(false);
     }
   };
+
+  // Update mode: re-read the STORED sheet automatically — the whole point is
+  // "look at the run sheet again with the latest pipeline", no re-dropping.
+  useEffect(() => {
+    if (!replaceRundown) return;
+    let cancelled = false;
+    setBusy(true);
+    void fetchRundownSource(replaceRundown.id)
+      .then((file) => {
+        if (cancelled || !file) return;
+        setAutoLoaded(file.name);
+        return onFile(file);
+      })
+      .finally(() => {
+        if (!cancelled) setBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [replaceRundown?.id]);
 
   const doImport = () => {
     // When the sheet has NO role column of its own, every detected role that
@@ -243,7 +324,7 @@ export function ImportPanel({
       cueish.length >= 10 && cueish.filter((r) => r.startSec != null).length / cueish.length < 0.5;
 
     const seedRows: SeedRow[] = importable.map((r) => {
-      if (r.kind === "banner") return { type: "group", title: r.title };
+      if (r.kind === "banner") return { type: "group", title: r.title, sourceNumber: r.sourceNumber };
       if (r.kind === "milestone") {
         // Keep the cells, and let the banner title fall back to the first cell
         // value — PDF extraction sometimes lands a title in a neighboring band.
@@ -253,6 +334,7 @@ export function ImportPanel({
           title: r.title || fallback || "—",
           durationSec: null,
           hardStartSec: r.startSec,
+          sourceNumber: r.sourceNumber,
           cells: r.cells,
         };
       }
@@ -265,6 +347,7 @@ export function ImportPanel({
         hardStartSec: r.startSec,
         untimed: untimed || undefined,
         durationMuted: untimed && r.durationSec != null ? true : undefined,
+        sourceNumber: r.sourceNumber,
         cells: assigned ? { ...r.cells, roles: assigned } : r.cells,
       };
     });
@@ -287,17 +370,26 @@ export function ImportPanel({
     setBusy(true);
     // The sheet's own first time becomes the planned start.
     const firstStart = importable.find((r) => r.startSec != null)?.startSec ?? null;
-    const payload = {
-      rows: seedRows,
-      columns: customColumns,
-      roles,
-      roleColumnKey: roleKey ?? (roles.length > 0 ? "roles" : null),
-      plannedStartSec: firstStart,
+    const buildPayload = async () => {
+      const payload: Parameters<typeof api.replaceRundownContent>[1] = {
+        rows: seedRows,
+        columns: customColumns,
+        roles,
+        roleColumnKey: roleKey ?? (roles.length > 0 ? "roles" : null),
+        plannedStartSec: firstStart,
+      };
+      if (sourceFile && sourceFile.size <= 12_000_000) {
+        payload.sourceName = sourceFile.name;
+        payload.sourceFileB64 = bufferToB64(await sourceFile.arrayBuffer());
+      }
+      return payload;
     };
-    (replaceRundown
-      ? api.replaceRundownContent(replaceRundown.id, payload).then(() => replaceRundown.id)
-      : api.createRundown({ eventId, name: name.trim() || "Imported rundown", ...payload }).then(({ id }) => id)
-    )
+    void buildPayload()
+      .then((payload) =>
+        replaceRundown
+          ? api.replaceRundownContent(replaceRundown.id, payload).then(() => replaceRundown.id)
+          : api.createRundown({ eventId, name: name.trim() || "Imported rundown", ...payload }).then(({ id }) => id),
+      )
       .then((id) => onDone(id))
       .catch((err) => {
         setError(String(err));
@@ -317,6 +409,13 @@ export function ImportPanel({
           ✕
         </button>
       </div>
+
+      {autoLoaded && grid && (
+        <div style={{ color: "var(--text-2)", fontSize: "var(--fs-sm)" }}>
+          Re-read the stored sheet <strong>{autoLoaded}</strong> with the current pipeline — review below, then
+          update. Or drop a newer file via “Different file”.
+        </div>
+      )}
 
       {!grid && (
         <label

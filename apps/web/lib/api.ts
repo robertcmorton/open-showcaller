@@ -169,6 +169,8 @@ export const api = {
     columns?: { key: string; title: string; width?: number }[];
     roles?: { name: string; color: string }[];
     roleColumnKey?: string | null;
+    sourceName?: string;
+    sourceFileB64?: string;
   }) => request<{ id: string }>("/rundowns", { method: "POST", body: JSON.stringify(body) }),
   replaceRundownContent: (
     id: string,
@@ -178,6 +180,8 @@ export const api = {
       roles?: { name: string; color: string }[];
       roleColumnKey?: string | null;
       plannedStartSec?: number | null;
+      sourceName?: string;
+      sourceFileB64?: string;
     },
   ) => request<{ id: string; epoch: number }>(`/rundowns/${id}/replace-content`, { method: "POST", body: JSON.stringify(body) }),
   errors: (limit = 200) =>
@@ -200,6 +204,17 @@ export const api = {
   deleteRundown: (id: string) => request<Record<string, never>>(`/rundowns/${id}`, { method: "DELETE" }),
   duplicateRundown: (id: string) => request<{ id: string }>(`/rundowns/${id}/duplicate`, { method: "POST" }),
 };
+
+/** The stored source sheet of a rundown, as a File — or null when none was kept. */
+export async function fetchRundownSource(rundownId: string): Promise<File | null> {
+  const headers: Record<string, string> = {};
+  const admin = getAdminToken();
+  if (admin) headers.authorization = `Bearer ${admin}`;
+  const res = await fetch(`${API_URL}/rundowns/${rundownId}/source`, { headers });
+  if (!res.ok) return null;
+  const name = decodeURIComponent(res.headers.get("x-source-name") ?? "sheet.pdf");
+  return new File([await res.blob()], name);
+}
 
 /**
  * One-click share: a view-only URL for a rundown (camera operators, crew).

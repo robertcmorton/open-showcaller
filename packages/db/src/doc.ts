@@ -24,6 +24,8 @@ export interface SeedRow {
   durationMuted?: boolean;
   /** The source sheet left this row's time BLANK (a sub-cue inside a timed block) — display no start. */
   untimed?: boolean;
+  /** The sheet's own number for this row; rows the sheet didn't number show none. */
+  sourceNumber?: string;
   color?: string;
   /** columnKey → plain text; converted into a single-paragraph rich-text fragment. */
   cells?: Record<string, string>;
@@ -143,6 +145,7 @@ export function buildRundownDoc(
       row.set("durationSec", seed.durationSec ?? null);
       if (seed.durationMuted) row.set("durationMuted", true);
       if (seed.untimed) row.set("untimed", true);
+      if (seed.sourceNumber) row.set("sourceNumber", seed.sourceNumber);
       if (seed.color) row.set("color", seed.color);
 
       const cells = new Y.Map<Y.XmlFragment>();
@@ -172,6 +175,8 @@ export interface ProjectedRow extends PlanRow {
   cellsRich?: Record<string, string>;
   /** Source sheet had no time for this row — the grid shows no start for it. */
   untimed?: boolean;
+  /** The sheet's own row number, mirrored into the grid's # column. */
+  sourceNumber?: string;
   color?: string;
 }
 
@@ -255,6 +260,7 @@ export function projectRundownDoc(doc: Y.Doc): {
       durationMuted: (row.get("durationMuted") as boolean | undefined) ?? false,
       skipped: (row.get("skipped") as boolean | undefined) ?? false,
       untimed: (row.get("untimed") as boolean | undefined) ?? false,
+      sourceNumber: row.get("sourceNumber") as string | undefined,
       durationHidden: (row.get("durationHidden") as boolean | undefined) ?? false,
       title: cells["title"] ?? "",
       cells,

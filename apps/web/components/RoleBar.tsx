@@ -46,25 +46,38 @@ export function rowMatchesRole(row: ProjectedRow, role: string, roleColumnKey?: 
   return Object.values(row.cells).some((v) => v.toLowerCase().includes(needle));
 }
 
+/** A user can hold several roles — the first of theirs this row involves (for its colour), or null. */
+export function matchingRole(row: ProjectedRow, roles: string[], roleColumnKey?: string | null): string | null {
+  for (const role of roles) if (rowMatchesRole(row, role, roleColumnKey)) return role;
+  return null;
+}
+
 /**
  * Role picker: every user — admin, editor, or view-only — can mark which
- * assigned role is theirs (BGM, Camera 1…). Suggestions come from the sheet
- * itself: short values that repeat across cells. Stored per browser.
+ * assigned roles are theirs (BGM, Camera 1… — several at once is normal).
+ * Suggestions come from the sheet itself. Stored per browser. Opens as an
+ * overlay; never reflows the layout.
  */
 export function RolePicker({
   rows,
   roles = [],
-  myRole,
+  myRoles,
   onChange,
 }: {
   rows: ProjectedRow[];
   roles?: RoleDef[];
-  myRole: string | null;
-  onChange: (role: string | null) => void;
+  myRoles: string[];
+  onChange: (roles: string[]) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const ref = useDismiss(open, () => setOpen(false));
+
+  const toggle = (role: string) => {
+    const has = myRoles.some((r) => r.toLowerCase() === role.toLowerCase());
+    onChange(has ? myRoles.filter((r) => r.toLowerCase() !== role.toLowerCase()) : [...myRoles, role]);
+  };
+  const firstColor = roles.find((r) => r.name.toLowerCase() === myRoles[0]?.toLowerCase())?.color ?? "#2dd4bf";
 
   // Candidate roles: short cell lines seen at least twice.
   const counts = new Map<string, number>();
@@ -81,35 +94,41 @@ export function RolePicker({
     .slice(0, 18)
     .map(([v]) => v);
 
+  const isMine = (name: string) => myRoles.some((r) => r.toLowerCase() === name.toLowerCase());
+
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-flex" }}>
       <button
         type="button"
-        className={`btn btn-sm ${myRole ? "is-on" : ""}`}
+        className={`btn btn-sm ${myRoles.length > 0 ? "is-on" : ""}`}
         style={
-          myRole
+          myRoles.length > 0
             ? {
-                maxWidth: 150,
+                maxWidth: 170,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
                 display: "inline-block",
                 lineHeight: "24px",
-                borderColor: roles.find((r) => r.name.toLowerCase() === myRole.toLowerCase())?.color ?? "#2dd4bf",
-                color: roles.find((r) => r.name.toLowerCase() === myRole.toLowerCase())?.color ?? "#2dd4bf",
-                background: `${roles.find((r) => r.name.toLowerCase() === myRole.toLowerCase())?.color ?? "#2dd4bf"}1a`,
+                borderColor: firstColor,
+                color: firstColor,
+                background: `${firstColor}1a`,
               }
             : undefined
         }
-        title="Pick your assigned role — your items highlight and the bar below tracks your next one"
+        title="Pick your assigned roles — your items highlight and the bar below tracks your next one"
         onClick={() => setOpen((o) => !o)}
       >
-        {myRole ? `Role: ${myRole}` : "My role"}
+        {myRoles.length === 0
+          ? "My role"
+          : myRoles.length === 1
+            ? `Role: ${myRoles[0]}`
+            : `Roles: ${myRoles[0]} +${myRoles.length - 1}`}
       </button>
       {open && (
-        <div className="menu" style={{ top: "calc(100% + 5px)", left: 0, minWidth: 240, padding: 10 }}>
+        <div className="menu" style={{ top: "calc(100% + 5px)", right: 0, minWidth: 250, padding: 10 }}>
           <div className="menu-heading" style={{ padding: "0 0 6px" }}>
-            Your assigned role
+            Your assigned roles — pick any number
           </div>
           <input
             className="input"
@@ -120,8 +139,7 @@ export function RolePicker({
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && text.trim()) {
-                onChange(text.trim());
-                setOpen(false);
+                toggle(text.trim());
                 setText("");
               }
             }}
@@ -132,13 +150,16 @@ export function RolePicker({
                 <button
                   key={r.id}
                   type="button"
-                  style={{ borderColor: r.color, color: r.color, background: `${r.color}1a` }}
-                  onClick={() => {
-                    onChange(r.name);
-                    setOpen(false);
-                    setText("");
+                  className={isMine(r.name) ? "is-on" : ""}
+                  style={{
+                    borderColor: r.color,
+                    color: r.color,
+                    background: isMine(r.name) ? `${r.color}40` : `${r.color}1a`,
+                    fontWeight: isMine(r.name) ? 700 : 400,
                   }}
+                  onClick={() => toggle(r.name)}
                 >
+                  {isMine(r.name) ? "✓ " : ""}
                   {r.name}
                 </button>
               ))}
@@ -150,33 +171,23 @@ export function RolePicker({
                 .filter((sugg) => !text || sugg.toLowerCase().includes(text.toLowerCase()))
                 .slice(0, 12)
                 .map((sugg) => (
-                  <button
-                    key={sugg}
-                    type="button"
-                    onClick={() => {
-                      onChange(sugg);
-                      setOpen(false);
-                      setText("");
-                    }}
-                  >
+                  <button key={sugg} type="button" className={isMine(sugg) ? "is-on" : ""} onClick={() => toggle(sugg)}>
+                    {isMine(sugg) ? "✓ " : ""}
                     {sugg}
                   </button>
                 ))}
             </div>
           )}
-          {myRole && (
-            <button
-              type="button"
-              className="btn btn-sm btn-ghost"
-              style={{ marginTop: 8 }}
-              onClick={() => {
-                onChange(null);
-                setOpen(false);
-              }}
-            >
-              Clear role
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            {myRoles.length > 0 && (
+              <button type="button" className="btn btn-sm btn-ghost" onClick={() => onChange([])}>
+                Clear all
+              </button>
+            )}
+            <button type="button" className="btn btn-sm" style={{ marginLeft: "auto" }} onClick={() => setOpen(false)}>
+              Done
             </button>
-          )}
+          </div>
         </div>
       )}
     </div>
@@ -189,8 +200,8 @@ export function RolePicker({
  * ON-AIR banner while your item is live, then moves on to the one after.
  */
 export function RoleBar({
-  myRole,
-  roleColor = "#2dd4bf",
+  myRoles,
+  roleColorFor,
   roleColumnKey,
   rows,
   timing,
@@ -198,8 +209,8 @@ export function RoleBar({
   channel,
   activeRowId,
 }: {
-  myRole: string;
-  roleColor?: string;
+  myRoles: string[];
+  roleColorFor: (role: string) => string;
   roleColumnKey?: string | null;
   rows: ProjectedRow[];
   timing: PlanTiming;
@@ -207,13 +218,13 @@ export function RoleBar({
   channel: ShowChannel;
   activeRowId: string | null;
 }) {
-  if (!live || !activeRowId) return null;
+  if (!live || !activeRowId || myRoles.length === 0) return null;
 
   const activeIndex = rows.findIndex((r) => r.id === activeRowId);
   const activeRow = activeIndex >= 0 ? rows[activeIndex]! : null;
-  const onAir = activeRow != null && rowMatchesRole(activeRow, myRole, roleColumnKey);
+  const onAirRole = activeRow != null ? matchingRole(activeRow, myRoles, roleColumnKey) : null;
 
-  if (onAir) {
+  if (onAirRole != null) {
     const over = live.remainingInRowSec != null && live.remainingInRowSec < 0;
     const display =
       live.remainingInRowSec == null
@@ -224,26 +235,30 @@ export function RoleBar({
     return (
       <div className="role-bar on-air no-print">
         <span className="rb-onair">● YOU’RE ON</span>
-        <span className="rb-role" style={{ color: roleColor }}>{myRole}</span>
+        <span className="rb-role" style={{ color: roleColorFor(onAirRole) }}>{onAirRole}</span>
         <span className="rb-title">{activeRow!.title || "—"}</span>
         <span className="rb-count">{display}</span>
       </div>
     );
   }
 
-  // Next item of mine after the active row.
-  let next: { row: ProjectedRow; startSec: number | null } | null = null;
+  // Next item of mine — across ANY of my roles — after the active row.
+  let next: { row: ProjectedRow; startSec: number | null; role: string } | null = null;
   for (let i = Math.max(0, activeIndex) + 1; i < rows.length; i++) {
     const row = rows[i]!;
-    if (row.type === "group" || row.skipped || !rowMatchesRole(row, myRole, roleColumnKey)) continue;
-    next = { row, startSec: timing.rows[i]!.startSec };
+    if (row.type === "group" || row.skipped) continue;
+    const role = matchingRole(row, myRoles, roleColumnKey);
+    if (!role) continue;
+    next = { row, startSec: timing.rows[i]!.startSec, role };
     break;
   }
+
+  const rolesLabel = myRoles.length === 1 ? myRoles[0]! : `${myRoles[0]} +${myRoles.length - 1}`;
 
   if (!next) {
     return (
       <div className="role-bar no-print">
-        <span className="rb-role" style={{ color: roleColor }}>{myRole}</span>
+        <span className="rb-role" style={{ color: roleColorFor(myRoles[0]!) }}>{rolesLabel}</span>
         <span className="rb-done">No more items for you in this show.</span>
       </div>
     );
@@ -258,7 +273,7 @@ export function RoleBar({
 
   return (
     <div className={`role-bar no-print ${imminent ? "imminent" : ""}`}>
-      <span className="rb-role" style={{ color: roleColor }}>{myRole} · next</span>
+      <span className="rb-role" style={{ color: roleColorFor(next.role) }}>{next.role} · next</span>
       <span className="rb-title">{next.row.title || "—"}</span>
       <span className="rb-count">
         {countdown == null ? "—" : countdown <= 0 ? "any moment" : `in ${formatDuration(countdown)}`}

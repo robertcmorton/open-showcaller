@@ -97,6 +97,7 @@ export function createApiHandler(
     const { pathname } = url;
     res.setHeader("access-control-allow-origin", "*");
     res.setHeader("access-control-allow-headers", "content-type,authorization,x-join-code");
+    res.setHeader("access-control-expose-headers", "x-source-name");
     res.setHeader("access-control-allow-methods", "GET,POST,PATCH,DELETE,OPTIONS");
     if (req.method === "OPTIONS") {
       res.statusCode = 204;
@@ -141,6 +142,16 @@ export function createApiHandler(
       if (eventId && (await canManageEvent(handle, ctx, eventId))) return true;
       json(res, 401, { error: "editor access required" });
       return false;
+    };
+
+    /** The dropped run sheet, base64 in JSON (≤ ~12MB decoded) → bytes, or null. */
+    const sourceFileValue = (v: unknown): Uint8Array | null => {
+      if (typeof v !== "string" || v.length === 0 || v.length > 16_000_000) return null;
+      try {
+        return new Uint8Array(Buffer.from(v, "base64"));
+      } catch {
+        return null;
+      }
     };
 
     /** Small inline image (data URL) or null to clear; anything else is rejected. */
@@ -792,6 +803,7 @@ export function createApiHandler(
           );
         }
 
+        const sourceFile = sourceFileValue(body.sourceFileB64);
         await db.insert(schema.rundowns).values({
           id,
           eventId,
@@ -801,8 +813,29 @@ export function createApiHandler(
           plannedStartSec,
           doc: encodeDoc(doc),
           docUpdatedAt: new Date(),
+          sourceName: sourceFile && typeof body.sourceName === "string" ? body.sourceName.slice(0, 200) : null,
+          sourceFile,
         });
         json(res, 201, { id });
+        return true;
+      }
+
+      // The stored source sheet, for Update import to re-read with the current pipeline.
+      if (req.method === "GET" && /^\/rundowns\/[^/]+\/source$/.test(pathname)) {
+        const id = pathname.split("/")[2]!;
+        if (!(await requireRundownManage(id))) return true;
+        const row = await db.query.rundowns.findFirst({
+          where: eq(schema.rundowns.id, id),
+          columns: { sourceName: true, sourceFile: true },
+        });
+        if (!row?.sourceFile) {
+          json(res, 404, { error: "no stored source sheet — drop the file again (imports now store it)" });
+          return true;
+        }
+        res.statusCode = 200;
+        res.setHeader("content-type", "application/octet-stream");
+        res.setHeader("x-source-name", encodeURIComponent(row.sourceName ?? "sheet"));
+        res.end(Buffer.from(row.sourceFile));
         return true;
       }
 
@@ -857,9 +890,20 @@ export function createApiHandler(
           importRoles,
         );
         const epoch = rundown.docEpoch + 1;
+        const sourceFile = sourceFileValue(body.sourceFileB64);
         await db
           .update(schema.rundowns)
-          .set({ doc: encodeDoc(doc), docEpoch: epoch, plannedStartSec, docUpdatedAt: new Date(), updatedAt: new Date() })
+          .set({
+            doc: encodeDoc(doc),
+            docEpoch: epoch,
+            plannedStartSec,
+            docUpdatedAt: new Date(),
+            updatedAt: new Date(),
+            // A newly dropped sheet replaces the stored source; re-reads keep it.
+            ...(sourceFile
+              ? { sourceFile, sourceName: typeof body.sourceName === "string" ? body.sourceName.slice(0, 200) : rundown.sourceName }
+              : {}),
+          })
           .where(eq(schema.rundowns.id, id));
         try {
           for (const name of docServer?.documents.keys() ?? []) {

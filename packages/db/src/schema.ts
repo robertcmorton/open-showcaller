@@ -111,6 +111,9 @@ export const rundowns = pgTable("rundowns", {
   docUpdatedAt: timestamp("doc_updated_at", { withTimezone: true }),
   /** Bumped on in-place restore: doc connections are scoped to `<id>@<epoch>`, so stale clients can never merge old state back. */
   docEpoch: integer("doc_epoch").notNull().default(0),
+  /** The imported run sheet, kept so Update import can re-read it with the current pipeline. */
+  sourceName: text("source_name"),
+  sourceFile: bytea("source_file"),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   createdAt: createdAt(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
