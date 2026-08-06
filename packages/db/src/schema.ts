@@ -109,6 +109,8 @@ export const rundowns = pgTable("rundowns", {
   plannedStartSec: integer("planned_start_sec"),
   doc: bytea("doc"),
   docUpdatedAt: timestamp("doc_updated_at", { withTimezone: true }),
+  /** Bumped on in-place restore: doc connections are scoped to `<id>@<epoch>`, so stale clients can never merge old state back. */
+  docEpoch: integer("doc_epoch").notNull().default(0),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   createdAt: createdAt(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-06 (in-place snapshot restore)
+- **Restore here**: a version in the History panel can now replace the current rundown's content directly (armed two-click, next to the existing "Restore as copy"). The server saves an automatic **"Before restore"** snapshot first, so a restore is itself reversible. Under the hood every document connection is scoped to a per-rundown **doc epoch**; restoring bumps the epoch and disconnects every open screen, which reconnect fresh and show the restored content within seconds — pre-restore edits can never merge back in, and a stale client's pending save can never overwrite the restored document.
+
 ### Added — 2026-08-06 (import fix-it list · planned timing from the sheet · row-number resize)
 - **Unparseable import cells get a fix-it list.** Instead of only flagging "N cells couldn't be parsed", the preview now lists each failed START/DURATION cell with the row, the offending text, and an **auto-suggested repair** (wrong separators like "19h30", durations buried in prose like "approx 5 mins TBC", bare numbers treated as minutes). Fix each one in place — Apply (validated live), Clear (import empty), or Keep as is.
 - **Imported rundowns take their planned start from the sheet's own first time** instead of defaulting to 9:00 AM. The planned start in the rundown header is now **click-to-edit**, and when the final item has no duration the header shows an **approximate end (≈) assuming 30 minutes** — unless that item is itself the ending (Full time, End…), which stays exact.

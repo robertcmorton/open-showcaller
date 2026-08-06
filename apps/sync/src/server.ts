@@ -122,8 +122,10 @@ process.on("unhandledRejection", (reason) => {
   logServerError(dbHandle, "process", reason);
 });
 
-// HTTP: JSON API for the web app (dev-open; real auth in the hardening pass).
-const handleApi = createApiHandler(dbHandle);
+const docServer = createDocServer(dbHandle);
+
+// HTTP: JSON API for the web app.
+const handleApi = createApiHandler(dbHandle, docServer);
 const httpServer = createServer(async (req, res) => {
   try {
     const handled = await handleApi(req, res);
@@ -138,7 +140,6 @@ const httpServer = createServer(async (req, res) => {
   }
 });
 
-const docServer = createDocServer(dbHandle);
 const wss = new WebSocketServer({ noServer: true });
 const docWss = new WebSocketServer({ noServer: true });
 

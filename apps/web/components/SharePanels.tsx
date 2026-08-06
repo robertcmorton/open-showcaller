@@ -122,6 +122,35 @@ export function JoinCodesPanel({ rundownId, onClose }: { rundownId: string; onCl
   );
 }
 
+/**
+ * In-place restore, armed two-click (no browser dialogs): replaces THIS
+ * rundown's content with the snapshot. The server saves a "Before restore"
+ * snapshot first and bumps the doc epoch, so every open screen reloads the
+ * restored content and pre-restore edits can't leak back.
+ */
+function RestoreHereButton({ snapshotId }: { snapshotId: string }) {
+  const [armed, setArmed] = useState(false);
+  return (
+    <button
+      className={`btn btn-sm ${armed ? "btn-danger is-on" : ""}`}
+      title="Replace this rundown's content with this version (a 'Before restore' snapshot is saved first)"
+      onClick={() => {
+        if (!armed) {
+          setArmed(true);
+          window.setTimeout(() => setArmed(false), 3500);
+          return;
+        }
+        void api
+          .restoreSnapshotInPlace(snapshotId)
+          .then(() => window.location.reload())
+          .catch((err) => window.alert(String(err)));
+      }}
+    >
+      {armed ? "Replace current content?" : "Restore here"}
+    </button>
+  );
+}
+
 export function HistoryPanel({ rundownId, onClose }: { rundownId: string; onClose: () => void }) {
   const [snapshots, setSnapshots] = useState<SnapshotSummary[]>([]);
   const reload = () => void api.snapshots(rundownId).then(setSnapshots);
@@ -159,12 +188,14 @@ export function HistoryPanel({ rundownId, onClose }: { rundownId: string; onClos
               {s.label ?? "Untitled"}{" "}
               <span style={{ color: "var(--text-3)" }}>{new Date(s.createdAt).toLocaleString()}</span>
             </span>
+            <RestoreHereButton snapshotId={s.id} />
             <button
               className="btn btn-sm"
+              title="Copy this version into a NEW rundown, leaving the current one untouched"
               onClick={() =>
                 void api
                   .restoreSnapshot(s.id)
-                  .then(({ id }) => (window.location.href = `/rundown/${id}`))
+                  .then(({ id }) => (window.location.href = `/show/${id}`))
               }
             >
               Restore as copy

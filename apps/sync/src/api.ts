@@ -63,7 +63,11 @@ setInterval(() => {
   loginBudget = 30;
 }, 60_000).unref();
 
-export function createApiHandler(handle: DbHandle) {
+export function createApiHandler(
+  handle: DbHandle,
+  /** The live doc server, so in-place restore can kick stale connections. */
+  docServer?: { closeConnections: (documentName?: string) => void; documents: Map<string, unknown> },
+) {
   const { db } = handle;
 
   const readJson = async (req: IncomingMessage): Promise<Record<string, unknown>> => {
@@ -980,10 +984,67 @@ export function createApiHandler(handle: DbHandle) {
         return true;
       }
 
-      // Restore = copy the snapshot into a NEW rundown. In-place restore of a
-      // live CRDT would merge old state back from connected clients; a fresh
-      // rundown id sidesteps that entirely (in-place restore lands with the
-      // doc-epoch mechanism in the hardening pass).
+      // The rundown's current doc epoch — clients scope their doc connection
+      // to it (`<id>@<epoch>`); public, it's just a counter.
+      if (req.method === "GET" && /^\/rundowns\/[^/]+\/epoch$/.test(pathname)) {
+        const row = await db.query.rundowns.findFirst({
+          where: eq(schema.rundowns.id, pathname.split("/")[2]!),
+          columns: { docEpoch: true },
+        });
+        if (!row) {
+          json(res, 404, { error: "rundown not found" });
+          return true;
+        }
+        json(res, 200, { epoch: row.docEpoch });
+        return true;
+      }
+
+      // In-place restore: replace the SAME rundown's doc with the snapshot.
+      // Bumping the doc epoch invalidates every live connection, so no client
+      // can merge pre-restore CRDT state back; they reconnect fresh.
+      if (req.method === "POST" && /^\/snapshots\/[^/]+\/restore-in-place$/.test(pathname)) {
+        const snapshotId = pathname.split("/")[2]!;
+        const snapshot = await db.query.rundownSnapshots.findFirst({
+          where: eq(schema.rundownSnapshots.id, snapshotId),
+        });
+        if (!snapshot) {
+          json(res, 404, { error: "snapshot not found" });
+          return true;
+        }
+        if (!(await requireEditor(snapshot.rundownId))) return true;
+        const rundown = await db.query.rundowns.findFirst({ where: eq(schema.rundowns.id, snapshot.rundownId) });
+        if (!rundown) {
+          json(res, 404, { error: "rundown not found" });
+          return true;
+        }
+        // Safety net: snapshot the pre-restore state first, so a restore is
+        // itself reversible.
+        if (rundown.doc)
+          await db.insert(schema.rundownSnapshots).values({
+            id: ulid(),
+            rundownId: rundown.id,
+            doc: rundown.doc,
+            label: "Before restore",
+          });
+        const epoch = rundown.docEpoch + 1;
+        await db
+          .update(schema.rundowns)
+          .set({ doc: snapshot.doc, docEpoch: epoch, docUpdatedAt: new Date(), updatedAt: new Date() })
+          .where(eq(schema.rundowns.id, rundown.id));
+        // Kick live connections on the old epoch (and legacy bare-id docs).
+        try {
+          for (const name of docServer?.documents.keys() ?? []) {
+            if (name === rundown.id || String(name).startsWith(`${rundown.id}@`)) docServer!.closeConnections(String(name));
+          }
+        } catch (err) {
+          logServerError(handle, "server", err, { url: "restore-in-place closeConnections" });
+        }
+        json(res, 200, { id: rundown.id, epoch });
+        return true;
+      }
+
+      // Restore-as-copy: the snapshot becomes a NEW rundown alongside the
+      // original (useful for comparing versions side by side).
       if (req.method === "POST" && /^\/snapshots\/[^/]+\/restore$/.test(pathname)) {
         const snapshotId = pathname.split("/")[2]!;
         const body = await readJson(req);

@@ -154,6 +154,8 @@ export const api = {
     request<{ id: string }>(`/rundowns/${rundownId}/snapshots`, { method: "POST", body: JSON.stringify({ label }) }),
   restoreSnapshot: (snapshotId: string, name?: string) =>
     request<{ id: string }>(`/snapshots/${snapshotId}/restore`, { method: "POST", body: JSON.stringify({ name }) }),
+  restoreSnapshotInPlace: (snapshotId: string) =>
+    request<{ id: string; epoch: number }>(`/snapshots/${snapshotId}/restore-in-place`, { method: "POST" }),
   createEvent: (body: { name: string; location?: string; startDate: string; endDate: string; timezone?: string; teamId?: string }) =>
     request<{ id: string }>("/events", { method: "POST", body: JSON.stringify(body) }),
   createRundown: (body: {
