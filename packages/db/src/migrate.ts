@@ -1,13 +1,17 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { sql } from "drizzle-orm";
 import type { Db } from "./client";
 
 /**
- * Phase-1 bootstrap DDL. Replaced by generated drizzle-kit migrations once the
- * schema settles (tracked for Phase 6). Statements run one at a time — the
- * extended query protocol does not accept multi-statement strings.
+ * The pre-migration bootstrap DDL (idempotent). Kept ONLY to baseline
+ * databases created before generated migrations existed: it runs once to
+ * bring any straggler to the schema the 0000 baseline describes, after which
+ * every file in ./drizzle is marked applied and this string never runs again.
+ * New schema changes are drizzle-kit migrations — do not extend this.
  */
-export async function ensureSchema(db: Db): Promise<void> {
-  const ddl = `
+const LEGACY_DDL = `
     CREATE TABLE IF NOT EXISTS users (
       id text PRIMARY KEY,
       email text NOT NULL UNIQUE,
@@ -171,8 +175,56 @@ export async function ensureSchema(db: Db): Promise<void> {
       PRIMARY KEY (user_id, rundown_id)
     );
   `;
-  for (const statement of ddl.split(";")) {
+
+const MIGRATIONS_DIR = fileURLToPath(new URL("../drizzle", import.meta.url));
+
+/** Statements run one at a time — the extended query protocol rejects multi-statement strings. */
+async function runStatements(db: Db, text: string, separator: string | RegExp): Promise<void> {
+  for (const statement of text.split(separator)) {
     const trimmed = statement.trim();
     if (trimmed) await db.execute(sql.raw(trimmed));
+  }
+}
+
+const rowsOf = (result: unknown): Record<string, unknown>[] =>
+  (result as { rows?: Record<string, unknown>[] }).rows ?? (result as Record<string, unknown>[]);
+
+/**
+ * Applies the generated drizzle-kit migrations in ./drizzle at boot, tracked
+ * in schema_migrations — a fresh database initialises itself, an up-to-date
+ * one is a no-op, and there is no separate migrate command for operators.
+ *
+ * A database created before migrations existed (no journal, but tables
+ * present) is BASELINED: the legacy idempotent DDL runs once to catch any
+ * straggler up to the 0000 schema, then every current file is marked applied
+ * without executing.
+ *
+ * Workflow for schema changes: edit src/schema.ts, run
+ * `pnpm --filter @opencall/db generate`, commit the new SQL file.
+ */
+export async function ensureSchema(db: Db): Promise<void> {
+  await db.execute(
+    sql.raw(
+      "CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())",
+    ),
+  );
+  const applied = new Set(rowsOf(await db.execute(sql.raw("SELECT name FROM schema_migrations"))).map((r) => String(r.name)));
+  const files = readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
+
+  if (applied.size === 0) {
+    const probe = rowsOf(await db.execute(sql.raw("SELECT to_regclass('rundowns') AS t")));
+    if (probe[0]?.t != null) {
+      await runStatements(db, LEGACY_DDL, ";");
+      for (const f of files) await db.execute(sql`INSERT INTO schema_migrations (name) VALUES (${f}) ON CONFLICT DO NOTHING`);
+      return;
+    }
+  }
+
+  for (const f of files) {
+    if (applied.has(f)) continue;
+    await runStatements(db, readFileSync(join(MIGRATIONS_DIR, f), "utf8"), /-->\s*statement-breakpoint/);
+    await db.execute(sql`INSERT INTO schema_migrations (name) VALUES (${f})`);
   }
 }

@@ -89,7 +89,7 @@ Create three services from this repo:
 2. **sync** — build `pnpm --filter @opencall/sync build`, start `pnpm --filter @opencall/sync start`, root directory = repo root. Set `DATABASE_URL` (reference the managed Postgres), `ADMIN_TOKEN`, `ALLOW_DEV_JOIN=0`. Most platforms inject `PORT` — the server honours it. Give it a public domain.
 3. **web** — build `pnpm --filter @opencall/web build`, start `pnpm --filter @opencall/web start`, root directory = repo root. Set the three `NEXT_PUBLIC_*` variables to the sync service's public domain (they must be present **at build time**) plus `PORT=3000`. Give it a public domain.
 
-The sync server runs idempotent DDL on boot, so a fresh database initialises itself — there is no migration command to run.
+The sync server applies its bundled migrations on boot, so a fresh database initialises itself and upgrades apply automatically — there is no migration command to run.
 
 ### Option C — bare Node on a server
 

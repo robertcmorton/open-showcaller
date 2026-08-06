@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Changed — 2026-08-06 (generated database migrations)
+- **Schema changes are now generated drizzle-kit migrations** (`packages/db/drizzle/`), applied automatically at boot and tracked in a `schema_migrations` journal — a fresh database builds itself from the baseline, an up-to-date one is a no-op, and databases created before this scheme are baselined in place (after a one-time idempotent catch-up) without touching data. Operators still never run a migration command. Developers: edit `src/schema.ts`, run `pnpm --filter @opencall/db generate`, commit the SQL.
+
 ### Added — 2026-08-06 (in-place snapshot restore)
 - **Restore here**: a version in the History panel can now replace the current rundown's content directly (armed two-click, next to the existing "Restore as copy"). The server saves an automatic **"Before restore"** snapshot first, so a restore is itself reversible. Under the hood every document connection is scoped to a per-rundown **doc epoch**; restoring bumps the epoch and disconnects every open screen, which reconnect fresh and show the restored content within seconds — pre-restore edits can never merge back in, and a stale client's pending save can never overwrite the restored document.
 
