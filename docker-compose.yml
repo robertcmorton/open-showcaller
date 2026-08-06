@@ -22,6 +22,10 @@ services:
     environment:
       DATABASE_URL: postgres://showcaller:showcaller@postgres:5432/showcaller
       PORT: 8787
+      # Lock the deployment: export ADMIN_TOKEN before `docker compose up`
+      # (empty = dev-open, where EVERY visitor is admin — localhost only).
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      ALLOW_DEV_JOIN: ${ALLOW_DEV_JOIN:-0}
     ports:
       - "8787:8787"
     depends_on:

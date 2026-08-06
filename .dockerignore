@@ -5,9 +5,12 @@ node_modules
 .turbo
 **/.turbo
 .pglite
+.pglite*
 .git
 Images
 Research
+Example Cue Sheets
+apps/web/public/_*
 DEMO_NOTES.md
 DEVLOG.md
 CLAUDE.local.md
