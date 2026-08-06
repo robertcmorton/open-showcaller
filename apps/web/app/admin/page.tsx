@@ -17,6 +17,7 @@ import { ImportPanel } from "../../components/ImportPanel";
 import { SideNavSection, WithSideNav } from "../../components/SideNav";
 import { pickImage } from "../../lib/pickImage";
 import { AdminNavSection } from "../../components/AdminNav";
+import { VersionBadge } from "../../components/VersionBadge";
 
 function CreateEventForm({ onCreated, teamId }: { onCreated: () => void; teamId?: string }) {
   const [open, setOpen] = useState(false);
@@ -976,6 +977,7 @@ export default function AdminPage() {
         )}
       </main>
       </WithSideNav>
+      <VersionBadge />
     </div>
   );
 }

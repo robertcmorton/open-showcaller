@@ -3,9 +3,15 @@
 All notable changes to this project are documented here, newest first.
 Format follows [Keep a Changelog](https://keepachangelog.com/); the project is not yet versioned, so everything sits under **Unreleased**.
 
+> Versioning: the root `package.json` version is the app version, shown bottom-right of the dashboard together with the build commit. Bump the **minor** for a feature batch, the **patch** for fix-only releases, and cut the `[Unreleased]` section into a matching heading in the same commit.
+
 > Maintenance rule (see CLAUDE.md): update this file in the same commit as any meaningful change. Entries are written generically — no references to external vendors or reference material.
 
 ## [Unreleased]
+
+_Nothing yet._
+
+## [0.4.0] — 2026-08-07
 
 ### Added — 2026-08-07 (show chrome overhaul · one-click re-import · multi-role · undo · clock sync)
 - **Everything the caller needs stays on screen while scrolling**: the title, planned/item/show/projected-end readouts, the transport, and the column headers are all pinned — the run sheet scrolls beneath them. (The column headers were meant to pin all along; a styling rule had silently broken it.)
