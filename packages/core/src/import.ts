@@ -42,6 +42,12 @@ export function parseDurationLoose(raw: string): number | null {
   const leaked = s.match(/^(\d+):(\d{1,2}):(\d{2})\s*(?:am|pm)$/);
   if (leaked) return parseInt(leaked[1]!, 10) * 3600 + parseInt(leaked[2]!, 10) * 60 + parseInt(leaked[3]!, 10);
 
+  // Summed parts: "40mins + 3mins", "1hr + 15 mins".
+  if (s.includes("+")) {
+    const parts = s.split("+").map((p) => parseDurationLoose(p));
+    if (parts.length > 1 && parts.every((p) => p != null)) return parts.reduce((a, b) => a! + b!, 0);
+  }
+
   // H:MM:SS where MM may overflow ("0:90:00" = 90 minutes).
   const colon = s.match(/^(\d+):(\d{1,3}):(\d{2})$/);
   if (colon) return parseInt(colon[1]!, 10) * 3600 + parseInt(colon[2]!, 10) * 60 + parseInt(colon[3]!, 10);

@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Added — 2026-08-06 (faithful times for sub-cues · Update import)
+- **Rows the source sheet leaves untimed no longer get invented times.** Cue-sheet-style documents time only their parent rows; the sub-cues beneath (reads, graphics, tracks) have blank TIME cells — but the grid used to fill them with cascade guesses whose durations drifted past the next real time. Imports of sparse-timed sheets now mark those rows **untimed**: they show "—" exactly like the source (double-click still sets a real time), and their durations remain visible but excluded from the running order. A real 450-row cue sheet now imports with its 85 sheet times anchored and every sub-cue blank, matching the printed sheet.
+- **Update import**: every rundown on the dashboard has an **Update import…** action — drop the run sheet again and the re-imported content **replaces the same rundown** (links, join codes, and view links keep working; the old content is snapshotted as "Before update" and every open screen refreshes to the new content). This is the upgrade path for rundowns imported before the latest pipeline improvements.
+- Durations written as sums ("40mins + 3mins") now parse.
+
 ### Fixed — 2026-08-06 (Docker packaging hygiene)
 - `docker-compose.yml` now passes `ADMIN_TOKEN` / `ALLOW_DEV_JOIN` through from the environment, so locking a Docker deployment is a one-liner instead of editing the file. `.dockerignore` excludes local databases, database backups, and every local-only working folder from the build context.
 

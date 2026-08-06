@@ -364,7 +364,8 @@ export default function AdminPage() {
   const [live, setLive] = useState<Map<string, string>>(new Map());
   const [error, setError] = useState(false);
   const [locked, setLocked] = useState(false);
-  const [importFor, setImportFor] = useState<string | null>(null); // eventId
+  // Import panel target: an event (new rundown), optionally replacing an existing rundown's content.
+  const [importFor, setImportFor] = useState<{ eventId: string; replace?: { id: string; name: string } } | null>(null);
   const [me, setMe] = useState<{ role: "admin" | "company" | "user" | null; teamName?: string; name?: string; canManage?: boolean } | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [companies, setCompanies] = useState<{ id: string; name: string; companyToken: string | null; logo: string | null; eventCount: number }[]>([]);
@@ -854,6 +855,13 @@ export default function AdminPage() {
                       >
                         Copy view link
                       </button>
+                      <button
+                        className="btn btn-sm btn-ghost"
+                        title="Re-import this rundown from a run sheet — content is replaced with the latest import quality; links and codes keep working"
+                        onClick={() => setImportFor({ eventId: event.id, replace: { id: r.id, name: r.name } })}
+                      >
+                        Update import…
+                      </button>
                       <button className="btn btn-sm btn-ghost" onClick={() => rename("rundown", r.id, r.name)}>
                         Rename
                       </button>
@@ -884,6 +892,14 @@ export default function AdminPage() {
                       >
                         <span className="check" />
                         Copy view link
+                      </button>
+                      <button
+                        type="button"
+                        className="menu-item"
+                        onClick={() => setImportFor({ eventId: event.id, replace: { id: r.id, name: r.name } })}
+                      >
+                        <span className="check" />
+                        Update import…
                       </button>
                       <button type="button" className="menu-item" onClick={() => rename("rundown", r.id, r.name)}>
                         <span className="check" />
@@ -918,9 +934,10 @@ export default function AdminPage() {
                   </li>
                 )}
               </ul>
-              {importFor === event.id ? (
+              {importFor?.eventId === event.id ? (
                 <ImportPanel
                   eventId={event.id}
+                  replaceRundown={importFor.replace}
                   onClose={() => setImportFor(null)}
                   onDone={(rundownId) => {
                     setImportFor(null);
@@ -930,7 +947,7 @@ export default function AdminPage() {
                 />
               ) : (
                 <div style={{ padding: "0 16px 4px" }}>
-                  <button className="btn btn-sm" onClick={() => setImportFor(event.id)}>
+                  <button className="btn btn-sm" onClick={() => setImportFor({ eventId: event.id })}>
                     ⤒ Import run sheet…
                   </button>
                 </div>

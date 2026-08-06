@@ -116,7 +116,18 @@ const KIND_STYLE: Record<ClassifiedRow["kind"], { label: string; color: string }
  * Upload → extract → map columns → preview → import. Extraction is entirely
  * client-side; nothing is created until "Import" is pressed.
  */
-export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onDone: (rundownId: string) => void; onClose: () => void }) {
+export function ImportPanel({
+  eventId,
+  replaceRundown,
+  onDone,
+  onClose,
+}: {
+  eventId: string;
+  /** Update mode: the imported sheet REPLACES this rundown's content (same id, links, codes). */
+  replaceRundown?: { id: string; name: string };
+  onDone: (rundownId: string) => void;
+  onClose: () => void;
+}) {
   const [name, setName] = useState("");
   const [rawGrid, setRawGrid] = useState<string[][] | null>(null); // as extracted, pre-merge
   const [lineMeta, setLineMeta] = useState<{ page: number; y: number }[] | undefined>(undefined);
@@ -223,6 +234,14 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
         .map((role) => role.name)
         .join(", ");
     };
+    // Sparse-timed sheets (cue-sheet style) time only PARENT rows; the rows
+    // with a blank TIME cell are sub-cues inside that block. Marking them
+    // `untimed` keeps the grid faithful (no invented cascade times) and their
+    // durations informational (excluded from the running order).
+    const cueish = importable.filter((r) => r.kind !== "banner");
+    const sparseTimed =
+      cueish.length >= 10 && cueish.filter((r) => r.startSec != null).length / cueish.length < 0.5;
+
     const seedRows: SeedRow[] = importable.map((r) => {
       if (r.kind === "banner") return { type: "group", title: r.title };
       if (r.kind === "milestone") {
@@ -238,11 +257,14 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
         };
       }
       const assigned = rolesFor(r);
+      const untimed = sparseTimed && r.startSec == null;
       return {
         type: "cue",
         title: r.title,
         durationSec: r.durationSec,
         hardStartSec: r.startSec,
+        untimed: untimed || undefined,
+        durationMuted: untimed && r.durationSec != null ? true : undefined,
         cells: assigned ? { ...r.cells, roles: assigned } : r.cells,
       };
     });
@@ -265,17 +287,18 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
     setBusy(true);
     // The sheet's own first time becomes the planned start.
     const firstStart = importable.find((r) => r.startSec != null)?.startSec ?? null;
-    api
-      .createRundown({
-        eventId,
-        name: name.trim() || "Imported rundown",
-        rows: seedRows,
-        columns: customColumns,
-        roles,
-        roleColumnKey: roleKey ?? (roles.length > 0 ? "roles" : null),
-        plannedStartSec: firstStart,
-      })
-      .then(({ id }) => onDone(id))
+    const payload = {
+      rows: seedRows,
+      columns: customColumns,
+      roles,
+      roleColumnKey: roleKey ?? (roles.length > 0 ? "roles" : null),
+      plannedStartSec: firstStart,
+    };
+    (replaceRundown
+      ? api.replaceRundownContent(replaceRundown.id, payload).then(() => replaceRundown.id)
+      : api.createRundown({ eventId, name: name.trim() || "Imported rundown", ...payload }).then(({ id }) => id)
+    )
+      .then((id) => onDone(id))
       .catch((err) => {
         setError(String(err));
         setBusy(false);
@@ -285,7 +308,11 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
   return (
     <div className="panel" style={{ margin: "0 16px 14px", display: "grid", gap: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <strong style={{ flex: 1 }}>Import a run sheet (XLSX, XLS, CSV, or PDF)</strong>
+        <strong style={{ flex: 1 }}>
+          {replaceRundown
+            ? `Update “${replaceRundown.name}” from a run sheet — the new import replaces its content (links and codes keep working; the old content is snapshotted first)`
+            : "Import a run sheet (XLSX, XLS, CSV, or PDF)"}
+        </strong>
         <button className="btn btn-sm btn-ghost" onClick={onClose}>
           ✕
         </button>
@@ -339,10 +366,12 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
       {grid && (
         <>
           <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
-            <div>
-              <label className="field-label">Rundown name</label>
-              <input className="input" value={name} onChange={(e) => setName(e.target.value)} style={{ minWidth: 240 }} />
-            </div>
+            {!replaceRundown && (
+              <div>
+                <label className="field-label">Rundown name</label>
+                <input className="input" value={name} onChange={(e) => setName(e.target.value)} style={{ minWidth: 240 }} />
+              </div>
+            )}
             <div>
               <label className="field-label" title="Which source row holds the column headers — adjust if detection picked the wrong one">
                 Header row
@@ -373,7 +402,7 @@ export function ImportPanel({ eventId, onDone, onClose }: { eventId: string; onD
                 Different file
               </button>
               <button className="btn btn-primary" disabled={busy || importable.length === 0} onClick={doImport}>
-                {busy ? "Importing…" : `Import ${importable.length} rows`}
+                {busy ? "Importing…" : `${replaceRundown ? "Update with" : "Import"} ${importable.length} rows`}
               </button>
             </div>
           </div>

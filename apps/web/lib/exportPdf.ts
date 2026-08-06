@@ -71,7 +71,12 @@ export async function exportRundownPdf(input: PdfExportInput): Promise<void> {
       return;
     }
     const anchored = r.hardStartSec != null;
-    const start = t.startSec != null ? `${anchored ? "*" : ""}${formatTimeOfDay(t.startSec, input.use24h)}` : "—";
+    const start =
+      r.untimed && !anchored
+        ? "" // untimed in the source sheet — no invented time
+        : t.startSec != null
+          ? `${anchored ? "*" : ""}${formatTimeOfDay(t.startSec, input.use24h)}`
+          : "—";
     const dur = r.type === "milestone" ? "—" : r.durationSec != null ? formatDuration(r.durationSec) : "";
     body.push([
       String(i + 1),

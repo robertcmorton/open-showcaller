@@ -22,6 +22,8 @@ export interface SeedRow {
   hardStartSec?: number | null;
   backtime?: boolean;
   durationMuted?: boolean;
+  /** The source sheet left this row's time BLANK (a sub-cue inside a timed block) — display no start. */
+  untimed?: boolean;
   color?: string;
   /** columnKey → plain text; converted into a single-paragraph rich-text fragment. */
   cells?: Record<string, string>;
@@ -140,6 +142,7 @@ export function buildRundownDoc(
       if (seed.backtime) row.set("backtime", true);
       row.set("durationSec", seed.durationSec ?? null);
       if (seed.durationMuted) row.set("durationMuted", true);
+      if (seed.untimed) row.set("untimed", true);
       if (seed.color) row.set("color", seed.color);
 
       const cells = new Y.Map<Y.XmlFragment>();
@@ -167,6 +170,8 @@ export interface ProjectedRow extends PlanRow {
   cells: Record<string, string>; // columnKey → plain text
   /** columnKey → the cell's XML, present only when it carries formatting marks. */
   cellsRich?: Record<string, string>;
+  /** Source sheet had no time for this row — the grid shows no start for it. */
+  untimed?: boolean;
   color?: string;
 }
 
@@ -249,6 +254,7 @@ export function projectRundownDoc(doc: Y.Doc): {
       backtime: (row.get("backtime") as boolean | undefined) ?? false,
       durationMuted: (row.get("durationMuted") as boolean | undefined) ?? false,
       skipped: (row.get("skipped") as boolean | undefined) ?? false,
+      untimed: (row.get("untimed") as boolean | undefined) ?? false,
       durationHidden: (row.get("durationHidden") as boolean | undefined) ?? false,
       title: cells["title"] ?? "",
       cells,

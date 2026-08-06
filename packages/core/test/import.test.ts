@@ -353,3 +353,11 @@ describe("unparseable-cell repair suggestions", () => {
     expect(suggestDurationFix("1m30s")).toBeNull(); // already parses
   });
 });
+
+describe("parseDurationLoose summed parts", () => {
+  it("sums plus-joined durations", () => {
+    expect(parseDurationLoose("40mins + 3mins")).toBe(43 * 60);
+    expect(parseDurationLoose("1 hr + 15 mins")).toBe(75 * 60);
+    expect(parseDurationLoose("5 + banana")).toBeNull();
+  });
+});

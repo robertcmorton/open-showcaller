@@ -434,7 +434,11 @@ export function RundownEditor({
     const body = rows.map((r, i) => [
       r.type,
       r.title,
-      timing.rows[i]!.startSec != null ? formatTimeOfDay(timing.rows[i]!.startSec!, true) : "",
+      r.untimed && r.hardStartSec == null
+        ? ""
+        : timing.rows[i]!.startSec != null
+          ? formatTimeOfDay(timing.rows[i]!.startSec!, true)
+          : "",
       r.durationSec != null ? formatDuration(r.durationSec) : "",
       ...richColumns.map((c) => r.cells[c.key] ?? ""),
     ]);
@@ -1039,6 +1043,12 @@ export function RundownEditor({
                             if (e.key === "Escape") setEditingTime(null);
                           }}
                         />
+                      ) : rowRecord.untimed && rowRecord.hardStartSec == null ? (
+                        // The source sheet left this row untimed (a sub-cue) —
+                        // faithful blank instead of an invented cascade time.
+                        <span style={{ color: "var(--text-3)" }} title="Untimed in the source sheet — double-click to set a time">
+                          —
+                        </span>
                       ) : t.startSec != null ? (
                         formatTimeOfDay(t.startSec, meta.use24h)
                       ) : (

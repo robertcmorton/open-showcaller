@@ -806,6 +806,72 @@ export function createApiHandler(
         return true;
       }
 
+      // Update import: re-imported content replaces the SAME rundown — id,
+      // links, join codes, and view links all keep working. The old content
+      // is snapshotted first, and the doc-epoch bump kicks every open screen
+      // onto the fresh document (identical mechanism to in-place restore).
+      if (req.method === "POST" && /^\/rundowns\/[^/]+\/replace-content$/.test(pathname)) {
+        const id = pathname.split("/")[2]!;
+        if (!(await requireRundownManage(id))) return true;
+        const body = await readJson(req);
+        const rundown = await db.query.rundowns.findFirst({ where: eq(schema.rundowns.id, id) });
+        if (!rundown) {
+          json(res, 404, { error: "rundown not found" });
+          return true;
+        }
+        const event = await db.query.events.findFirst({ where: eq(schema.events.id, rundown.eventId) });
+        const rows = Array.isArray(body.rows) && body.rows.length > 0 ? (body.rows as SeedRow[]) : null;
+        if (!rows) {
+          json(res, 400, { error: "rows required" });
+          return true;
+        }
+        const extraColumns = Array.isArray(body.columns)
+          ? (body.columns as { key: string; title: string }[]).filter(
+              (c) => typeof c?.key === "string" && typeof c?.title === "string",
+            )
+          : [];
+        const importRoles = Array.isArray(body.roles)
+          ? (body.roles as { name: string; color: string }[]).filter(
+              (r) => typeof r?.name === "string" && typeof r?.color === "string",
+            )
+          : [];
+        const plannedStartSec =
+          typeof body.plannedStartSec === "number" ? body.plannedStartSec : rundown.plannedStartSec;
+        if (rundown.doc)
+          await db.insert(schema.rundownSnapshots).values({
+            id: ulid(),
+            rundownId: rundown.id,
+            doc: rundown.doc,
+            label: "Before update",
+          });
+        const doc = buildRundownDoc(
+          rows,
+          {
+            name: rundown.name,
+            plannedStartSec,
+            use24h: event?.use24h ?? false,
+            roleColumnKey: typeof body.roleColumnKey === "string" && body.roleColumnKey ? body.roleColumnKey : null,
+          },
+          extraColumns,
+          extraColumns.length > 0,
+          importRoles,
+        );
+        const epoch = rundown.docEpoch + 1;
+        await db
+          .update(schema.rundowns)
+          .set({ doc: encodeDoc(doc), docEpoch: epoch, plannedStartSec, docUpdatedAt: new Date(), updatedAt: new Date() })
+          .where(eq(schema.rundowns.id, id));
+        try {
+          for (const name of docServer?.documents.keys() ?? []) {
+            if (name === id || String(name).startsWith(`${id}@`)) docServer!.closeConnections(String(name));
+          }
+        } catch (err) {
+          logServerError(handle, "server", err, { url: "replace-content closeConnections" });
+        }
+        json(res, 200, { id, epoch });
+        return true;
+      }
+
       if (req.method === "GET" && /^\/rundowns\/[^/]+\/join-codes$/.test(pathname)) {
         const rundownId = pathname.split("/")[2]!;
         if (!(await requireEditor(rundownId))) return true;

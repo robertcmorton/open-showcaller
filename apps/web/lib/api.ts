@@ -170,6 +170,16 @@ export const api = {
     roles?: { name: string; color: string }[];
     roleColumnKey?: string | null;
   }) => request<{ id: string }>("/rundowns", { method: "POST", body: JSON.stringify(body) }),
+  replaceRundownContent: (
+    id: string,
+    body: {
+      rows: SeedRow[];
+      columns?: { key: string; title: string; width?: number }[];
+      roles?: { name: string; color: string }[];
+      roleColumnKey?: string | null;
+      plannedStartSec?: number | null;
+    },
+  ) => request<{ id: string; epoch: number }>(`/rundowns/${id}/replace-content`, { method: "POST", body: JSON.stringify(body) }),
   errors: (limit = 200) =>
     request<{ id: string; at: string; source: string; message: string; stack: string | null; url: string | null; userAgent: string | null }[]>(
       `/errors?limit=${limit}`,
