@@ -72,9 +72,9 @@ Use `https://`/`wss://` in production and make sure your proxy/host **passes Web
 
 ```bash
 git clone https://github.com/robertcmorton/opencall.git && cd opencall
-# 1. Edit docker-compose.yml: set the three NEXT_PUBLIC_* build args to the
-#    public URL of your sync host, add ADMIN_TOKEN + ALLOW_DEV_JOIN=0 to the
-#    sync service environment, and change the Postgres password.
+# Edit docker-compose.yml: set the three NEXT_PUBLIC_* build args to the
+# public URL of your sync host, and change the Postgres password. Then:
+export ADMIN_TOKEN="oc_admin_$(openssl rand -hex 20)"   # save this — it is the admin login
 docker compose up -d --build
 docker compose run --rm seed    # optional demo data
 ```

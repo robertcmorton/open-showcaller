@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 ## [Unreleased]
 
+### Fixed — 2026-08-06 (Docker packaging hygiene)
+- `docker-compose.yml` now passes `ADMIN_TOKEN` / `ALLOW_DEV_JOIN` through from the environment, so locking a Docker deployment is a one-liner instead of editing the file. `.dockerignore` excludes local databases, database backups, and every local-only working folder from the build context.
+
 ### Added — 2026-08-06 (installable app: PNG icons + service worker)
 - **OpenCall now installs properly as an app.** PNG icons at every size platforms expect — an apple-touch icon for iOS home screens (iOS ignores SVG manifests), 192/512 manifest icons, and a padded maskable variant for Android launchers — plus a conservative service worker: navigations fall back to a cached shell when offline and hashed build assets are cached, while live show data (WebSockets, API) is never intercepted, so crew can never see stale show state. Also fixed the manifest still calling the app by its old short name.
 
