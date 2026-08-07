@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as Y from "yjs";
 import { ulid } from "ulid";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
@@ -115,6 +115,22 @@ const HIDDEN_COLS_KEY = (rundownId: string) => `oc:hiddencols:${rundownId}`;
 const COL_WIDTHS_KEY = (rundownId: string) => `oc:colwidths:${rundownId}`;
 
 /**
+ * Progress-bar fill that only ever animates forwards. Chrome will start the
+ * CSS width transition from the previous fill's value even across a remount,
+ * so on a row change the bar visibly receded instead of snapping to zero —
+ * the transition is disabled inline whenever the fraction shrinks (and on
+ * first paint), which prevents any width transition from starting.
+ */
+function BarFill({ frac, className }: { frac: number; className?: string }) {
+  const prevRef = useRef<number | null>(null);
+  const snap = prevRef.current == null || frac < prevRef.current;
+  useLayoutEffect(() => {
+    prevRef.current = frac;
+  });
+  return <div className={className} style={{ width: `${frac * 100}%`, transition: snap ? "none" : undefined }} />;
+}
+
+/**
  * The unmissable clock: fixed centre-top while the show runs. Counts down the
  * active item (green → amber in the final stretch → red counting up on
  * overrun), dims amber while paused.
@@ -151,7 +167,7 @@ function BigTimer({
       </div>
       <div className="bt-time">{display}</div>
       <div className="bt-bar">
-        <div style={{ width: `${frac * 100}%` }} />
+        <BarFill frac={frac} />
       </div>
     </div>
   );
@@ -1134,7 +1150,7 @@ export function RundownEditor({
                         return (
                           <td key="title-live" className="mono-progress" style={{ position: "relative" }}>
                             {rowRecord.cells[titleColumn.key] ?? ""}
-                            <div className={`row-progress ${over ? "over" : ""}`} style={{ width: `${frac * 100}%` }} />
+                            <BarFill className={`row-progress ${over ? "over" : ""}`} frac={frac} />
                           </td>
                         );
                       })()

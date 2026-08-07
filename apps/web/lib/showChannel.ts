@@ -36,6 +36,19 @@ export function useShowChannel(rundownId: string, device: "console" | "companion
   const wsRef = useRef<WebSocket | null>(null);
   const offsetRef = useRef(0);
   const lastSeqRef = useRef(-1);
+  // Commands sent while the socket is CONNECTING (or between reconnects) are
+  // queued and flushed once the server has welcomed us — never thrown at a
+  // socket that isn't ready. Stale entries (>15s) are dropped at flush.
+  const welcomedRef = useRef(false);
+  const pendingRef = useRef<{ frame: string; at: number }[]>([]);
+  const flushPending = () => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const now = Date.now();
+    for (const { frame, at } of pendingRef.current.splice(0)) {
+      if (now - at < 15_000) ws.send(frame);
+    }
+  };
 
   useEffect(() => {
     let closed = false;
@@ -71,6 +84,8 @@ export function useShowChannel(rundownId: string, device: "console" | "companion
             setTimezone(msg.timezone ?? null);
             lastSeqRef.current = msg.show.seq;
             setShow(msg.show);
+            welcomedRef.current = true;
+            flushPending();
             for (let i = 0; i < OFFSET_SAMPLES; i++)
               setTimeout(() => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ v: PROTOCOL_VERSION, t: "ping", t0: Date.now() })), i * 200);
             break;
@@ -96,6 +111,7 @@ export function useShowChannel(rundownId: string, device: "console" | "companion
 
       ws.onclose = () => {
         setConnected(false);
+        welcomedRef.current = false;
         if (closed) return;
         setTimeout(connect, retryDelay + Math.random() * 250);
         retryDelay = Math.min(retryDelay * 2, 8000);
@@ -119,7 +135,13 @@ export function useShowChannel(rundownId: string, device: "console" | "companion
       const payload: Record<string, unknown> = { v: PROTOCOL_VERSION, t: "cmd", id: ulid(), action };
       if (rowId) payload.rowId = rowId;
       if (action === "stop") payload.confirm = true;
-      wsRef.current?.send(JSON.stringify(payload));
+      const frame = JSON.stringify(payload);
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN && welcomedRef.current) ws.send(frame);
+      else {
+        pendingRef.current.push({ frame, at: Date.now() });
+        if (pendingRef.current.length > 20) pendingRef.current.shift();
+      }
     },
   };
 }

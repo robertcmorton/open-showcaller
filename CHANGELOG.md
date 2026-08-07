@@ -11,6 +11,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.6.1] — 2026-08-07
+
+### Fixed
+- **The item progress bar snaps to the start on every row change** instead of visibly receding for a second. The browser was starting the bar's smooth-fill animation from the previous row's position — even across an element swap — so each handover began with the bar sliding backwards. Both the big-timer bar and the in-row progress bar now disable the animation for any backwards movement and only animate while filling forwards. Verified live: on a row change the fill now paints at its true position (~1.5%) on the first frame, then resumes smooth filling.
+- **Commands clicked during a reconnect no longer throw** (`InvalidStateError: Still in CONNECTING state`). Transport and toggle commands issued while the show socket is still connecting are queued and sent the moment the server welcomes the connection; entries older than 15 seconds are dropped rather than fired late into a live show.
+
 ## [0.6.0] — 2026-08-07
 
 ### Changed
