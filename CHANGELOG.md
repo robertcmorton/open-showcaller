@@ -11,6 +11,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.13.0] — 2026-08-08
+
+### Added
+- **Spreadsheet-style column headers**: drag a header to reorder columns — the move is written to the shared document, so every open screen, the guest view, and the PDF/CSV exports follow instantly and it survives reloads. **Click a header label to rename it in place** (replacing the old double-click prompt); Enter commits, Escape cancels. A drop indicator shows where the column will land, and the resize handles still work exactly as before.
+
 ## [0.12.3] — 2026-08-08
 
 ### Changed

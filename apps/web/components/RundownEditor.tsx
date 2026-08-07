@@ -699,15 +699,43 @@ export function RundownEditor({
   const startColumn = columns.find((c) => c.kind === "startTime");
   const durationColumn = columns.find((c) => c.kind === "duration");
 
-  /** Double-click a header to rename the column — imported sheets keep their
-   *  own header names, and any of them can be changed here. */
-  const renameColumn = (col: ColumnDef | undefined): void => {
-    if (!col || !canEditContent) return;
-    const next = window.prompt("Column name", col.title);
-    if (next === null || !next.trim()) return;
+  // Column headers behave like a spreadsheet: click a label to edit it in
+  // place, drag it to reorder the column (the document's column order is the
+  // truth, so every screen and export follows).
+  const [editingCol, setEditingCol] = useState<string | null>(null); // column id
+  const [dragCol, setDragCol] = useState<string | null>(null); // column key
+  const [dropCol, setDropCol] = useState<string | null>(null); // column key
+
+  const commitColTitle = (colId: string, raw: string): void => {
+    const next = raw.trim();
+    if (next) {
+      const yCols = doc.getArray<Y.Map<unknown>>("columns");
+      doc.transact(() => {
+        for (const c of yCols) if (c.get("id") === colId) c.set("title", next);
+      });
+    }
+    setEditingCol(null);
+  };
+
+  /** Moves the dragged column to the drop target's position. A Yjs map can't
+   *  be re-inserted after deletion, so the column is cloned across. */
+  const moveColumn = (fromKey: string, toKey: string): void => {
     const yCols = doc.getArray<Y.Map<unknown>>("columns");
     doc.transact(() => {
-      for (const c of yCols) if (c.get("id") === col.id) c.set("title", next.trim());
+      const arr = yCols.toArray();
+      const fromIdx = arr.findIndex((c) => c.get("key") === fromKey);
+      if (fromIdx < 0) return;
+      const data = arr[fromIdx]!.toJSON() as Record<string, unknown>;
+      yCols.delete(fromIdx, 1);
+      const rest = yCols.toArray();
+      const toIdx = rest.findIndex((c) => c.get("key") === toKey);
+      if (toIdx < 0) return;
+      const clone = new Y.Map();
+      for (const [k, v] of Object.entries(data)) clone.set(k, v);
+      // Dropping on a column takes its place: before it when coming from the
+      // right, after it when coming from the left.
+      const origToIdx = arr.findIndex((c) => c.get("key") === toKey);
+      yCols.insert(fromIdx < origToIdx ? toIdx + 1 : toIdx, [clone]);
     });
   };
 
@@ -1342,12 +1370,61 @@ export function RundownEditor({
                   <th
                     key={c.id}
                     data-colkey={c.key}
-                    className={richColClass(c)}
+                    className={`${richColClass(c)} ${dragCol && dropCol === c.key && dragCol !== c.key ? "col-drop-target" : ""}`}
                     style={w ? { width: w, ...(c.kind === "richtext" ? { minWidth: Math.min(w, 140) } : {}) } : undefined}
-                    title={canEditContent ? "Double-click to rename this column" : undefined}
-                    onDoubleClick={() => renameColumn(c)}
+                    onDragOver={
+                      canEditContent
+                        ? (e) => {
+                            if (!dragCol) return;
+                            e.preventDefault();
+                            setDropCol(c.key);
+                          }
+                        : undefined
+                    }
+                    onDrop={
+                      canEditContent
+                        ? (e) => {
+                            e.preventDefault();
+                            if (dragCol && dragCol !== c.key) moveColumn(dragCol, c.key);
+                            setDragCol(null);
+                            setDropCol(null);
+                          }
+                        : undefined
+                    }
                   >
-                    {c.title}
+                    {editingCol === c.id ? (
+                      <input
+                        className="inline-edit"
+                        autoFocus
+                        size={1}
+                        defaultValue={c.title}
+                        style={{ width: "100%", boxSizing: "border-box", font: "inherit", textTransform: "none", letterSpacing: "normal" }}
+                        onFocus={(e) => e.currentTarget.select()}
+                        onBlur={(e) => commitColTitle(c.id, e.currentTarget.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") commitColTitle(c.id, e.currentTarget.value);
+                          if (e.key === "Escape") setEditingCol(null);
+                        }}
+                      />
+                    ) : (
+                      <span
+                        className="col-label"
+                        draggable={canEditContent}
+                        title={canEditContent ? "Click to rename · drag to move the column" : undefined}
+                        onClick={canEditContent ? () => setEditingCol(c.id) : undefined}
+                        onDragStart={(e) => {
+                          setDragCol(c.key);
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", c.key);
+                        }}
+                        onDragEnd={() => {
+                          setDragCol(null);
+                          setDropCol(null);
+                        }}
+                      >
+                        {c.title}
+                      </span>
+                    )}
                     {resizeHandle(c.key, nextColKey(c.key))}
                   </th>
                 );

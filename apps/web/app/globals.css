@@ -1361,6 +1361,23 @@ kbd {
   min-width: 680px;
 }
 
+/* Spreadsheet-style headers: click a label to rename, drag it to move the
+   column; the drop target shows an accent edge. */
+.col-label {
+  cursor: grab;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.col-label:hover {
+  color: var(--text);
+}
+th.col-drop-target {
+  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--accent-soft);
+}
+
 /* Custom column widths: edges pinned, no horizontal scroll — a squeezed
    column wraps its text onto extra lines instead. */
 .rundown-grid.cols-fixed {
