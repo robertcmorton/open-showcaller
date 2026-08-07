@@ -154,6 +154,17 @@ export function createApiHandler(
       }
     };
 
+    /** The sheet's own header names for the structural columns, if supplied. */
+    const baseTitlesOf = (body: Record<string, unknown>): { title?: string; start?: string; duration?: string } | undefined => {
+      const raw = body.baseTitles;
+      if (typeof raw !== "object" || raw === null) return undefined;
+      const pick = (k: "title" | "start" | "duration") => {
+        const v = (raw as Record<string, unknown>)[k];
+        return typeof v === "string" && v.trim() ? v.trim().slice(0, 80) : undefined;
+      };
+      return { title: pick("title"), start: pick("start"), duration: pick("duration") };
+    };
+
     /** Small inline image (data URL) or null to clear; anything else is rejected. */
     const imageValue = (v: unknown): string | null | undefined => {
       if (v === null) return null;
@@ -796,6 +807,7 @@ export function createApiHandler(
               plannedStartSec,
               use24h: event.use24h,
               roleColumnKey: typeof body.roleColumnKey === "string" && body.roleColumnKey ? body.roleColumnKey : null,
+              baseTitles: baseTitlesOf(body),
             },
             extraColumns,
             extraColumns.length > 0, // importer path: mirror the source sheet's columns exactly
@@ -884,6 +896,7 @@ export function createApiHandler(
             plannedStartSec,
             use24h: event?.use24h ?? false,
             roleColumnKey: typeof body.roleColumnKey === "string" && body.roleColumnKey ? body.roleColumnKey : null,
+            baseTitles: baseTitlesOf(body),
           },
           extraColumns,
           extraColumns.length > 0,

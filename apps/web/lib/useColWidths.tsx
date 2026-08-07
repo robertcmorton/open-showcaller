@@ -82,7 +82,10 @@ export function useColWidths(storageKey: string): {
         className="col-resize no-print"
         title="Drag to resize — double-click to reset all columns"
         onPointerDown={(e) => startResize(e, key, nextKey)}
-        onDoubleClick={resetAll}
+        onDoubleClick={(e) => {
+          e.stopPropagation(); // the th's own double-click renames the column
+          resetAll();
+        }}
       />
     );
 

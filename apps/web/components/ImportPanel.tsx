@@ -370,6 +370,12 @@ export function ImportPanel({
     setBusy(true);
     // The sheet's own first time becomes the planned start.
     const firstStart = importable.find((r) => r.startSec != null)?.startSec ?? null;
+    // The structural columns keep the sheet's own header names (ACTIVITY, TIME…).
+    const headerFor = (kind: "title" | "start" | "duration"): string | undefined => {
+      const i = mapping.findIndex((t) => t.kind === kind);
+      const h = i >= 0 ? headers[i]?.trim() : undefined;
+      return h || undefined;
+    };
     const buildPayload = async () => {
       const payload: Parameters<typeof api.replaceRundownContent>[1] = {
         rows: seedRows,
@@ -377,6 +383,7 @@ export function ImportPanel({
         roles,
         roleColumnKey: roleKey ?? (roles.length > 0 ? "roles" : null),
         plannedStartSec: firstStart,
+        baseTitles: { title: headerFor("title"), start: headerFor("start"), duration: headerFor("duration") },
       };
       if (sourceFile && sourceFile.size <= 12_000_000) {
         payload.sourceName = sourceFile.name;
@@ -511,14 +518,11 @@ export function ImportPanel({
               <strong style={{ fontSize: "var(--fs-sm)" }}>
                 {issues.length} cell{issues.length === 1 ? "" : "s"} couldn’t be parsed — fix, clear, or keep each one
               </strong>
-              {issues.slice(0, 12).map((issue) => (
-                <IssueFixRow key={issue.key} issue={issue} onApply={applyFix} onKeep={() => setDismissed(new Set([...dismissed, issue.key]))} />
-              ))}
-              {issues.length > 12 && (
-                <span style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)" }}>
-                  Showing the first 12 — fixing these reveals the rest.
-                </span>
-              )}
+              <div style={{ display: "grid", gap: 8, maxHeight: "38vh", overflow: "auto" }}>
+                {issues.map((issue) => (
+                  <IssueFixRow key={issue.key} issue={issue} onApply={applyFix} onKeep={() => setDismissed(new Set([...dismissed, issue.key]))} />
+                ))}
+              </div>
             </div>
           )}
 
@@ -539,7 +543,7 @@ export function ImportPanel({
             </div>
           )}
 
-          <div style={{ overflowX: "auto" }}>
+          <div style={{ overflow: "auto", maxHeight: "62vh" }}>
             <table className="rundown-grid" style={{ fontSize: "0.78rem" }}>
               <thead>
                 <tr>
@@ -568,7 +572,7 @@ export function ImportPanel({
                 </tr>
               </thead>
               <tbody>
-                {rows.slice(0, 40).map((r) =>
+                {rows.map((r) =>
                   r.kind === "spacer" ? null : (
                     <tr key={r.sourceIndex} className={r.kind === "banner" ? "group-row" : ""}>
                       <td style={{ color: KIND_STYLE[r.kind].color, fontSize: "0.7rem", whiteSpace: "nowrap" }}>
@@ -606,11 +610,9 @@ export function ImportPanel({
                 )}
               </tbody>
             </table>
-            {rows.length > 40 && (
-              <p style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", margin: "6px 0 0" }}>
-                Showing the first 40 rows — all {importable.length} import.
-              </p>
-            )}
+            <p style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", margin: "6px 0 0" }}>
+              All {rows.length} rows shown — {importable.length} will import.
+            </p>
           </div>
         </>
       )}

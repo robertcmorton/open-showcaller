@@ -781,6 +781,42 @@ kbd {
   background: rgba(255, 98, 89, 0.28);
   border-right-color: var(--over);
 }
+/* Outcome branches: rows tagged win / lose / golden point wear a small chip
+   in the number column; non-chosen branches skip themselves at full time. */
+.outcome-chip {
+  display: inline-block;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin-top: 2px;
+}
+.oc-win {
+  color: var(--under);
+  background: var(--under-soft);
+  border: 1px solid var(--under);
+}
+.oc-lose {
+  color: var(--over);
+  background: var(--over-soft);
+  border: 1px solid var(--over);
+}
+.oc-golden {
+  color: var(--warn);
+  background: var(--warn-soft);
+  border: 1px solid var(--warn);
+}
+
+/* Timing-check focus: the two rows whose numbers disagree glow amber while
+   their issue is on screen. */
+.rundown-grid tr.gap-row td {
+  background: var(--warn-soft);
+}
+.rundown-grid tr.gap-row-to td {
+  box-shadow: inset 0 2px 0 var(--warn), inset 0 -2px 0 var(--warn);
+}
+
 /* Pre-show walkthrough cursor: blue rails (the live cue's white rails are
    reserved for an actual running show). */
 .rundown-grid tr.walk-row td {
@@ -1313,6 +1349,28 @@ kbd {
   .grid-scroll.mobile-show-all .rundown-grid.cols-fixed {
     min-width: 680px;
   }
+}
+
+/* Event artwork slots: the ✕ appears on hover only. */
+.img-slot-x {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  height: 16px;
+  width: 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 9px;
+  line-height: 1;
+  display: none;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+}
+.img-slot:hover .img-slot-x {
+  display: grid;
 }
 
 /* ---------- Mobile ---------- */

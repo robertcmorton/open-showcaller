@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { isValidTimeZone, zoneAbbreviation } from "@opencall/core";
 import { api } from "../lib/api";
 
@@ -23,29 +23,36 @@ export function TimezoneField({
   atDate?: string;
   label?: string;
 }) {
-  const listId = useId();
-  const zones = useMemo(
-    () => (typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : []),
-    [],
-  );
+  // Every zone worldwide, grouped by region for a scannable dropdown.
+  const groups = useMemo(() => {
+    const zones = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
+    const byRegion = new Map<string, string[]>();
+    for (const z of zones) {
+      const region = z.includes("/") ? z.slice(0, z.indexOf("/")) : "Other";
+      const list = byRegion.get(region) ?? [];
+      list.push(z);
+      byRegion.set(region, list);
+    }
+    return [...byRegion.entries()];
+  }, []);
+  const known = groups.some(([, zs]) => zs.includes(value));
   const valid = isValidTimeZone(value);
   const previewMs = atDate ? Date.parse(`${atDate}T12:00:00`) : Date.now();
   return (
     <div>
       <label className="field-label">{label}</label>
-      <input
-        className="input"
-        list={listId}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="Australia/Sydney"
-        style={{ minWidth: 230 }}
-      />
-      <datalist id={listId}>
-        {zones.map((z) => (
-          <option key={z} value={z} />
+      <select className="input" value={value} onChange={(e) => onChange(e.target.value)} style={{ minWidth: 230 }}>
+        {!known && <option value={value}>{value}</option>}
+        {groups.map(([region, zs]) => (
+          <optgroup key={region} label={region}>
+            {zs.map((z) => (
+              <option key={z} value={z}>
+                {z.includes("/") ? z.slice(z.indexOf("/") + 1).replaceAll("_", " ").replaceAll("/", " / ") : z}
+              </option>
+            ))}
+          </optgroup>
         ))}
-      </datalist>
+      </select>
       <div
         style={{
           marginTop: 4,
@@ -57,7 +64,7 @@ export function TimezoneField({
       >
         {valid
           ? `${zoneAbbreviation(value, Number.isNaN(previewMs) ? Date.now() : previewMs)}${atDate ? ` on ${atDate}` : ""} — every clock and the run of show follow this zone, daylight saving included.`
-          : "Pick a zone from the list — type a city, e.g. Australia/Sydney."}
+          : "Pick a zone from the list."}
       </div>
     </div>
   );
@@ -85,9 +92,9 @@ export function LocationDialog({
       onClick={onClose}
     >
       <div className="panel" style={{ width: 430, maxWidth: "92vw", display: "grid", gap: 12 }} onClick={(e) => e.stopPropagation()}>
-        <strong>Location &amp; timezone</strong>
+        <strong>Event location</strong>
         <div>
-          <label className="field-label">Location</label>
+          <label className="field-label">Event location</label>
           <input className="input" autoFocus value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Main arena, Sydney" style={{ width: "100%" }} />
         </div>
         <TimezoneField value={tz} onChange={setTz} atDate={event.startDate} />

@@ -15,11 +15,65 @@ import {
 import { Dropdown, Icon } from "../../components/ui";
 import { ImportPanel } from "../../components/ImportPanel";
 import { SideNavSection, WithSideNav } from "../../components/SideNav";
-import { pickImage } from "../../lib/pickImage";
+import { imageFileToDataUrl, pickImage } from "../../lib/pickImage";
 import { AdminNavSection } from "../../components/AdminNav";
 import { VersionBadge } from "../../components/VersionBadge";
 import { LocationDialog, TimezoneField } from "../../components/TimezoneField";
 import { isValidTimeZone } from "@opencall/core";
+
+/** Event artwork slot: click (or drop an image on it) to set, hover ✕ to clear. */
+function ImageSlot({ value, hint, onChange }: { value: string | null; hint: string; onChange: (img: string | null) => void }) {
+  const [drag, setDrag] = useState(false);
+  return (
+    <div
+      className="img-slot"
+      title={value ? `${hint} — click to replace` : `${hint} — click to add, or drop an image`}
+      onClick={() => void pickImage().then((img) => img && onChange(img))}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDrag(true);
+      }}
+      onDragLeave={() => setDrag(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDrag(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file && file.type.startsWith("image/")) void imageFileToDataUrl(file).then((img) => img && onChange(img));
+      }}
+      style={{
+        position: "relative",
+        height: 40,
+        width: 40,
+        borderRadius: 8,
+        cursor: "pointer",
+        flexShrink: 0,
+        display: "grid",
+        placeItems: "center",
+        border: value && !drag ? "1px solid transparent" : `1.5px dashed ${drag ? "var(--accent)" : "var(--border)"}`,
+        background: drag ? "var(--accent-soft)" : undefined,
+      }}
+    >
+      {value ? (
+        <img src={value} alt="" style={{ height: 34, width: 34, objectFit: "contain" }} />
+      ) : (
+        <span style={{ color: "var(--text-3)", fontSize: 18, lineHeight: 1 }}>+</span>
+      )}
+      {value && (
+        <button
+          type="button"
+          className="img-slot-x"
+          title="Remove image"
+          onClick={(e) => {
+            e.stopPropagation();
+            onChange(null);
+          }}
+        >
+          ✕
+        </button>
+      )}
+    </div>
+  );
+}
 
 function CreateEventForm({ onCreated, teamId }: { onCreated: () => void; teamId?: string }) {
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -57,7 +111,7 @@ function CreateEventForm({ onCreated, teamId }: { onCreated: () => void; teamId?
         <input className="input" autoFocus placeholder="Launch Night" value={name} onChange={(e) => setName(e.target.value)} />
       </div>
       <div>
-        <label className="field-label">Location</label>
+        <label className="field-label">Event location</label>
         <input className="input" placeholder="Main arena" value={location} onChange={(e) => setLocation(e.target.value)} />
       </div>
       <div>
@@ -100,10 +154,13 @@ function CreateRundownForm({
   eventId,
   templates,
   onCreated,
+  leading,
 }: {
   eventId: string;
   templates: TemplateSummary[];
   onCreated: () => void;
+  /** Rendered at the start of the row (the Import run sheet button). */
+  leading?: React.ReactNode;
 }) {
   const [name, setName] = useState("");
   const [templateId, setTemplateId] = useState("");
@@ -134,6 +191,7 @@ function CreateRundownForm({
         });
       }}
     >
+      {leading}
       <input className="input" placeholder="New rundown name" value={name} onChange={(e) => setName(e.target.value)} />
       {templates.length > 0 && (
         <select
@@ -654,68 +712,38 @@ export default function AdminPage() {
                 {group.events.map((event) => (
             <section key={event.id} className="card">
               <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px 4px", opacity: event.archivedAt ? 0.55 : 1 }}>
-                {event.image1 && (
-                  <img src={event.image1} alt="" style={{ height: 36, width: 36, objectFit: "contain" }} />
-                )}
-                {event.image2 && (
-                  <img src={event.image2} alt="" style={{ height: 36, width: 36, objectFit: "contain" }} />
-                )}
-                <h2 style={{ fontSize: "1.02rem", fontWeight: 650, margin: 0 }}>{event.name}</h2>
-                {event.archivedAt && <span className="chip">archived</span>}
-                <span style={{ color: "var(--text-3)", fontSize: "var(--fs-sm)", flex: 1 }}>
-                  {event.location ? `${event.location} · ` : ""}
-                  {event.startDate} → {event.endDate}
-                </span>
+                <ImageSlot
+                  value={event.image1}
+                  hint="Event image / home team"
+                  onChange={(img) => void api.patchEvent(event.id, { image1: img }).then(reload)}
+                />
+                <ImageSlot
+                  value={event.image2}
+                  hint="Away team (sport)"
+                  onChange={(img) => void api.patchEvent(event.id, { image2: img }).then(reload)}
+                />
+                <div style={{ minWidth: 0 }}>
+                  <h2 style={{ fontSize: "1.02rem", fontWeight: 650, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                    {event.name}
+                    {event.archivedAt && <span className="chip">archived</span>}
+                  </h2>
+                  <div style={{ color: "var(--text-3)", fontSize: "var(--fs-sm)", marginTop: 2 }}>
+                    {event.location ? `${event.location} · ` : ""}
+                    {event.startDate} → {event.endDate}
+                  </div>
+                </div>
+                <span style={{ flex: 1 }} />
                 <span className="hide-mobile" style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                 <button className="btn btn-sm btn-ghost" onClick={() => rename("event", event.id, event.name)}>
                   Rename
                 </button>
                 <DatesEditor key={`${event.startDate}${event.endDate}`} event={event} onSaved={reload} />
-                <Dropdown label="Images" className="btn btn-sm btn-ghost">
-                  <button
-                    type="button"
-                    className="menu-item"
-                    onClick={() =>
-                      void pickImage().then((img) => {
-                        if (img) void api.patchEvent(event.id, { image1: img }).then(reload);
-                      })
-                    }
-                  >
-                    <span className="check" />
-                    {event.image1 ? "Replace image / home team" : "Add image (or home team)"}
-                  </button>
-                  <button
-                    type="button"
-                    className="menu-item"
-                    onClick={() =>
-                      void pickImage().then((img) => {
-                        if (img) void api.patchEvent(event.id, { image2: img }).then(reload);
-                      })
-                    }
-                  >
-                    <span className="check" />
-                    {event.image2 ? "Replace away team image" : "Add away team image (sport)"}
-                  </button>
-                  {(event.image1 || event.image2) && (
-                    <>
-                      <div className="menu-sep" />
-                      <button
-                        type="button"
-                        className="menu-item"
-                        onClick={() => void api.patchEvent(event.id, { image1: null, image2: null }).then(reload)}
-                      >
-                        <span className="check" />
-                        Remove images
-                      </button>
-                    </>
-                  )}
-                </Dropdown>
                 <button
                   className="btn btn-sm btn-ghost"
                   title="The event's location decides its timezone — clocks follow the daylight-saving rules in force there on the show date"
                   onClick={() => setLocEvent(event)}
                 >
-                  Location…
+                  Event location…
                 </button>
                 <button
                   className="btn btn-sm btn-ghost"
@@ -740,31 +768,7 @@ export default function AdminPage() {
                   </button>
                   <button type="button" className="menu-item" onClick={() => setLocEvent(event)}>
                     <span className="check" />
-                    Location…
-                  </button>
-                  <button
-                    type="button"
-                    className="menu-item"
-                    onClick={() =>
-                      void pickImage().then((img) => {
-                        if (img) void api.patchEvent(event.id, { image1: img }).then(reload);
-                      })
-                    }
-                  >
-                    <span className="check" />
-                    {event.image1 ? "Replace image / home team" : "Add image (or home team)"}
-                  </button>
-                  <button
-                    type="button"
-                    className="menu-item"
-                    onClick={() =>
-                      void pickImage().then((img) => {
-                        if (img) void api.patchEvent(event.id, { image2: img }).then(reload);
-                      })
-                    }
-                  >
-                    <span className="check" />
-                    {event.image2 ? "Replace away team image" : "Add away team image (sport)"}
+                    Event location…
                   </button>
                   <button
                     type="button"
@@ -810,56 +814,90 @@ export default function AdminPage() {
                         {r.description ?? ""} {r.showDate ? `· ${r.showDate}` : ""}
                       </span>
                     </span>
-                    <Link href={`/show/${r.id}`} className="btn btn-sm btn-primary" style={{ textDecoration: "none" }}>
+                    <Link
+                      href={`/show/${r.id}`}
+                      className="btn btn-sm btn-primary"
+                      style={{ textDecoration: "none" }}
+                      title="Showcaller console: full transport (start, pause, next) plus live editing — the caller's screen"
+                    >
                       Show
                     </Link>
-                    <Link href={`/edit/${r.id}`} className="btn btn-sm" style={{ textDecoration: "none" }}>
+                    <Link
+                      href={`/edit/${r.id}`}
+                      className="btn btn-sm"
+                      style={{ textDecoration: "none" }}
+                      title="Edit the sheet with no transport controls — safe for producers preparing content"
+                    >
                       Edit
                     </Link>
-                    <Link href={`/view/${r.id}`} className="btn btn-sm" style={{ textDecoration: "none" }}>
+                    <Link
+                      href={`/view/${r.id}`}
+                      className="btn btn-sm"
+                      style={{ textDecoration: "none" }}
+                      title="Read-only: follows the live show, nothing can be changed — for anyone who just watches"
+                    >
                       View
                     </Link>
-                    {(["follow", "timer", "prompter"] as const).map((view) => (
-                      <Link key={view} href={`/${view}/${r.id}`} className="chip" style={{ textDecoration: "none" }}>
+                    {(
+                      [
+                        ["follow", "Crew companion for phones — tracks the live cue with your role highlighted"],
+                        ["timer", "Full-screen speaker timer — big countdown of the current item"],
+                        ["prompter", "Script prompter — large scrolling script that follows the caller"],
+                      ] as const
+                    ).map(([view, hint]) => (
+                      <Link key={view} href={`/${view}/${r.id}`} className="chip" style={{ textDecoration: "none" }} title={hint}>
                         {view}
                       </Link>
                     ))}
-                    <span className="hide-mobile" style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
-                      <button
-                        className="btn btn-sm"
-                        title="Copy a URL that opens this rundown read-only — for camera operators and crew"
-                        onClick={() =>
-                          void copyViewOnlyLink(r.id).then((url) =>
-                            window.alert(`View-only link copied:\n\n${url}\n\nAnyone with it can watch this rundown live.`),
-                          )
-                        }
-                      >
-                        Copy view link
-                      </button>
-                      <button
-                        className="btn btn-sm btn-ghost"
-                        title="Re-import this rundown from a run sheet — content is replaced with the latest import quality; links and codes keep working"
-                        onClick={() => setImportFor({ eventId: event.id, replace: { id: r.id, name: r.name } })}
-                      >
-                        Update import…
-                      </button>
-                      <button className="btn btn-sm btn-ghost" onClick={() => rename("rundown", r.id, r.name)}>
-                        Rename
-                      </button>
-                      <button
-                        className="btn btn-sm btn-ghost"
-                        onClick={() => void api.archiveRundown(r.id, !r.archivedAt).then(reload)}
-                      >
-                        {r.archivedAt ? "Unarchive" : "Archive"}
-                      </button>
-                      <button className="btn btn-sm btn-ghost" onClick={() => void api.duplicateRundown(r.id).then(reload)}>
-                        Duplicate
-                      </button>
-                      <DangerButton
-                        label="Delete"
-                        confirmLabel="Really delete?"
-                        onConfirm={() => void api.deleteRundown(r.id).then(reload)}
-                      />
+                    <span className="hide-mobile">
+                      <Dropdown label="⋯" className="btn btn-sm btn-ghost">
+                        <button
+                          type="button"
+                          className="menu-item"
+                          title="Copy a URL that opens this rundown read-only — for camera operators and crew"
+                          onClick={() =>
+                            void copyViewOnlyLink(r.id).then((url) =>
+                              window.alert(`View-only link copied:\n\n${url}\n\nAnyone with it can watch this rundown live.`),
+                            )
+                          }
+                        >
+                          <span className="check" />
+                          Copy view link
+                        </button>
+                        <button
+                          type="button"
+                          className="menu-item"
+                          title="Re-import from the stored run sheet with the latest import quality — links and codes keep working"
+                          onClick={() => setImportFor({ eventId: event.id, replace: { id: r.id, name: r.name } })}
+                        >
+                          <span className="check" />
+                          Update import…
+                        </button>
+                        <button type="button" className="menu-item" onClick={() => rename("rundown", r.id, r.name)}>
+                          <span className="check" />
+                          Rename
+                        </button>
+                        <button type="button" className="menu-item" onClick={() => void api.duplicateRundown(r.id).then(reload)}>
+                          <span className="check" />
+                          Duplicate
+                        </button>
+                        <button
+                          type="button"
+                          className="menu-item"
+                          onClick={() => void api.archiveRundown(r.id, !r.archivedAt).then(reload)}
+                        >
+                          <span className="check" />
+                          {r.archivedAt ? "Unarchive" : "Archive"}
+                        </button>
+                        <div className="menu-sep" />
+                        <div data-keep-open style={{ padding: "4px 9px" }}>
+                          <DangerButton
+                            label="Delete"
+                            confirmLabel="Really delete?"
+                            onConfirm={() => void api.deleteRundown(r.id).then(reload)}
+                          />
+                        </div>
+                      </Dropdown>
                     </span>
                     <MobileActions>
                       <button
@@ -926,14 +964,24 @@ export default function AdminPage() {
                     window.open(`/show/${rundownId}`, "_blank");
                   }}
                 />
-              ) : (
-                <div style={{ padding: "0 16px 4px" }}>
-                  <button className="btn btn-sm" onClick={() => setImportFor({ eventId: event.id })}>
-                    ⤒ Import run sheet…
-                  </button>
-                </div>
-              )}
-              <CreateRundownForm eventId={event.id} templates={templates} onCreated={reload} />
+              ) : null}
+              <CreateRundownForm
+                eventId={event.id}
+                templates={templates}
+                onCreated={reload}
+                leading={
+                  !importFor || importFor.eventId !== event.id ? (
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      title="Create a rundown from an XLSX, CSV, or PDF run sheet"
+                      onClick={() => setImportFor({ eventId: event.id })}
+                    >
+                      ⤒ Import run sheet…
+                    </button>
+                  ) : undefined
+                }
+              />
             </section>
                 ))}
                 {group.events.length === 0 && (

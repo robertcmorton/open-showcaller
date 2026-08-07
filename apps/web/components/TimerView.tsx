@@ -36,7 +36,10 @@ export function TimerView({ rundownId, joinCode }: { rundownId: string; joinCode
     <main
       onDoubleClick={() => void document.documentElement.requestFullscreen?.().catch(() => undefined)}
       style={{
-        minHeight: "100vh",
+        // Sized to the screen in BOTH axes (min of vw/vh) so nothing ever
+        // overflows — wide, tall, phone, or confidence monitor.
+        height: "100dvh",
+        overflow: "hidden",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -45,19 +48,31 @@ export function TimerView({ rundownId, joinCode }: { rundownId: string; joinCode
         background: "#000",
         cursor: "default",
         userSelect: "none",
+        padding: "0 2vw",
       }}
     >
-      <div style={{ color: "var(--text-2)", fontSize: "3.4vw", fontWeight: 500 }}>
+      <div
+        style={{
+          color: "var(--text-2)",
+          fontSize: "min(3.4vw, 5vh)",
+          fontWeight: 500,
+          maxWidth: "94vw",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
         {active ? active.title : meta.name}
       </div>
       <div
         style={{
           border: "1px solid var(--border)",
           borderRadius: 8,
-          padding: "2vh 5vw",
+          padding: "1.5vh 4vw",
+          maxWidth: "96vw",
           fontFamily: "var(--font-mono)",
           fontWeight: 700,
-          fontSize: "22vw",
+          fontSize: "min(22vw, 52vh)",
           lineHeight: 1.05,
           color,
           fontVariantNumeric: "tabular-nums",
@@ -65,7 +80,7 @@ export function TimerView({ rundownId, joinCode }: { rundownId: string; joinCode
       >
         {isLive ? display : "--:--"}
       </div>
-      <div style={{ color: "var(--text-3)", fontSize: "1.6vw" }}>
+      <div style={{ color: "var(--text-3)", fontSize: "min(1.6vw, 2.6vh)" }}>
         {!channel.connected
           ? "reconnecting…"
           : !isLive

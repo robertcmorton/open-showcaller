@@ -63,13 +63,16 @@ export function useShowChannel(rundownId: string, device: "console" | "companion
 
       ws.onopen = () => {
         retryDelay = 500;
-        // A join code always wins (it carries the role). Otherwise consoles
-        // send the stored admin token as a session token — on dev-open
-        // servers any session token maps to caller.
+        // A join code always wins (it carries the role). Otherwise any stored
+        // sign-in token authenticates — consoles AND companions (follow /
+        // timer / prompter opened from the dashboard have no code, and the
+        // DEV123 fallback is dead on locked servers, which left them
+        // "reconnecting" forever). DEV123 remains the dev-open last resort.
+        const stored = localStorage.getItem("oc:admintoken");
         const auth = joinCode
           ? { kind: "join" as const, code: joinCode.toUpperCase() }
-          : device === "console"
-            ? { kind: "session" as const, token: localStorage.getItem("oc:admintoken") ?? "dev" }
+          : device === "console" || stored
+            ? { kind: "session" as const, token: stored ?? "dev" }
             : { kind: "join" as const, code: "DEV123" };
         ws.send(JSON.stringify({ v: PROTOCOL_VERSION, t: "hello", auth, device, lastSeq: lastSeqRef.current >= 0 ? lastSeqRef.current : undefined }));
       };

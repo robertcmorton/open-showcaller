@@ -46,6 +46,7 @@ function SortableRow({
   active,
   next,
   walk,
+  gapMark,
   paused,
   mine,
   mineColor,
@@ -62,6 +63,8 @@ function SortableRow({
   next: boolean;
   /** Pre-show walkthrough cursor sits on this row. */
   walk: boolean;
+  /** This row is part of the timing-check issue on screen. */
+  gapMark?: "from" | "to" | null;
   paused: boolean;
   mine: boolean;
   mineColor: string;
@@ -74,7 +77,7 @@ function SortableRow({
   return (
     <tr
       ref={setNodeRef}
-      className={`${row.type === "group" ? "group-row" : ""} ${row.type === "milestone" ? "milestone-row" : ""} ${selected ? "selected" : ""} ${active ? "active-row" : ""} ${next ? "next-row" : ""} ${walk ? "walk-row" : ""} ${active && paused ? "paused" : ""} ${mine ? "my-role-row" : ""} ${row.skipped ? "skipped-row" : ""} ${clockMark ? "clock-row" : ""}`}
+      className={`${row.type === "group" ? "group-row" : ""} ${row.type === "milestone" ? "milestone-row" : ""} ${selected ? "selected" : ""} ${active ? "active-row" : ""} ${next ? "next-row" : ""} ${walk ? "walk-row" : ""} ${gapMark ? `gap-row gap-row-${gapMark}` : ""} ${active && paused ? "paused" : ""} ${mine ? "my-role-row" : ""} ${row.skipped ? "skipped-row" : ""} ${clockMark ? "clock-row" : ""}`}
       title={walk ? "Walkthrough position — synced to every screen" : clockMark ? "Event time is here per the TIME column" : undefined}
       style={{
         transform: CSS.Transform.toString(transform),
@@ -87,6 +90,11 @@ function SortableRow({
       <td className="row-number mono" onClick={onSelect} {...attributes} {...listeners}>
         <span className="rn-num">{displayNumber}</span>
         {active && <span className="cue-badge">CUE</span>}
+        {!active && row.outcome && (
+          <span className={`outcome-chip oc-${row.outcome}`} title="Alternate ending — plays only when this outcome is picked at full time">
+            {row.outcome === "win" ? "WIN" : row.outcome === "lose" ? "LOSE" : row.outcome === "golden" ? "GP" : row.outcome}
+          </span>
+        )}
       </td>
       {children}
     </tr>
@@ -97,7 +105,7 @@ function SortableRow({
 function cloneRow(source: Y.Map<unknown>, newId: string): Y.Map<unknown> {
   const copy = new Y.Map();
   copy.set("id", newId);
-  for (const field of ["type", "hardStartSec", "durationSec", "durationMuted", "durationHidden", "backtime", "color"]) {
+  for (const field of ["type", "hardStartSec", "durationSec", "durationMuted", "durationHidden", "backtime", "color", "outcome"]) {
     const v = source.get(field);
     if (v !== undefined) copy.set(field, v);
   }
@@ -215,6 +223,13 @@ export function RundownEditor({
   const [durationPopover, setDurationPopover] = useState<string | null>(null); // rowId
   const [panel, setPanel] = useState<"guest" | "history" | "join" | null>(null);
   const [reconciling, setReconciling] = useState(false);
+  // The timing-check issue currently on screen: its rows are highlighted in
+  // the grid and the disagreeing row is scrolled into view.
+  const [gapFocus, setGapFocus] = useState<{ fromId: string; toId: string } | null>(null);
+  useEffect(() => {
+    if (!gapFocus) return;
+    document.querySelector("tr.gap-row-to")?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [gapFocus?.toId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [hiddenCols, setHiddenCols] = useState<ReadonlySet<string>>(new Set());
   // Per-user column width overrides (drag the header edges); imported sheets
   // still provide the starting widths.
@@ -387,6 +402,34 @@ export function RundownEditor({
   const setRowField = (rowId: string, field: string, value: unknown): void => {
     doc.transact(() => {
       yRows.get(rowId)?.set(field, value);
+    });
+  };
+
+  // Outcome branches (win / lose / golden point): picking one plays its rows
+  // and skips the other endings — in one undoable transaction, synced to
+  // every screen, and the transport jumps to the chosen branch when live.
+  const outcomeRows = rows.filter((r) => r.outcome);
+  const outcomesPresent = (["golden", "win", "lose"] as const).filter((o) => outcomeRows.some((r) => r.outcome === o));
+  const chosenOutcome = (() => {
+    for (const o of outcomesPresent) {
+      const mine = outcomeRows.filter((r) => r.outcome === o);
+      const others = outcomeRows.filter((r) => r.outcome !== o);
+      if (mine.length > 0 && mine.every((r) => !r.skipped) && others.length > 0 && others.every((r) => r.skipped)) return o;
+    }
+    return null;
+  })();
+  const pickOutcome = (o: string): void => {
+    doc.transact(() => {
+      for (const r of outcomeRows) yRows.get(r.id)?.set("skipped", r.outcome !== o);
+    });
+    if (showLive) {
+      const first = rows.find((r) => r.outcome === o && r.type === "cue");
+      if (first) channel.sendCmd("jump", first.id);
+    }
+  };
+  const clearOutcome = (): void => {
+    doc.transact(() => {
+      for (const r of outcomeRows) yRows.get(r.id)?.set("skipped", false);
     });
   };
 
@@ -580,6 +623,20 @@ export function RundownEditor({
   const allRichColumns = columns.filter((c) => c.kind === "richtext");
   const richColumns = allRichColumns.filter((c) => !hiddenCols.has(c.key));
   const titleColumn = columns.find((c) => c.kind === "title");
+  const startColumn = columns.find((c) => c.kind === "startTime");
+  const durationColumn = columns.find((c) => c.kind === "duration");
+
+  /** Double-click a header to rename the column — imported sheets keep their
+   *  own header names, and any of them can be changed here. */
+  const renameColumn = (col: ColumnDef | undefined): void => {
+    if (!col || !canEditContent) return;
+    const next = window.prompt("Column name", col.title);
+    if (next === null || !next.trim()) return;
+    const yCols = doc.getArray<Y.Map<unknown>>("columns");
+    doc.transact(() => {
+      for (const c of yCols) if (c.get("id") === col.id) c.set("title", next.trim());
+    });
+  };
 
   // Column order as rendered — each resize handle moves the boundary between
   // a column and the one after it, so the table's outer edges stay pinned.
@@ -906,6 +963,43 @@ export function RundownEditor({
             })()}
           </>
         )}
+        {isShow && outcomesPresent.length > 0 && (
+          <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+            <span
+              className="chip"
+              title="This sheet has alternate endings. Pick the real result when it happens — the other branches skip themselves and every screen follows. Golden point loops back here for the final pick."
+            >
+              Full time:
+            </span>
+            {outcomesPresent.map((o) => (
+              <button
+                key={o}
+                className={`btn btn-sm ${chosenOutcome === o ? "is-on" : ""}`}
+                style={
+                  chosenOutcome === o
+                    ? {
+                        borderColor: o === "win" ? "var(--under)" : o === "lose" ? "var(--over)" : "var(--warn)",
+                        color: o === "win" ? "var(--under)" : o === "lose" ? "var(--over)" : "var(--warn)",
+                      }
+                    : undefined
+                }
+                title={
+                  o === "golden"
+                    ? "Scores level — play the golden-point block; the win/lose pick comes back after it"
+                    : `Play the ${o} ending and skip the others`
+                }
+                onClick={() => pickOutcome(o)}
+              >
+                {o === "golden" ? "⚡ Golden point" : o === "win" ? "Win" : "Lose"}
+              </button>
+            ))}
+            {chosenOutcome && (
+              <button className="btn btn-sm btn-ghost" title="Un-choose: all endings visible again" onClick={clearOutcome}>
+                Reset
+              </button>
+            )}
+          </span>
+        )}
         {isShow && showLive && (
           <button
             className={`btn btn-sm ${clockFollow ? "is-on" : ""}`}
@@ -1028,6 +1122,27 @@ export function RundownEditor({
               >
                 Skip
               </button>
+              <Dropdown label="Outcome" className="btn btn-sm">
+                {(
+                  [
+                    ["win", "Win"],
+                    ["lose", "Lose"],
+                    ["golden", "Golden point / draw"],
+                    [null, "Not an outcome branch"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={String(value)}
+                    type="button"
+                    className="menu-item"
+                    title="Tag the selected rows as an alternate ending — at full time the caller picks one branch and the others skip themselves"
+                    onClick={() => doc.transact(() => selected.forEach((id) => yRows.get(id)?.set("outcome", value)))}
+                  >
+                    <span className="check" />
+                    {label}
+                  </button>
+                ))}
+              </Dropdown>
               {[
                 ["rgba(229,72,77,0.16)", "Red"],
                 ["rgba(232,176,60,0.16)", "Amber"],
@@ -1104,7 +1219,11 @@ export function RundownEditor({
           timing={timing}
           gaps={timingGaps}
           use24h={meta.use24h}
-          onClose={() => setReconciling(false)}
+          onClose={() => {
+            setReconciling(false);
+            setGapFocus(null);
+          }}
+          onCurrent={setGapFocus}
         />
       )}
 
@@ -1147,9 +1266,33 @@ export function RundownEditor({
           <thead>
             <tr>
               <th data-colkey="rownum" style={{ width: colWidths["rownum"] }}>{resizeHandle("rownum", nextColKey("rownum"))}</th>
-              <th data-colkey="title" style={{ width: colWidths["title"] }}>Title{resizeHandle("title", nextColKey("title"))}</th>
-              <th data-colkey="start" style={{ width: colWidths["start"] }}>Start{resizeHandle("start", nextColKey("start"))}</th>
-              <th data-colkey="duration" style={{ width: colWidths["duration"] }}>Duration{resizeHandle("duration", nextColKey("duration"))}</th>
+              <th
+                data-colkey="title"
+                style={{ width: colWidths["title"] }}
+                title={canEditContent ? "Double-click to rename this column" : undefined}
+                onDoubleClick={() => renameColumn(titleColumn)}
+              >
+                {titleColumn?.title ?? "Title"}
+                {resizeHandle("title", nextColKey("title"))}
+              </th>
+              <th
+                data-colkey="start"
+                style={{ width: colWidths["start"] }}
+                title={canEditContent ? "Double-click to rename this column" : undefined}
+                onDoubleClick={() => renameColumn(startColumn)}
+              >
+                {startColumn?.title ?? "Start"}
+                {resizeHandle("start", nextColKey("start"))}
+              </th>
+              <th
+                data-colkey="duration"
+                style={{ width: colWidths["duration"] }}
+                title={canEditContent ? "Double-click to rename this column" : undefined}
+                onDoubleClick={() => renameColumn(durationColumn)}
+              >
+                {durationColumn?.title ?? "Duration"}
+                {resizeHandle("duration", nextColKey("duration"))}
+              </th>
               {showZero && (
                 <th data-colkey="zero" style={{ width: colWidths["zero"] }} title="Countdown to the next anchored time">
                   Zero{resizeHandle("zero", nextColKey("zero"))}
@@ -1163,6 +1306,8 @@ export function RundownEditor({
                     data-colkey={c.key}
                     className={richColClass(c)}
                     style={w ? { width: w, minWidth: Math.min(w, 140) } : undefined}
+                    title={canEditContent ? "Double-click to rename this column" : undefined}
+                    onDoubleClick={() => renameColumn(c)}
                   >
                     {c.title}
                     {resizeHandle(c.key, nextColKey(c.key))}
@@ -1188,6 +1333,9 @@ export function RundownEditor({
                     active={activeRowId === rowRecord.id}
                     next={nextRowId === rowRecord.id}
                     walk={walkRowId === rowRecord.id}
+                    gapMark={
+                      gapFocus ? (gapFocus.toId === rowRecord.id ? "to" : gapFocus.fromId === rowRecord.id ? "from" : null) : null
+                    }
                     paused={isPaused ?? false}
                     mine={myRowColors.has(rowRecord.id)}
                     mineColor={myRowColors.get(rowRecord.id) ?? "#2dd4bf"}

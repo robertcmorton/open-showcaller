@@ -11,6 +11,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.9.0] — 2026-08-07
+
+### Added
+- **Outcome branches — win / lose / golden point.** Sheets for sport carry alternate endings that share one start time; the app now understands them. Tag blocks of rows as Win, Lose, or Golden point/draw (select rows → Outcome), and a "Full time" chooser appears on the console: pick the real result when it happens and the other endings skip themselves on every screen, with the transport jumping straight to the chosen block. Golden point loops: pick it when scores are level, play the extra-time block, and the Win/Lose pick comes back at the end. Choices are undoable, work pre-show for planning (Reset restores all endings), and rows wear WIN/LOSE/GP chips in the number column.
+- **Imported sheets keep their own column headers** — the structural columns now carry the sheet's names (ACTIVITY, TIME…) instead of generic Title/Start/Duration, department columns already kept theirs, and **any column can be renamed by double-clicking its header**.
+- **Event artwork slots**: the Images menu is gone — each event card shows two slots; click the + or drop an image straight onto one, hover for ✕ to remove.
+
+### Changed
+- **Event location** (renamed from "Location") now picks the timezone from a proper dropdown of all 418 world zones grouped by region, still previewing the GMT offset on the event's own date.
+- Event cards put the location and dates beneath the event name, and each rundown sits on a single line — open buttons and view chips visible, everything else in a ⋯ menu, with the import/create controls on one compact row. Show/Edit/View and follow/timer/prompter now explain themselves on hover.
+- **The import preview shows every row** (scrollable) instead of stopping at 40, and the unparsed-cell fix-list shows every issue instead of 12.
+- **The timing check highlights the exact rows involved** in the sheet while each issue is on screen, and its fixes now say precisely what they'll do ("Change “Speech” duration to 05:00", "Change “Video package” start to 9:08 AM") instead of "absorb" and "un-anchor".
+
+### Fixed
+- **follow / timer / prompter no longer sit on "reconnecting…" on locked servers** — they now authenticate with your sign-in like the console does (crew join codes unchanged).
+- The speaker timer always fits the screen — wide, tall, phone, or confidence monitor.
+- Development servers evict any leftover service worker so a stale cached build can never mask fresh code.
+
 ## [0.8.1] — 2026-08-07
 
 ### Changed

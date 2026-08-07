@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as Y from "yjs";
 import { formatDuration, formatTimeOfDay, type PlanTiming } from "@opencall/core";
 import type { ProjectedRow } from "@opencall/db/doc";
@@ -52,6 +52,7 @@ export function ReconcilePanel({
   gaps,
   use24h,
   onClose,
+  onCurrent,
 }: {
   doc: Y.Doc;
   rows: ProjectedRow[];
@@ -59,12 +60,19 @@ export function ReconcilePanel({
   gaps: TimingGap[];
   use24h: boolean;
   onClose: () => void;
+  /** Reports the rows of the issue on screen so the grid can highlight them. */
+  onCurrent?: (focus: { fromId: string; toId: string } | null) => void;
 }) {
   const [accepted, setAccepted] = useState<ReadonlySet<string>>(new Set());
   const yRows = doc.getMap<Y.Map<unknown>>("rows");
 
   const open = gaps.filter((g) => !accepted.has(`${rows[g.toIndex]?.id}`));
   const current = open[0];
+  const fromId = current ? rows[current.fromIndex]?.id : undefined;
+  const toId = current ? rows[current.toIndex]?.id : undefined;
+  useEffect(() => {
+    onCurrent?.(fromId && toId ? { fromId, toId } : null);
+  }, [fromId, toId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!current) {
     return (
@@ -137,13 +145,12 @@ export function ReconcilePanel({
               });
             }}
           >
-            Absorb into “{(absorb.title || "untitled").slice(0, 24)}”
+            Change “{(absorb.title || "untitled").slice(0, 24)}” duration to {formatDuration(absorbNew)}
           </button>
           <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-2)" }}>
-            Trust the printed times. Assume “{(absorb.title || "untitled").slice(0, 24)}” really runs{" "}
-            <span className="mono">{formatDuration(absorbNew)}</span> (its duration changes from{" "}
-            <span className="mono">{absorb.durationSec != null ? formatDuration(absorb.durationSec) : "—"}</span>) so the
-            durations meet the printed time exactly.
+            Trust the printed times: “{(absorb.title || "untitled").slice(0, 24)}” goes from{" "}
+            <span className="mono">{absorb.durationSec != null ? formatDuration(absorb.durationSec) : "—"}</span> to{" "}
+            <span className="mono">{formatDuration(absorbNew)}</span>, and the durations then meet the printed time exactly.
           </span>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
@@ -156,19 +163,18 @@ export function ReconcilePanel({
               });
             }}
           >
-            Un-anchor “{(to.title || "untitled").slice(0, 24)}”
+            Change “{(to.title || "untitled").slice(0, 24)}” start to{" "}
+            {to.hardStartSec != null ? formatTimeOfDay(to.hardStartSec - current.gapSec, use24h) : "—"}
           </button>
           <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-2)" }}>
-            Trust the durations. Drop the printed{" "}
-            <span className="mono">{to.hardStartSec != null ? formatTimeOfDay(to.hardStartSec, use24h) : "—"}</span> — the row
-            will start when the items above finish (
-            <span className="mono">{to.hardStartSec != null ? formatTimeOfDay(to.hardStartSec - current.gapSec, use24h) : "—"}</span>
-            ) and move with them from now on.
+            Trust the durations: the printed{" "}
+            <span className="mono">{to.hardStartSec != null ? formatTimeOfDay(to.hardStartSec, use24h) : "—"}</span> is dropped
+            and the row starts when the items above finish, moving with them from now on.
           </span>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
           <button className="btn btn-sm btn-ghost" style={{ flexShrink: 0 }} onClick={() => setAccepted(new Set([...accepted, to.id]))}>
-            Gap is intentional
+            Keep both — the gap is deliberate
           </button>
           <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-2)" }}>
             Both numbers are right — the sheet really does hold for{" "}

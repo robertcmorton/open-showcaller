@@ -59,6 +59,9 @@ export interface DocMeta {
   versionLabel?: string;
   /** The imported column that carries role assignments (WHO, ROLE…), if any. */
   roleColumnKey?: string | null;
+  /** The source sheet's own header names for the structural columns
+   *  (e.g. ACTIVITY/TIME) — shown instead of the generic Title/Start/Duration. */
+  baseTitles?: { title?: string; start?: string; duration?: string };
 }
 
 export interface KeyTime {
@@ -105,7 +108,15 @@ export function buildRundownDoc(
       const colId = ulid();
       col.set("id", colId);
       col.set("key", def.key);
-      col.set("title", def.title);
+      const sheetTitle =
+        def.kind === "title"
+          ? docMeta.baseTitles?.title
+          : def.kind === "startTime"
+            ? docMeta.baseTitles?.start
+            : def.kind === "duration"
+              ? docMeta.baseTitles?.duration
+              : undefined;
+      col.set("title", sheetTitle || def.title);
       col.set("kind", def.kind);
       if (def.builtin) col.set("builtin", true);
       columns.push([col]);
@@ -178,6 +189,9 @@ export interface ProjectedRow extends PlanRow {
   /** The sheet's own row number, mirrored into the grid's # column. */
   sourceNumber?: string;
   color?: string;
+  /** Outcome branch this row belongs to ("win" | "lose" | "golden"), if any —
+   *  the caller picks one at full time and the others auto-skip. */
+  outcome?: string | null;
 }
 
 /** Marks the cell editor can produce — a cell mentioning one renders rich. */
@@ -198,6 +212,9 @@ export function projectRundownDoc(doc: Y.Doc): {
     use24h: (metaMap.get("use24h") as boolean | undefined) ?? false,
     versionLabel: (metaMap.get("versionLabel") as string | undefined) ?? "",
     roleColumnKey: (metaMap.get("roleColumnKey") as string | undefined) ?? null,
+    // Sheet header names live on the columns themselves after building; the
+    // projection never needs them separately.
+    baseTitles: {},
   };
   const roles: RoleDef[] = doc
     .getArray<Y.Map<unknown>>("roles")
@@ -266,6 +283,7 @@ export function projectRundownDoc(doc: Y.Doc): {
       cells,
       cellsRich,
       color: row.get("color") as string | undefined,
+      outcome: (row.get("outcome") as string | null | undefined) ?? null,
     });
   }
   return { meta, keyTimes, roles, columns, rows };

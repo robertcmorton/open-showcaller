@@ -26,8 +26,16 @@ function recoverIfStaleChunks(message: string): void {
  */
 export function ErrorReporter() {
   useEffect(() => {
-    if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
+    if (!("serviceWorker" in navigator)) return;
+    if (process.env.NODE_ENV === "production") {
       void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    } else {
+      // Dev actively evicts any worker left behind (e.g. a production Docker
+      // build on this port) — a stale worker serves stale chunks forever.
+      void navigator.serviceWorker
+        .getRegistrations()
+        .then((regs) => regs.forEach((r) => void r.unregister()))
+        .catch(() => undefined);
     }
   }, []);
   useEffect(() => {
