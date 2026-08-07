@@ -11,6 +11,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.12.1] — 2026-08-08
+
+### Fixed
+- **New events prefill today's date in YOUR timezone** — the form used the UTC date, which is yesterday every morning east of Greenwich.
+- **Date fields pop their calendar immediately** on click or focus, and native calendars now render in the dark theme.
+
 ## [0.12.0] — 2026-08-07
 
 ### Changed

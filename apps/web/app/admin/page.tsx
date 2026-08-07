@@ -97,13 +97,29 @@ function SportSelect({ value, onChange, compact }: { value: string | null; onCha
   );
 }
 
+/** Today in the USER'S timezone — toISOString() is UTC, which is yesterday
+ *  every morning east of Greenwich. */
+function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Pops the native calendar as soon as a date field is focused or clicked. */
+function openDatePicker(e: { currentTarget: HTMLInputElement }): void {
+  try {
+    e.currentTarget.showPicker?.();
+  } catch {
+    // showPicker demands a user gesture; the field still works without it.
+  }
+}
+
 function CreateEventForm({ onCreated, teamId }: { onCreated: () => void; teamId?: string }) {
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [sport, setSport] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localToday();
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
 
@@ -143,6 +159,8 @@ function CreateEventForm({ onCreated, teamId }: { onCreated: () => void; teamId?
           className="input"
           type="date"
           value={startDate}
+          onFocus={openDatePicker}
+          onClick={openDatePicker}
           onChange={(e) => {
             const v = e.target.value;
             setStartDate(v);
@@ -157,6 +175,8 @@ function CreateEventForm({ onCreated, teamId }: { onCreated: () => void; teamId?
           type="date"
           min={startDate}
           value={endDate}
+          onFocus={openDatePicker}
+          onClick={openDatePicker}
           onChange={(e) => setEndDate(e.target.value < startDate ? startDate : e.target.value)}
         />
       </div>
@@ -352,6 +372,8 @@ function DatesEditor({
         className="input"
         type="date"
         value={start}
+        onFocus={openDatePicker}
+        onClick={openDatePicker}
         onChange={(e) => {
           const v = e.target.value;
           setStart(v);
@@ -365,6 +387,8 @@ function DatesEditor({
         type="date"
         min={start}
         value={end}
+        onFocus={openDatePicker}
+        onClick={openDatePicker}
         onChange={(e) => setEnd(e.target.value < start ? start : e.target.value)}
         style={{ padding: "3px 6px" }}
       />

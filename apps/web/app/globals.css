@@ -5,6 +5,8 @@
    ============================================================ */
 
 :root {
+  /* Native form controls (date calendars, scrollbars) render for dark. */
+  color-scheme: dark;
   /* Surfaces (dark) */
   --bg: #0b0d10;
   --surface: #12151a;
