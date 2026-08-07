@@ -11,6 +11,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.7.2] — 2026-08-07
+
+### Changed
+- **The live cue row is now unmissable**: it grows physically taller with larger bold type, carries a filled **CUE** badge in place of its row number, and its rails are brighter and thicker with a stronger fill. The row number returns on printed output, where the live styling is stripped as before.
+
 ## [0.7.1] — 2026-08-07
 
 ### Fixed

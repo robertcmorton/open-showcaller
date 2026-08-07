@@ -82,7 +82,8 @@ function SortableRow({
       }}
     >
       <td className="row-number mono" onClick={onSelect} {...attributes} {...listeners}>
-        {displayNumber}
+        <span className="rn-num">{displayNumber}</span>
+        {active && <span className="cue-badge">CUE</span>}
       </td>
       {children}
     </tr>
