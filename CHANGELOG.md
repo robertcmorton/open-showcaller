@@ -11,6 +11,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.10.0] — 2026-08-07
+
+### Added
+- **Events have a sport** (NRL first — more sports and styles later), selectable when creating an event or on its card. Sport drives the live ending flow: at full time the console offers **Win / Lose / ⚡ Golden point** (a level score goes to extra time, never straight to a draw); once golden point is playing the final pick returns as **Win / Lose / Draw**. A **Draw** tag joins the outcome set for the final drawn result.
+- **Imports detect the ending blocks by themselves**: banners like "Fulltime – WIN", "Full Time (DRAW)", and "GOLDEN POINT Kick off" tag their blocks on the way in — no manual tagging for standard sheets.
+- **The console reminds the caller as full time approaches**: when the live cue is within two cues of the ending blocks and no result is picked, the Full time chooser pulses. The nudge is position-based, never clock-based — stoppage time, injuries, and penalties can stretch the game freely (NRL, cricket, soccer, basketball, AFL all behave differently; position in the sheet is the one thing they share).
+- **Join codes carry a name** ("Sarah — Cam 2"): set it when creating a code, see it in the panel, and every screen identifies the joiner by it. Codes can be **revoked** — they stop working everywhere immediately. (Email delivery of codes comes later.)
+- **Start-time edits ripple** like duration edits: moving a time shifts every fixed time below by the same amount, one undo reverses it all.
+
+### Fixed
+- **Opening a rundown that is already live re-syncs immediately** — the current cue is centred on screen as soon as the sheet loads.
+- **Editing a start time no longer nudges the sheet's layout at all** — the editor overlays the cell instead of stretching it.
+- The "+ version" and "+ key times" chips are gone from the show header — version lives in the rundown name and key times in the sheet itself.
+
 ## [0.9.0] — 2026-08-07
 
 ### Added

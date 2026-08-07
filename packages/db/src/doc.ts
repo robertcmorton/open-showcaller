@@ -27,6 +27,8 @@ export interface SeedRow {
   /** The sheet's own number for this row; rows the sheet didn't number show none. */
   sourceNumber?: string;
   color?: string;
+  /** Outcome branch ("win" | "lose" | "draw" | "golden") — the caller picks one at full time. */
+  outcome?: string | null;
   /** columnKey → plain text; converted into a single-paragraph rich-text fragment. */
   cells?: Record<string, string>;
 }
@@ -158,6 +160,7 @@ export function buildRundownDoc(
       if (seed.untimed) row.set("untimed", true);
       if (seed.sourceNumber) row.set("sourceNumber", seed.sourceNumber);
       if (seed.color) row.set("color", seed.color);
+      if (seed.outcome) row.set("outcome", seed.outcome);
 
       const cells = new Y.Map<Y.XmlFragment>();
       const titleFragment = new Y.XmlFragment();

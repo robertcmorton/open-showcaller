@@ -609,6 +609,8 @@ export function createApiHandler(
           }
           patch.timezone = body.timezone;
         }
+        if (body.sport === null) patch.sport = null;
+        else if (typeof body.sport === "string") patch.sport = body.sport.trim().toLowerCase().slice(0, 24) || null;
         if (Object.keys(patch).length > 0) await db.update(schema.events).set(patch).where(eq(schema.events.id, id));
         json(res, 200, { id });
         return true;
@@ -744,6 +746,7 @@ export function createApiHandler(
           startDate: createStart,
           endDate: createEnd,
           timezone: String(body.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone),
+          sport: typeof body.sport === "string" && body.sport.trim() ? body.sport.trim().toLowerCase().slice(0, 24) : null,
           use24h: Boolean(body.use24h ?? false),
         });
         json(res, 201, { id });
@@ -934,7 +937,7 @@ export function createApiHandler(
         if (!(await requireEditor(rundownId))) return true;
         const rows = await db.query.shareTokens.findMany({
           where: and(eq(schema.shareTokens.rundownId, rundownId), eq(schema.shareTokens.kind, "join")),
-          columns: { id: true, joinCode: true, role: true, revokedAt: true },
+          columns: { id: true, joinCode: true, role: true, label: true, revokedAt: true },
         });
         json(res, 200, rows.filter((r) => !r.revokedAt).map(({ revokedAt: _r, ...rest }) => rest));
         return true;
@@ -945,6 +948,7 @@ export function createApiHandler(
         if (!(await requireEditor(rundownId))) return true;
         const body = await readJson(req);
         const role = ["caller", "editor", "follower"].includes(String(body.role)) ? String(body.role) : "follower";
+        const label = typeof body.label === "string" && body.label.trim() ? body.label.trim().slice(0, 80) : null;
         // Readable code: no confusable characters.
         const alphabet = "ABCDEFGHJKMNPQRSTVWXYZ23456789";
         const code = Array.from(
@@ -958,8 +962,22 @@ export function createApiHandler(
           token: ulid(),
           joinCode: code,
           role: role as (typeof schema.shareRoles)[number],
+          label,
         });
-        json(res, 201, { code, role });
+        json(res, 201, { code, role, label });
+        return true;
+      }
+
+      // Revoke a join code: it stops working everywhere immediately.
+      if (req.method === "DELETE" && /^\/rundowns\/[^/]+\/join-codes\/[^/]+$/.test(pathname)) {
+        const rundownId = pathname.split("/")[2]!;
+        const codeId = pathname.split("/")[4]!;
+        if (!(await requireEditor(rundownId))) return true;
+        await db
+          .update(schema.shareTokens)
+          .set({ revokedAt: new Date() })
+          .where(and(eq(schema.shareTokens.id, codeId), eq(schema.shareTokens.rundownId, rundownId)));
+        json(res, 200, { id: codeId });
         return true;
       }
 

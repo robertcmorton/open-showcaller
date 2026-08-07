@@ -241,6 +241,35 @@ export interface ClassifiedRow {
   sourceIndex: number;
   /** The sheet's own number for this row (its ITEM/# cell), when it has one. */
   sourceNumber?: string;
+  /** Detected outcome branch ("win" | "lose" | "draw" | "golden") — sport
+   *  sheets carry alternate full-time endings; the caller picks one live. */
+  outcome?: string | null;
+}
+
+/**
+ * Tags alternate-ending blocks from their banner rows: "Fulltime - X WIN",
+ * "Full Time (DRAW)", "GOLDEN POINT Kick off"… A trigger row starts a block
+ * that runs until the next trigger (or the end of the sheet). A full-time
+ * DRAW block is tagged "golden" — in NRL a level score goes to golden point,
+ * and that block carries the extra-time content.
+ */
+export function detectOutcomes(rows: ClassifiedRow[]): void {
+  const trigger = (title: string): string | null => {
+    const t = title.toLowerCase();
+    const fullTime = /\bfull\s?time\b/.test(t);
+    if (fullTime && /\bwin\b/.test(t)) return "win";
+    if (fullTime && /\b(lose|loss|lost)\b/.test(t)) return "lose";
+    if (/\bgolden\s?point\b/.test(t)) return "golden";
+    if (fullTime && /\bdraw\b/.test(t)) return "golden";
+    return null;
+  };
+  let current: string | null = null;
+  for (const r of rows) {
+    if (r.kind === "spacer") continue;
+    const next = trigger(r.title);
+    if (next) current = next;
+    if (current) r.outcome = current;
+  }
 }
 
 /**
@@ -614,6 +643,7 @@ export function planImport(
       if (/^\d+$/.test(value)) r.sourceNumber = value;
     }
   }
+  detectOutcomes(rows);
   return {
     grid: finalGrid,
     headerIndex,

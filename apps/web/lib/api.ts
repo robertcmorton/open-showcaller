@@ -25,6 +25,8 @@ export interface EventSummary {
   startDate: string;
   endDate: string;
   timezone: string;
+  /** Sport code ("nrl") — drives sport-specific live flows. */
+  sport: string | null;
   use24h: boolean;
   rundowns: RundownSummary[];
 }
@@ -92,6 +94,8 @@ export interface JoinCodeSummary {
   id: string;
   joinCode: string | null;
   role: string;
+  /** Who this code is for — the joiner's identity on every screen. */
+  label: string | null;
 }
 
 export const api = {
@@ -144,11 +148,13 @@ export const api = {
   createGuestPass: (body: { rundownId: string; columns?: Record<string, boolean> }) =>
     request<{ token: string }>("/guest-passes", { method: "POST", body: JSON.stringify(body) }),
   joinCodes: (rundownId: string) => request<JoinCodeSummary[]>(`/rundowns/${rundownId}/join-codes`),
-  createJoinCode: (rundownId: string, role: "caller" | "editor" | "follower") =>
-    request<{ code: string; role: string }>(`/rundowns/${rundownId}/join-codes`, {
+  createJoinCode: (rundownId: string, role: "caller" | "editor" | "follower", label?: string) =>
+    request<{ code: string; role: string; label: string | null }>(`/rundowns/${rundownId}/join-codes`, {
       method: "POST",
-      body: JSON.stringify({ role }),
+      body: JSON.stringify({ role, label }),
     }),
+  revokeJoinCode: (rundownId: string, codeId: string) =>
+    request<{ id: string }>(`/rundowns/${rundownId}/join-codes/${codeId}`, { method: "DELETE" }),
   snapshots: (rundownId: string) => request<SnapshotSummary[]>(`/rundowns/${rundownId}/snapshots`),
   createSnapshot: (rundownId: string, label?: string) =>
     request<{ id: string }>(`/rundowns/${rundownId}/snapshots`, { method: "POST", body: JSON.stringify({ label }) }),
@@ -156,7 +162,7 @@ export const api = {
     request<{ id: string }>(`/snapshots/${snapshotId}/restore`, { method: "POST", body: JSON.stringify({ name }) }),
   restoreSnapshotInPlace: (snapshotId: string) =>
     request<{ id: string; epoch: number }>(`/snapshots/${snapshotId}/restore-in-place`, { method: "POST" }),
-  createEvent: (body: { name: string; location?: string; startDate: string; endDate: string; timezone?: string; teamId?: string }) =>
+  createEvent: (body: { name: string; location?: string; startDate: string; endDate: string; timezone?: string; sport?: string | null; teamId?: string }) =>
     request<{ id: string }>("/events", { method: "POST", body: JSON.stringify(body) }),
   createRundown: (body: {
     eventId: string;
@@ -198,7 +204,7 @@ export const api = {
   resolveCode: (code: string) =>
     request<{ role: "caller" | "editor" | "follower"; rundownId: string }>(`/codes/${encodeURIComponent(code)}`),
   live: () => request<{ rundownId: string; state: string; startedAt: string }[]>("/live"),
-  patchEvent: (id: string, body: { name?: string; location?: string; timezone?: string; startDate?: string; endDate?: string; image1?: string | null; image2?: string | null }) =>
+  patchEvent: (id: string, body: { name?: string; location?: string; timezone?: string; startDate?: string; endDate?: string; sport?: string | null; image1?: string | null; image2?: string | null }) =>
     request<{ id: string }>(`/events/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteEvent: (id: string) => request<{ id: string }>(`/events/${id}`, { method: "DELETE" }),
   patchRundown: (id: string, body: { name?: string }) =>

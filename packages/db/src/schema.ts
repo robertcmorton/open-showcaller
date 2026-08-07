@@ -89,6 +89,8 @@ export const events = pgTable("events", {
   startDate: text("start_date").notNull(), // ISO date, event-local
   endDate: text("end_date").notNull(),
   timezone: text("timezone").notNull(),
+  /** Sport code ("nrl") — drives sport-specific live flows like outcome picks. */
+  sport: text("sport"),
   use24h: boolean("use_24h").notNull().default(false),
   image1: text("image1"),
   image2: text("image2"),
@@ -169,6 +171,8 @@ export const shareTokens = pgTable("share_tokens", {
   token: text("token").notNull().unique(),
   joinCode: text("join_code").unique(),
   role: text("role", { enum: shareRoles }).notNull(),
+  /** Who this code is for ("Sarah — Cam 2") — the joiner's identity on every screen. */
+  label: text("label"),
   columnVisibility: jsonb("column_visibility").$type<Record<string, boolean>>(),
   createdBy: text("created_by").references(() => users.id),
   expiresAt: timestamp("expires_at", { withTimezone: true }),

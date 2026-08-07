@@ -101,7 +101,7 @@ async function resolveAuth(
         isNull(schema.shareTokens.revokedAt),
       ),
     });
-    if (row) return { role: row.role as Role, label: row.role === "caller" ? "Caller" : "Crew" };
+    if (row) return { role: row.role as Role, label: row.label || (row.role === "caller" ? "Caller" : "Crew") };
     if (auth.code === "DEV123" && process.env.ALLOW_DEV_JOIN !== "0") return { role: "follower", label: "Crew (dev)" };
     return null;
   }
@@ -192,7 +192,7 @@ wss.on("connection", (ws, req) => {
       const eventRow = rundownRow
         ? await dbHandle.db.query.events.findFirst({
             where: eq(schema.events.id, rundownRow.eventId),
-            columns: { timezone: true },
+            columns: { timezone: true, sport: true },
           })
         : null;
       send(ws, {
@@ -204,6 +204,7 @@ wss.on("connection", (ws, req) => {
         show: (await showStore.get(rundownId)).current,
         doc: { mode: resolved.role === "guest" ? "projection" : "sync" },
         timezone: eventRow?.timezone,
+        sport: eventRow?.sport ?? undefined,
       });
       broadcastPresence(rundownId);
       return;

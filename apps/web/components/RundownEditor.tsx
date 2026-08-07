@@ -92,7 +92,7 @@ function SortableRow({
         {active && <span className="cue-badge">CUE</span>}
         {!active && row.outcome && (
           <span className={`outcome-chip oc-${row.outcome}`} title="Alternate ending — plays only when this outcome is picked at full time">
-            {row.outcome === "win" ? "WIN" : row.outcome === "lose" ? "LOSE" : row.outcome === "golden" ? "GP" : row.outcome}
+            {row.outcome === "win" ? "WIN" : row.outcome === "lose" ? "LOSE" : row.outcome === "golden" ? "GP" : row.outcome === "draw" ? "DRAW" : row.outcome}
           </span>
         )}
       </td>
@@ -292,12 +292,29 @@ export function RundownEditor({
   const focusRowId = activeRowId ?? walkRowId;
   useEffect(() => {
     if (!focusRowId || !followScroll) return;
-    programmaticScroll.current = true;
-    document.querySelector("tr.active-row, tr.walk-row")?.scrollIntoView({ block: "center", behavior: "smooth" });
-    const t = window.setTimeout(() => {
-      programmaticScroll.current = false;
-    }, 1000);
-    return () => window.clearTimeout(t);
+    // Opening a rundown that is ALREADY live: the show state often arrives
+    // before the document's rows have rendered, so retry until the live row
+    // exists — first thing on screen is the current cue, centred.
+    let cancelled = false;
+    let settle: number | undefined;
+    const attempt = (left: number) => {
+      if (cancelled) return;
+      const el = document.querySelector("tr.active-row, tr.walk-row");
+      if (el) {
+        programmaticScroll.current = true;
+        el.scrollIntoView({ block: "center", behavior: "smooth" });
+        settle = window.setTimeout(() => {
+          programmaticScroll.current = false;
+        }, 1000);
+      } else if (left > 0) {
+        settle = window.setTimeout(() => attempt(left - 1), 300);
+      }
+    };
+    attempt(20);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(settle);
+    };
   }, [focusRowId, followScroll]);
   useEffect(() => {
     if (!activeRowId) return;
@@ -405,11 +422,11 @@ export function RundownEditor({
     });
   };
 
-  // Outcome branches (win / lose / golden point): picking one plays its rows
-  // and skips the other endings — in one undoable transaction, synced to
-  // every screen, and the transport jumps to the chosen branch when live.
+  // Outcome branches (win / lose / draw / golden point): picking one plays
+  // its rows and skips the other endings — in one undoable transaction,
+  // synced to every screen, and the transport jumps to the branch when live.
   const outcomeRows = rows.filter((r) => r.outcome);
-  const outcomesPresent = (["golden", "win", "lose"] as const).filter((o) => outcomeRows.some((r) => r.outcome === o));
+  const outcomesPresent = (["golden", "win", "lose", "draw"] as const).filter((o) => outcomeRows.some((r) => r.outcome === o));
   const chosenOutcome = (() => {
     for (const o of outcomesPresent) {
       const mine = outcomeRows.filter((r) => r.outcome === o);
@@ -432,6 +449,29 @@ export function RundownEditor({
       for (const r of outcomeRows) yRows.get(r.id)?.set("skipped", false);
     });
   };
+  // NRL flow: at full time the choices are Win / Lose / ⚡Golden point (a
+  // level score goes to golden point, never straight to a draw). Once golden
+  // point is playing, the final pick returns as Win / Lose / Draw. Events
+  // without a sport show every tagged ending.
+  const visibleOutcomes =
+    channel.sport === "nrl"
+      ? chosenOutcome === "golden"
+        ? outcomesPresent.filter((o) => o !== "golden")
+        : outcomesPresent.filter((o) => o !== "draw")
+      : outcomesPresent;
+  const outcomeLabel = (o: string): string =>
+    o === "golden" ? "⚡ Golden point" : o === "win" ? "Win" : o === "lose" ? "Lose" : "Draw";
+  // Position-based nudge — never clock-based, so stoppage time, injuries and
+  // penalties can stretch the game freely: once the live row is within two
+  // cues of the ending blocks and no result is picked, the chooser pulses.
+  const decisionSoon = (() => {
+    if (!showLive || chosenOutcome || outcomeRows.length === 0 || !activeRowId) return false;
+    const firstOutcomeIdx = rows.findIndex((r) => r.outcome);
+    const activeIdx = rows.findIndex((r) => r.id === activeRowId);
+    if (firstOutcomeIdx < 0 || activeIdx < 0 || activeIdx >= firstOutcomeIdx) return false;
+    const between = rows.slice(activeIdx + 1, firstOutcomeIdx).filter((r) => r.type === "cue" && !r.skipped).length;
+    return between <= 2;
+  })();
 
   const selectRow = (rowId: string, e: React.MouseEvent): void => {
     const order = rows.map((r) => r.id);
@@ -583,13 +623,29 @@ export function RundownEditor({
   };
 
   /** Empty clears the fixed time (back to auto flow); an unchanged value is a
-   *  no-op so opening the editor and clicking away never pins a flowing row. */
+   *  no-op so opening the editor and clicking away never pins a flowing row.
+   *  A changed time ripples like a changed duration: every fixed time BELOW
+   *  shifts by the same amount, one undoable transaction. */
   const commitTime = (rowId: string, raw: string, currentSec: number | null): void => {
     const trimmed = raw.trim();
     if (trimmed === "") setRowField(rowId, "hardStartSec", null);
     else {
       const sec = parseTimeOfDay(trimmed);
-      if (sec != null && sec !== currentSec) setRowField(rowId, "hardStartSec", sec);
+      if (sec != null && sec !== currentSec) {
+        const delta = currentSec != null ? sec - currentSec : 0;
+        doc.transact(() => {
+          yRows.get(rowId)?.set("hardStartSec", sec);
+          if (delta === 0) return;
+          const order = yOrder.toArray();
+          const idx = order.indexOf(rowId);
+          if (idx < 0) return;
+          for (let i = idx + 1; i < order.length; i++) {
+            const later = yRows.get(order[i]!);
+            const fixed = later?.get("hardStartSec") as number | null | undefined;
+            if (fixed != null) later!.set("hardStartSec", fixed + delta);
+          }
+        });
+      }
     }
     setEditingTime(null);
   };
@@ -838,19 +894,6 @@ export function RundownEditor({
         <div className="topbar-left">
         <h1 style={{ fontSize: "1.15rem", fontWeight: 650, margin: 0, letterSpacing: "-0.01em" }}>{meta.name}</h1>
         {mode !== "show" && <span className="chip">{mode === "edit" ? "EDIT — no transport" : "VIEW ONLY"}</span>}
-        <button
-          className="chip hide-mobile"
-          style={{ cursor: canEditContent ? "pointer" : "default", border: meta.versionLabel ? "1px solid var(--warn)" : undefined, color: meta.versionLabel ? "var(--warn)" : undefined }}
-          title="Version label — printed on exports"
-          onClick={() => {
-            if (!canEditContent) return;
-            const label = window.prompt("Version label (e.g. V2, FINAL — empty to clear)", meta.versionLabel);
-            if (label !== null) doc.getMap("meta").set("versionLabel", label.trim());
-          }}
-        >
-          {meta.versionLabel || (canEditContent ? "+ version" : "")}
-        </button>
-        <KeyTimesEditor doc={doc} keyTimes={keyTimes} use24h={meta.use24h} canEdit={canEditContent} />
         <div className="hide-mobile">
           <div className="header-label">Planned</div>
           <div
@@ -966,31 +1009,36 @@ export function RundownEditor({
         {isShow && outcomesPresent.length > 0 && (
           <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
             <span
-              className="chip"
+              className={`chip ${decisionSoon ? "decision-pulse" : ""}`}
               title="This sheet has alternate endings. Pick the real result when it happens — the other branches skip themselves and every screen follows. Golden point loops back here for the final pick."
             >
-              Full time:
+              {decisionSoon ? "Full time — pick the result" : "Full time:"}
             </span>
-            {outcomesPresent.map((o) => (
+            {chosenOutcome === "golden" && (
+              <span className="chip" style={{ color: "var(--warn)", borderColor: "var(--warn)" }} title="Golden point is playing — pick the final result when it lands">
+                ⚡ Golden point playing
+              </span>
+            )}
+            {visibleOutcomes.map((o) => (
               <button
                 key={o}
                 className={`btn btn-sm ${chosenOutcome === o ? "is-on" : ""}`}
                 style={
                   chosenOutcome === o
                     ? {
-                        borderColor: o === "win" ? "var(--under)" : o === "lose" ? "var(--over)" : "var(--warn)",
-                        color: o === "win" ? "var(--under)" : o === "lose" ? "var(--over)" : "var(--warn)",
+                        borderColor: o === "win" ? "var(--under)" : o === "lose" ? "var(--over)" : o === "draw" ? "var(--accent)" : "var(--warn)",
+                        color: o === "win" ? "var(--under)" : o === "lose" ? "var(--over)" : o === "draw" ? "var(--accent)" : "var(--warn)",
                       }
                     : undefined
                 }
                 title={
                   o === "golden"
-                    ? "Scores level — play the golden-point block; the win/lose pick comes back after it"
+                    ? "Scores level — play the golden-point block; the final pick comes back after it"
                     : `Play the ${o} ending and skip the others`
                 }
                 onClick={() => pickOutcome(o)}
               >
-                {o === "golden" ? "⚡ Golden point" : o === "win" ? "Win" : "Lose"}
+                {outcomeLabel(o)}
               </button>
             ))}
             {chosenOutcome && (
@@ -1127,7 +1175,8 @@ export function RundownEditor({
                   [
                     ["win", "Win"],
                     ["lose", "Lose"],
-                    ["golden", "Golden point / draw"],
+                    ["draw", "Draw (final result)"],
+                    ["golden", "Golden point (extra time)"],
                     [null, "Not an outcome branch"],
                   ] as const
                 ).map(([value, label]) => (
@@ -1366,29 +1415,41 @@ export function RundownEditor({
                     ) : (
                       <td />
                     )}
-                    <td className="mono" onDoubleClick={canEditContent ? () => setEditingTime(rowRecord.id) : undefined}>
+                    <td
+                      className="mono"
+                      style={{ position: "relative" }}
+                      onDoubleClick={canEditContent ? () => setEditingTime(rowRecord.id) : undefined}
+                    >
                       {editingTime === rowRecord.id ? (
-                        <input
-                          ref={timeInputRef}
-                          className="inline-edit"
-                          autoFocus
-                          size={1}
-                          style={{ width: "100%", boxSizing: "border-box" }}
-                          defaultValue={
-                            rowRecord.hardStartSec != null
-                              ? formatTimeOfDay(rowRecord.hardStartSec, meta.use24h)
-                              : t.startSec != null
-                                ? formatTimeOfDay(t.startSec, meta.use24h)
-                                : ""
-                          }
-                          placeholder="9:30 am"
-                          onFocus={(e) => e.currentTarget.select()}
-                          onBlur={(e) => commitTime(rowRecord.id, e.currentTarget.value, t.startSec ?? null)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") commitTime(rowRecord.id, e.currentTarget.value, t.startSec ?? null);
-                            if (e.key === "Escape") setEditingTime(null);
-                          }}
-                        />
+                        // The editor OVERLAYS the cell; the invisible copy of the
+                        // display text keeps the column width pixel-identical, so
+                        // opening it never shifts the layout.
+                        <>
+                          <span style={{ visibility: "hidden" }}>
+                            {t.startSec != null ? formatTimeOfDay(t.startSec, meta.use24h) : "—"}
+                          </span>
+                          <input
+                            ref={timeInputRef}
+                            className="inline-edit"
+                            autoFocus
+                            size={1}
+                            style={{ position: "absolute", inset: "1px 2px", width: "calc(100% - 4px)", boxSizing: "border-box" }}
+                            defaultValue={
+                              rowRecord.hardStartSec != null
+                                ? formatTimeOfDay(rowRecord.hardStartSec, meta.use24h)
+                                : t.startSec != null
+                                  ? formatTimeOfDay(t.startSec, meta.use24h)
+                                  : ""
+                            }
+                            placeholder="9:30 am"
+                            onFocus={(e) => e.currentTarget.select()}
+                            onBlur={(e) => commitTime(rowRecord.id, e.currentTarget.value, t.startSec ?? null)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") commitTime(rowRecord.id, e.currentTarget.value, t.startSec ?? null);
+                              if (e.key === "Escape") setEditingTime(null);
+                            }}
+                          />
+                        </>
                       ) : rowRecord.untimed && rowRecord.hardStartSec == null ? (
                         // The source sheet left this row untimed (a sub-cue) —
                         // faithful blank instead of an invented cascade time.

@@ -67,7 +67,8 @@ export function GuestPassPanel({ rundownId, columns, onClose }: { rundownId: str
 }
 
 export function JoinCodesPanel({ rundownId, onClose }: { rundownId: string; onClose: () => void }) {
-  const [codes, setCodes] = useState<{ joinCode: string | null; role: string }[]>([]);
+  const [codes, setCodes] = useState<{ id: string; joinCode: string | null; role: string; label: string | null }[]>([]);
+  const [name, setName] = useState("");
   const reload = () => void api.joinCodes(rundownId).then(setCodes);
   useEffect(reload, [rundownId]);
 
@@ -80,7 +81,7 @@ export function JoinCodesPanel({ rundownId, onClose }: { rundownId: string; onCl
   return (
     <div className="panel" style={panelStyle}>
       <strong>Join codes — enter on the landing page or open the copied URL. Caller → console, editor → edit, follower → view.</strong>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <button
           className="btn btn-sm btn-primary"
           title="Copies a URL that opens this rundown read-only — hand it to camera operators and crew"
@@ -93,24 +94,50 @@ export function JoinCodesPanel({ rundownId, onClose }: { rundownId: string; onCl
         >
           Copy view-only link
         </button>
+        <input
+          className="input"
+          placeholder="Who is this code for? (e.g. Sarah — Cam 2)"
+          title="The name travels with the code — every screen shows who joined with it"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          style={{ minWidth: 220 }}
+        />
         {(["follower", "editor", "caller"] as const).map((role) => (
-          <button key={role} className="btn btn-sm" onClick={() => void api.createJoinCode(rundownId, role).then(reload)}>
+          <button
+            key={role}
+            className="btn btn-sm"
+            onClick={() =>
+              void api.createJoinCode(rundownId, role, name.trim() || undefined).then(() => {
+                setName("");
+                reload();
+              })
+            }
+          >
             + {role} code
           </button>
         ))}
       </div>
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 }}>
         {codes.map((c) => (
-          <li key={c.joinCode} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+          <li key={c.id} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
             <code style={{ background: "var(--bg)", border: "1px solid var(--border-subtle)", padding: "3px 8px", borderRadius: 4, fontSize: "1rem", letterSpacing: "0.15em" }}>
               {c.joinCode}
             </code>
+            <span style={{ color: "var(--text-2)", minWidth: 120 }}>{c.label ?? <span style={{ color: "var(--text-3)" }}>unnamed</span>}</span>
             <span style={{ color: "var(--text-3)" }}>{c.role}</span>
             {c.joinCode && (
               <button className="btn btn-sm" onClick={() => void navigator.clipboard.writeText(urlFor(c.joinCode!, c.role))}>
                 Copy URL
               </button>
             )}
+            <button
+              className="btn btn-sm btn-ghost"
+              style={{ color: "var(--over)" }}
+              title="Revoke: this code stops working everywhere immediately"
+              onClick={() => void api.revokeJoinCode(rundownId, c.id).then(reload)}
+            >
+              Revoke
+            </button>
           </li>
         ))}
       </ul>

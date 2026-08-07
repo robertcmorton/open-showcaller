@@ -81,6 +81,8 @@ export const WelcomeMsg = z.object({
   doc: z.object({ mode: z.enum(["sync", "projection"]) }),
   /** IANA timezone of the event's location — governs every clock (additive v1.3). */
   timezone: z.string().optional(),
+  /** Event's sport code ("nrl") — drives sport-specific live flows (additive v1.6). */
+  sport: z.string().optional(),
 });
 
 export const PongMsg = z.object({ ...envelope, t: z.literal("pong"), t0: z.number(), t1: z.number() });

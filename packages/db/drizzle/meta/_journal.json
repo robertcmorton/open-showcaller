@@ -22,6 +22,20 @@
       "when": 1786079550493,
       "tag": "0002_clock-follow",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786104555789,
+      "tag": "0003_event-sport",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786104778458,
+      "tag": "0004_code-labels",
+      "breakpoints": true
     }
   ]
 }

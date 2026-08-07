@@ -324,7 +324,7 @@ export function ImportPanel({
       cueish.length >= 10 && cueish.filter((r) => r.startSec != null).length / cueish.length < 0.5;
 
     const seedRows: SeedRow[] = importable.map((r) => {
-      if (r.kind === "banner") return { type: "group", title: r.title, sourceNumber: r.sourceNumber };
+      if (r.kind === "banner") return { type: "group", title: r.title, sourceNumber: r.sourceNumber, outcome: r.outcome ?? undefined };
       if (r.kind === "milestone") {
         // Keep the cells, and let the banner title fall back to the first cell
         // value — PDF extraction sometimes lands a title in a neighboring band.
@@ -335,6 +335,7 @@ export function ImportPanel({
           durationSec: null,
           hardStartSec: r.startSec,
           sourceNumber: r.sourceNumber,
+          outcome: r.outcome ?? undefined,
           cells: r.cells,
         };
       }
@@ -348,6 +349,7 @@ export function ImportPanel({
         untimed: untimed || undefined,
         durationMuted: untimed && r.durationSec != null ? true : undefined,
         sourceNumber: r.sourceNumber,
+        outcome: r.outcome ?? undefined,
         cells: assigned ? { ...r.cells, roles: assigned } : r.cells,
       };
     });

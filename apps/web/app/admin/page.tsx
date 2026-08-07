@@ -75,8 +75,31 @@ function ImageSlot({ value, hint, onChange }: { value: string | null; hint: stri
   );
 }
 
+/** Sports with a live outcome flow (full time win/lose/draw, golden point…). */
+const SPORTS: [string, string][] = [["nrl", "NRL"]];
+
+function SportSelect({ value, onChange, compact }: { value: string | null; onChange: (v: string | null) => void; compact?: boolean }) {
+  return (
+    <select
+      className="input"
+      title="Sport drives the live outcome flow — NRL adds the full-time Win / Lose / Golden point pick"
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value || null)}
+      style={compact ? { height: 30, fontSize: "var(--fs-sm)", padding: "0 8px" } : undefined}
+    >
+      <option value="">No sport</option>
+      {SPORTS.map(([v, label]) => (
+        <option key={v} value={v}>
+          {label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function CreateEventForm({ onCreated, teamId }: { onCreated: () => void; teamId?: string }) {
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const [sport, setSport] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
@@ -98,7 +121,7 @@ function CreateEventForm({ onCreated, teamId }: { onCreated: () => void; teamId?
       onSubmit={(e) => {
         e.preventDefault();
         if (!name.trim() || !isValidTimeZone(timezone)) return;
-        void api.createEvent({ name: name.trim(), location: location.trim() || undefined, startDate, endDate, timezone, teamId }).then(() => {
+        void api.createEvent({ name: name.trim(), location: location.trim() || undefined, startDate, endDate, timezone, sport, teamId }).then(() => {
           setName("");
           setLocation("");
           setOpen(false);
@@ -138,6 +161,10 @@ function CreateEventForm({ onCreated, teamId }: { onCreated: () => void; teamId?
         />
       </div>
       <TimezoneField value={timezone} onChange={setTimezone} atDate={startDate} />
+      <div>
+        <label className="field-label">Sport</label>
+        <SportSelect value={sport} onChange={setSport} />
+      </div>
       <div style={{ display: "flex", gap: 8 }}>
         <button className="btn btn-primary" type="submit">
           Create event
@@ -738,6 +765,11 @@ export default function AdminPage() {
                   Rename
                 </button>
                 <DatesEditor key={`${event.startDate}${event.endDate}`} event={event} onSaved={reload} />
+                <SportSelect
+                  compact
+                  value={event.sport}
+                  onChange={(v) => void api.patchEvent(event.id, { sport: v }).then(reload)}
+                />
                 <button
                   className="btn btn-sm btn-ghost"
                   title="The event's location decides its timezone — clocks follow the daylight-saving rules in force there on the show date"

@@ -17,6 +17,8 @@ export interface ShowChannel {
   role: Role | null;
   /** IANA timezone of the event — governs every clock on this surface. */
   timezone: string | null;
+  /** Event's sport code ("nrl") — drives sport-specific live flows. */
+  sport: string | null;
   show: ShowStatePayload | null;
   /** Server clock now: Date.now() + measured offset. */
   serverNow: () => number;
@@ -32,6 +34,7 @@ export function useShowChannel(rundownId: string, device: "console" | "companion
   const [connected, setConnected] = useState(false);
   const [role, setRole] = useState<Role | null>(null);
   const [timezone, setTimezone] = useState<string | null>(null);
+  const [sport, setSport] = useState<string | null>(null);
   const [show, setShow] = useState<ShowStatePayload | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const offsetRef = useRef(0);
@@ -85,6 +88,7 @@ export function useShowChannel(rundownId: string, device: "console" | "companion
             setConnected(true);
             setRole(msg.role);
             setTimezone(msg.timezone ?? null);
+            setSport(msg.sport ?? null);
             lastSeqRef.current = msg.show.seq;
             setShow(msg.show);
             welcomedRef.current = true;
@@ -132,6 +136,7 @@ export function useShowChannel(rundownId: string, device: "console" | "companion
     connected,
     role,
     timezone,
+    sport,
     show,
     serverNow: () => Date.now() + offsetRef.current,
     sendCmd: (action, rowId) => {
