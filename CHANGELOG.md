@@ -11,6 +11,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.8.1] — 2026-08-07
+
+### Changed
+- The sidebar's "Main page" link is now called "Login" — that's where it goes.
+
 ## [0.8.0] — 2026-08-07
 
 ### Added

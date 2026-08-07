@@ -50,7 +50,7 @@ export function WithSideNav({
           <div className="menu-heading">Navigate</div>
           <Link className="menu-item" href="/">
             <span className="check" />
-            Main page
+            Login
           </Link>
           <Link className="menu-item" href="/admin">
             <span className="check" />
