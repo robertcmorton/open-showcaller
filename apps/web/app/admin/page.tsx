@@ -18,8 +18,11 @@ import { SideNavSection, WithSideNav } from "../../components/SideNav";
 import { pickImage } from "../../lib/pickImage";
 import { AdminNavSection } from "../../components/AdminNav";
 import { VersionBadge } from "../../components/VersionBadge";
+import { LocationDialog, TimezoneField } from "../../components/TimezoneField";
+import { isValidTimeZone } from "@opencall/core";
 
 function CreateEventForm({ onCreated, teamId }: { onCreated: () => void; teamId?: string }) {
+  const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
@@ -40,8 +43,8 @@ function CreateEventForm({ onCreated, teamId }: { onCreated: () => void; teamId?
       style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", margin: "0 0 4px" }}
       onSubmit={(e) => {
         e.preventDefault();
-        if (!name.trim()) return;
-        void api.createEvent({ name: name.trim(), location: location.trim() || undefined, startDate, endDate, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, teamId }).then(() => {
+        if (!name.trim() || !isValidTimeZone(timezone)) return;
+        void api.createEvent({ name: name.trim(), location: location.trim() || undefined, startDate, endDate, timezone, teamId }).then(() => {
           setName("");
           setLocation("");
           setOpen(false);
@@ -80,6 +83,7 @@ function CreateEventForm({ onCreated, teamId }: { onCreated: () => void; teamId?
           onChange={(e) => setEndDate(e.target.value < startDate ? startDate : e.target.value)}
         />
       </div>
+      <TimezoneField value={timezone} onChange={setTimezone} atDate={startDate} />
       <div style={{ display: "flex", gap: 8 }}>
         <button className="btn btn-primary" type="submit">
           Create event
@@ -361,6 +365,7 @@ function DangerButton({ label, confirmLabel, onConfirm }: { label: string; confi
 
 export default function AdminPage() {
   const [events, setEvents] = useState<EventSummary[] | null>(null);
+  const [locEvent, setLocEvent] = useState<EventSummary | null>(null);
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [live, setLive] = useState<Map<string, string>>(new Map());
   const [error, setError] = useState(false);
@@ -707,20 +712,8 @@ export default function AdminPage() {
                 </Dropdown>
                 <button
                   className="btn btn-sm btn-ghost"
-                  title="The event's location decides its timezone — the primary time only changes when the location does"
-                  onClick={() => {
-                    const location = window.prompt("Event location", event.location ?? "");
-                    if (location === null) return;
-                    const timezone = window.prompt(
-                      "Timezone for this location (IANA name)",
-                      event.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-                    );
-                    if (timezone === null) return;
-                    void api
-                      .patchEvent(event.id, { location, timezone })
-                      .then(reload)
-                      .catch((err) => window.alert(String(err)));
-                  }}
+                  title="The event's location decides its timezone — clocks follow the daylight-saving rules in force there on the show date"
+                  onClick={() => setLocEvent(event)}
                 >
                   Location…
                 </button>
@@ -745,20 +738,7 @@ export default function AdminPage() {
                     <span className="check" />
                     Dates…
                   </button>
-                  <button
-                    type="button"
-                    className="menu-item"
-                    onClick={() => {
-                      const location = window.prompt("Event location", event.location ?? "");
-                      if (location === null) return;
-                      const timezone = window.prompt(
-                        "Timezone for this location (IANA name)",
-                        event.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-                      );
-                      if (timezone === null) return;
-                      void api.patchEvent(event.id, { location, timezone }).then(reload).catch((err) => window.alert(String(err)));
-                    }}
-                  >
+                  <button type="button" className="menu-item" onClick={() => setLocEvent(event)}>
                     <span className="check" />
                     Location…
                   </button>
@@ -978,6 +958,16 @@ export default function AdminPage() {
       </main>
       </WithSideNav>
       <VersionBadge />
+      {locEvent && (
+        <LocationDialog
+          event={locEvent}
+          onClose={() => setLocEvent(null)}
+          onSaved={() => {
+            setLocEvent(null);
+            reload();
+          }}
+        />
+      )}
     </div>
   );
 }

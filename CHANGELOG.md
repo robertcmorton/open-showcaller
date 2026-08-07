@@ -11,6 +11,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.8.0] — 2026-08-07
+
+### Added
+- **Pre-show walkthrough**: before the show starts, Prev/Next step a shared highlight through the sheet — every connected screen (consoles, view-only, companions) sees the same row light up and auto-scrolls to it, so the caller can talk the crew through the running order. A position chip shows where you are ("Walkthrough 4/38"); "End walkthrough" clears it everywhere; starting the show clears it automatically. Walkthrough moves never touch the as-run record.
+- **Duration edits ripple through the show**: changing a duration shifts every fixed time below by the same amount — the sheet now reflects an item running long or short, exactly like re-planning on paper. One undo takes back the duration change and the whole ripple together. (The duration editor says so, so nobody is surprised.)
+- **Timezone picker with the offset on the show's date**: setting an event's location now offers the full zone list (type a city) and previews the GMT offset in force there **on the event's start date** — daylight-saving transitions included. All clocks and the server's clock-follow already run on the IANA zone database, so a caller, a remote monitor, and a live cross in three countries stay in lockstep; this makes the setup human.
+
+### Changed
+- **The live row's progress sweeps the whole cell** as a translucent wash with a bright leading edge, instead of a thin strip at the bottom.
+- **Sync Cue floats top-centre of the grid** when you scroll away from the live row, instead of hiding bottom-right.
+- **The show page fits the screen exactly** — the run sheet is the only thing that scrolls; the outer page scrollbar is gone.
+- **The timing check explains itself**: each flagged spot now spells out the arithmetic ("adding the durations, X should start at 9:08 — the printed time says 9:10") and each fix describes exactly what it will change and why you'd pick it.
+- The redo button is labelled ("↻ Redo"); undo/redo were verified to cover timing edits, reordering, and deletes on the live console.
+
 ## [0.7.2] — 2026-08-07
 
 ### Changed

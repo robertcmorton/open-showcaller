@@ -104,46 +104,78 @@ export function ReconcilePanel({
         </button>
       </div>
 
-      <div style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6 }}>
-        Between <strong>{from.title || "untitled"}</strong> ({from.hardStartSec != null && formatTimeOfDay(from.hardStartSec, use24h)}) and{" "}
-        <strong>{to.title || "untitled"}</strong> (anchored {to.hardStartSec != null && formatTimeOfDay(to.hardStartSec, use24h)}), the
-        durations {overlap ? "OVERSHOOT the anchor" : "leave a gap"} of{" "}
+      <div style={{ fontSize: "var(--fs-sm)", lineHeight: 1.6, color: "var(--text-2)" }}>
+        The sheet's TIME column and its DURATION column disagree here. Starting from{" "}
+        <strong style={{ color: "var(--text)" }}>{from.title || "untitled"}</strong> at{" "}
+        <span className="mono">{from.hardStartSec != null ? formatTimeOfDay(from.hardStartSec, use24h) : "—"}</span> and adding
+        up every duration between, <strong style={{ color: "var(--text)" }}>{to.title || "untitled"}</strong> should start at{" "}
+        <strong className="mono" style={{ color: "var(--text)" }}>
+          {to.hardStartSec != null ? formatTimeOfDay(to.hardStartSec - current.gapSec, use24h) : "—"}
+        </strong>{" "}
+        — but its printed time says{" "}
+        <strong className="mono" style={{ color: "var(--text)" }}>
+          {to.hardStartSec != null ? formatTimeOfDay(to.hardStartSec, use24h) : "—"}
+        </strong>
+        . That's{" "}
         <strong className="mono" style={{ color: overlap ? "var(--over)" : "var(--warn)" }}>
           {formatDuration(Math.abs(current.gapSec))}
-        </strong>
-        .
+        </strong>{" "}
+        {overlap
+          ? "MORE content than the clock allows — the items above run past the printed time."
+          : "of unaccounted time — the sheet sits idle before the printed time."}{" "}
+        Choose which number to trust:
       </div>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button
-          className="btn btn-sm btn-primary"
-          title={`"${absorb.title || "untitled"}" duration ${absorb.durationSec != null ? formatDuration(absorb.durationSec) : "—"} → ${formatDuration(absorbNew)}`}
-          onClick={() => {
-            doc.transact(() => {
-              yRows.get(absorb.id)?.set("durationSec", absorbNew);
-            });
-          }}
-        >
-          Absorb into “{(absorb.title || "untitled").slice(0, 24)}” ({formatDuration(absorbNew)})
-        </button>
-        <button
-          className="btn btn-sm"
-          title="Remove this anchor — the row will follow the cascade instead"
-          onClick={() => {
-            doc.transact(() => {
-              yRows.get(to.id)?.set("hardStartSec", null);
-            });
-          }}
-        >
-          Un-anchor “{(to.title || "untitled").slice(0, 24)}”
-        </button>
-        <button
-          className="btn btn-sm btn-ghost"
-          title="The sheet intends this gap (a hold / doors period) — leave it"
-          onClick={() => setAccepted(new Set([...accepted, to.id]))}
-        >
-          Gap is intentional
-        </button>
+      <div style={{ display: "grid", gap: 8 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+          <button
+            className="btn btn-sm btn-primary"
+            style={{ flexShrink: 0 }}
+            onClick={() => {
+              doc.transact(() => {
+                yRows.get(absorb.id)?.set("durationSec", absorbNew);
+              });
+            }}
+          >
+            Absorb into “{(absorb.title || "untitled").slice(0, 24)}”
+          </button>
+          <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-2)" }}>
+            Trust the printed times. Assume “{(absorb.title || "untitled").slice(0, 24)}” really runs{" "}
+            <span className="mono">{formatDuration(absorbNew)}</span> (its duration changes from{" "}
+            <span className="mono">{absorb.durationSec != null ? formatDuration(absorb.durationSec) : "—"}</span>) so the
+            durations meet the printed time exactly.
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+          <button
+            className="btn btn-sm"
+            style={{ flexShrink: 0 }}
+            onClick={() => {
+              doc.transact(() => {
+                yRows.get(to.id)?.set("hardStartSec", null);
+              });
+            }}
+          >
+            Un-anchor “{(to.title || "untitled").slice(0, 24)}”
+          </button>
+          <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-2)" }}>
+            Trust the durations. Drop the printed{" "}
+            <span className="mono">{to.hardStartSec != null ? formatTimeOfDay(to.hardStartSec, use24h) : "—"}</span> — the row
+            will start when the items above finish (
+            <span className="mono">{to.hardStartSec != null ? formatTimeOfDay(to.hardStartSec - current.gapSec, use24h) : "—"}</span>
+            ) and move with them from now on.
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+          <button className="btn btn-sm btn-ghost" style={{ flexShrink: 0 }} onClick={() => setAccepted(new Set([...accepted, to.id]))}>
+            Gap is intentional
+          </button>
+          <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-2)" }}>
+            Both numbers are right — the sheet really does hold for{" "}
+            <span className="mono">{formatDuration(Math.abs(current.gapSec))}</span> here (doors, walk-in, a changeover).
+            Nothing changes; the check stops flagging it.
+          </span>
+        </div>
       </div>
     </div>
   );

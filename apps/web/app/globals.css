@@ -765,18 +765,38 @@ kbd {
 .rundown-grid tr.active-row td {
   position: relative;
 }
+/* The live row's progress sweeps the full cell height as a translucent wash
+   (inset past the cue rails) with a bright leading edge. */
 .row-progress {
   position: absolute;
   left: 0;
-  bottom: 0;
-  height: 2.5px;
-  background: var(--accent);
+  top: 3px;
+  bottom: 3px;
+  background: rgba(76, 141, 255, 0.26);
+  border-right: 2px solid var(--accent);
   transition: width 900ms linear;
   pointer-events: none;
 }
 .row-progress.over {
-  background: var(--over);
+  background: rgba(255, 98, 89, 0.28);
+  border-right-color: var(--over);
 }
+/* Pre-show walkthrough cursor: blue rails (the live cue's white rails are
+   reserved for an actual running show). */
+.rundown-grid tr.walk-row td {
+  background: rgba(76, 141, 255, 0.12);
+  box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent);
+}
+.rundown-grid tr.walk-row td:first-child {
+  box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent), inset 4px 0 0 var(--accent);
+}
+@media print {
+  .rundown-grid tr.walk-row td {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+}
+
 .rundown-grid tr.next-row td {
   background: rgba(76, 141, 255, 0.045);
 }
@@ -1111,9 +1131,18 @@ kbd {
   background: var(--over);
 }
 
+/* Floats top-centre of the grid (auto margins, not transform — the menu-in
+   animation owns transform). .grid-wrap is its positioning context. */
+.grid-wrap {
+  position: relative;
+}
 .sync-cue {
-  position: fixed;
-  right: 18px;
+  position: absolute;
+  top: 42px;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: fit-content;
   z-index: 68;
   box-shadow: var(--shadow-overlay);
   animation: menu-in var(--t-med) var(--ease);
@@ -1143,12 +1172,37 @@ kbd {
 /* ---------- Grid scroll container (mobile + narrow windows) ---------- */
 
 /* The grid scrolls INSIDE this container (the show chrome above stays put),
-   which also lets the sticky column headers work. Height set inline from the
-   measured top-bar height. */
+   which also lets the sticky column headers work. */
 .grid-scroll {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: var(--r-lg);
+}
+
+/* The show page fits the screen exactly: the grid takes whatever height the
+   viewport leaves and scrolls internally — the page itself never scrolls. */
+.show-page {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+.show-page .grid-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.show-page .grid-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+@media print {
+  .show-page {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
 }
 
 /* Everything the caller needs while scrolling: title, timer, readouts,
@@ -1348,8 +1402,5 @@ kbd {
   }
   .panel {
     padding: 12px;
-  }
-  .sync-cue {
-    right: 10px;
   }
 }

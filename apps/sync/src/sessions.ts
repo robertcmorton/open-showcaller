@@ -39,6 +39,7 @@ export class PersistentShowStore {
           pausedAccumMs: row.pausedAccumMs,
           sessionStartedAtMs: row.startedAt.getTime(),
           clockFollow: row.clockFollow,
+          walkRowId: null,
         });
       }
     }
@@ -63,8 +64,10 @@ export class PersistentShowStore {
     return true;
   }
 
-  /** Queue the DB write-through for an accepted command. */
-  persist(rundownId: string, state: ShowStatePayload, action: CmdAction, rowId?: string): void {
+  /** Queue the DB write-through for an accepted command. Walkthrough moves
+   *  ("walk") are rehearsal, not history — they are never persisted, and the
+   *  type says so. */
+  persist(rundownId: string, state: ShowStatePayload, action: Exclude<CmdAction, "walk">, rowId?: string): void {
     const prev = this.writeChains.get(rundownId) ?? Promise.resolve();
     const next = prev
       .then(() => this.write(rundownId, state, action, rowId))
@@ -72,7 +75,7 @@ export class PersistentShowStore {
     this.writeChains.set(rundownId, next);
   }
 
-  private async write(rundownId: string, state: ShowStatePayload, action: CmdAction, rowId?: string): Promise<void> {
+  private async write(rundownId: string, state: ShowStatePayload, action: Exclude<CmdAction, "walk">, rowId?: string): Promise<void> {
     const { db } = this.handle;
     if (!state.sessionId) return;
     const values = {

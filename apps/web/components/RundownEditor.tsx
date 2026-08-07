@@ -45,6 +45,7 @@ function SortableRow({
   selected,
   active,
   next,
+  walk,
   paused,
   mine,
   mineColor,
@@ -59,6 +60,8 @@ function SortableRow({
   selected: boolean;
   active: boolean;
   next: boolean;
+  /** Pre-show walkthrough cursor sits on this row. */
+  walk: boolean;
   paused: boolean;
   mine: boolean;
   mineColor: string;
@@ -71,8 +74,8 @@ function SortableRow({
   return (
     <tr
       ref={setNodeRef}
-      className={`${row.type === "group" ? "group-row" : ""} ${row.type === "milestone" ? "milestone-row" : ""} ${selected ? "selected" : ""} ${active ? "active-row" : ""} ${next ? "next-row" : ""} ${active && paused ? "paused" : ""} ${mine ? "my-role-row" : ""} ${row.skipped ? "skipped-row" : ""} ${clockMark ? "clock-row" : ""}`}
-      title={clockMark ? "Event time is here per the TIME column" : undefined}
+      className={`${row.type === "group" ? "group-row" : ""} ${row.type === "milestone" ? "milestone-row" : ""} ${selected ? "selected" : ""} ${active ? "active-row" : ""} ${next ? "next-row" : ""} ${walk ? "walk-row" : ""} ${active && paused ? "paused" : ""} ${mine ? "my-role-row" : ""} ${row.skipped ? "skipped-row" : ""} ${clockMark ? "clock-row" : ""}`}
+      title={walk ? "Walkthrough position — synced to every screen" : clockMark ? "Event time is here per the TIME column" : undefined}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
@@ -203,6 +206,8 @@ export function RundownEditor({
   }, [joinCode]);
   const live = useLiveTiming(channel, timing);
   const activeRowId = channel.show?.state === "running" || channel.show?.state === "paused" ? channel.show.activeRowId : null;
+  // Pre-show walkthrough cursor — shared across every connected device.
+  const walkRowId = !activeRowId ? (channel.show?.walkRowId ?? null) : null;
   const [activeCell, setActiveCell] = useState<ActiveCell>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [lastSelected, setLastSelected] = useState<string | null>(null);
@@ -234,20 +239,6 @@ export function RundownEditor({
     setPrintedAt(new Date().toLocaleString());
   }, []);
   const timeInputRef = useRef<HTMLInputElement>(null);
-
-  // The grid scrolls internally beneath the sticky top bar; its height is
-  // whatever the viewport leaves after the measured bar.
-  const topbarRef = useRef<HTMLDivElement>(null);
-  const [gridMaxH, setGridMaxH] = useState<string | undefined>(undefined);
-  useEffect(() => {
-    const el = topbarRef.current;
-    if (!el) return;
-    const measure = () => setGridMaxH(`calc(100vh - ${Math.ceil(el.getBoundingClientRect().height) + 14}px)`);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   // Per-user column visibility, loaded after mount to avoid hydration mismatch.
   useEffect(() => {
@@ -283,15 +274,16 @@ export function RundownEditor({
   // scroll (wheel/touch) disengages following instead of fighting the user;
   // the floating "Sync Cue" button re-engages it.
   const programmaticScroll = useRef(false);
+  const focusRowId = activeRowId ?? walkRowId;
   useEffect(() => {
-    if (!activeRowId || !followScroll) return;
+    if (!focusRowId || !followScroll) return;
     programmaticScroll.current = true;
-    document.querySelector("tr.active-row")?.scrollIntoView({ block: "center", behavior: "smooth" });
+    document.querySelector("tr.active-row, tr.walk-row")?.scrollIntoView({ block: "center", behavior: "smooth" });
     const t = window.setTimeout(() => {
       programmaticScroll.current = false;
     }, 1000);
     return () => window.clearTimeout(t);
-  }, [activeRowId, followScroll]);
+  }, [focusRowId, followScroll]);
   useEffect(() => {
     if (!activeRowId) return;
     const disengage = () => {
@@ -559,9 +551,30 @@ export function RundownEditor({
     setEditingTime(null);
   };
 
+  /** A changed duration ripples through the show: every fixed time BELOW the
+   *  row shifts by the same amount, so an item running long or short moves the
+   *  rest of the sheet with it. One transaction — one undo step reverses the
+   *  duration and the whole ripple together. */
   const commitDuration = (rowId: string, raw: string): void => {
     const trimmed = raw.trim();
-    setRowField(rowId, "durationSec", trimmed === "" ? null : parseDurationShorthand(trimmed));
+    const newSec = trimmed === "" ? null : parseDurationShorthand(trimmed);
+    const yRow = yRows.get(rowId);
+    const oldSec = (yRow?.get("durationSec") as number | null | undefined) ?? null;
+    // Muted and skipped rows sit outside the running order — no ripple.
+    const inTiming = !yRow?.get("durationMuted") && !yRow?.get("skipped");
+    doc.transact(() => {
+      yRow?.set("durationSec", newSec);
+      if (!inTiming || newSec == null || oldSec == null || newSec === oldSec) return;
+      const delta = newSec - oldSec;
+      const order = yOrder.toArray();
+      const idx = order.indexOf(rowId);
+      if (idx < 0) return;
+      for (let i = idx + 1; i < order.length; i++) {
+        const later = yRows.get(order[i]!);
+        const fixed = later?.get("hardStartSec") as number | null | undefined;
+        if (fixed != null) later!.set("hardStartSec", fixed + delta);
+      }
+    });
   };
 
   const allRichColumns = columns.filter((c) => c.kind === "richtext");
@@ -662,6 +675,9 @@ export function RundownEditor({
               }}
               onBlur={(e) => commitDuration(rowRecord.id, e.currentTarget.value)}
             />
+            <div style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", marginBottom: 8 }}>
+              Changing it shifts every time below by the same amount.
+            </div>
             <div style={{ display: "flex", gap: 6 }}>
               <button
                 type="button"
@@ -759,8 +775,8 @@ export function RundownEditor({
 
   return (
     <WithSideNav title={meta.name} settings={settings}>
-    <div style={{ padding: "0.6rem 1.5rem 1.25rem" }}>
-      <div className="show-topbar no-print" ref={topbarRef}>
+    <div className="show-page" style={{ padding: "0.6rem 1.5rem 1.25rem" }}>
+      <div className="show-topbar no-print">
       <header className="topbar-head">
         <div className="topbar-left">
         <h1 style={{ fontSize: "1.15rem", fontWeight: 650, margin: 0, letterSpacing: "-0.01em" }}>{meta.name}</h1>
@@ -854,6 +870,42 @@ export function RundownEditor({
             orderedRowIds={rows.filter((r) => !r.skipped || r.id === activeRowId).map((r) => r.id)}
           />
         )}
+        {isShow && !showLive && rows.length > 0 && (
+          <>
+            {/* Pre-show walkthrough: step the shared cursor through the sheet
+                with the crew — every connected screen follows along. */}
+            {(() => {
+              const walkable = rows.filter((r) => r.type !== "group" && !r.skipped);
+              const at = walkRowId ? walkable.findIndex((r) => r.id === walkRowId) : -1;
+              return (
+                <>
+                  <span className="chip" title="Rehearse the sheet before the show — Prev/Next move a highlight that every open screen sees">
+                    Walkthrough{at >= 0 ? ` ${at + 1}/${walkable.length}` : ""}
+                  </span>
+                  <button
+                    className="btn btn-sm"
+                    disabled={at <= 0}
+                    onClick={() => at > 0 && channel.sendCmd("walk", walkable[at - 1]!.id)}
+                  >
+                    {Icon.prev} Prev
+                  </button>
+                  <button
+                    className="btn btn-sm"
+                    disabled={at >= walkable.length - 1}
+                    onClick={() => channel.sendCmd("walk", walkable[Math.min(at + 1, walkable.length - 1)]!.id)}
+                  >
+                    Next {Icon.next}
+                  </button>
+                  {walkRowId && (
+                    <button className="btn btn-sm btn-ghost" title="Clear the walkthrough highlight on every screen" onClick={() => channel.sendCmd("walk")}>
+                      End walkthrough
+                    </button>
+                  )}
+                </>
+              );
+            })()}
+          </>
+        )}
         {isShow && showLive && (
           <button
             className={`btn btn-sm ${clockFollow ? "is-on" : ""}`}
@@ -877,10 +929,10 @@ export function RundownEditor({
             <button
               className="btn btn-sm"
               disabled={undoMgr.redoStack.length === 0}
-              title="Redo (⇧⌘Z)"
+              title="Redo the undone change (⇧⌘Z)"
               onClick={() => undoMgr.redo()}
             >
-              ↻
+              ↻ Redo
             </button>
             <button className="btn" onClick={() => addRow("cue")}>
               {Icon.plus} Row
@@ -897,7 +949,7 @@ export function RundownEditor({
           <button
             className="btn btn-sm"
             style={{ borderColor: "var(--warn)", color: "var(--warn)", background: "var(--warn-soft)" }}
-            title="Anchored times don't agree with the durations between them — resolve one by one"
+            title="The sheet's TIME and DURATION columns don't add up in these places — open to see each one explained, with the choices for fixing it"
             onClick={() => setReconciling(true)}
           >
             ⚠ {timingGaps.length} timing gap{timingGaps.length === 1 ? "" : "s"} — Reconcile
@@ -1073,7 +1125,24 @@ export function RundownEditor({
       )}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-        <div className={`grid-scroll ${mobileAllCols ? "mobile-show-all" : ""}`} style={{ maxHeight: gridMaxH }}>
+        <div className="grid-wrap">
+        {activeRowId && !followScroll && (
+          <button
+            className="btn btn-primary sync-cue"
+            title="Jump back to the live cue and follow along again"
+            onClick={() => {
+              setFollowScroll(true);
+              programmaticScroll.current = true;
+              document.querySelector("tr.active-row")?.scrollIntoView({ block: "center", behavior: "smooth" });
+              window.setTimeout(() => {
+                programmaticScroll.current = false;
+              }, 1000);
+            }}
+          >
+            ⇣ Sync Cue
+          </button>
+        )}
+        <div className={`grid-scroll ${mobileAllCols ? "mobile-show-all" : ""}`}>
         <table className={`rundown-grid ${fixedStyle ? "cols-fixed" : ""}`} style={fixedStyle}>
           <thead>
             <tr>
@@ -1118,6 +1187,7 @@ export function RundownEditor({
                     selected={selected.has(rowRecord.id)}
                     active={activeRowId === rowRecord.id}
                     next={nextRowId === rowRecord.id}
+                    walk={walkRowId === rowRecord.id}
                     paused={isPaused ?? false}
                     mine={myRowColors.has(rowRecord.id)}
                     mineColor={myRowColors.get(rowRecord.id) ?? "#2dd4bf"}
@@ -1210,27 +1280,11 @@ export function RundownEditor({
           </SortableContext>
         </table>
         </div>
+        </div>
       </DndContext>
 
       <CuePool doc={doc} mode={mode} channel={channel} />
       {myRoles.length > 0 && activeRowId && <div style={{ height: 72 }} />}
-      {activeRowId && !followScroll && (
-        <button
-          className="btn btn-primary sync-cue"
-          style={{ bottom: myRoles.length > 0 ? 86 : 18 }}
-          title="Jump back to the live cue and follow along again"
-          onClick={() => {
-            setFollowScroll(true);
-            programmaticScroll.current = true;
-            document.querySelector("tr.active-row")?.scrollIntoView({ block: "center", behavior: "smooth" });
-            window.setTimeout(() => {
-              programmaticScroll.current = false;
-            }, 1000);
-          }}
-        >
-          ⇣ Sync Cue
-        </button>
-      )}
       {myRoles.length > 0 && (
         <RoleBar
           myRoles={myRoles}

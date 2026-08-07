@@ -242,7 +242,9 @@ wss.on("connection", (ws, req) => {
       }
       // No fast path for the caller: everyone (including the sender) gets the broadcast.
       broadcast(ctx.rundownId, { v: PROTOCOL_VERSION, t: "show_state", ...result });
-      showStore.persist(ctx.rundownId, result, msg.action, msg.rowId);
+      // Walkthrough moves are rehearsal, not history — never written to the
+      // as-run record (and "walk" isn't a transition type).
+      if (msg.action !== "walk") showStore.persist(ctx.rundownId, result, msg.action, msg.rowId);
 
       // Automatic safety snapshot the moment a show goes live.
       if (msg.action === "start") {

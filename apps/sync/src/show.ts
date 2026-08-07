@@ -20,6 +20,7 @@ export class ShowStateMachine {
       pausedAccumMs: 0,
       sessionStartedAtMs: null,
       clockFollow: false,
+      walkRowId: null,
     };
   }
 
@@ -51,7 +52,14 @@ export class ShowStateMachine {
           pausedAtMs: null,
           pausedAccumMs: 0,
           sessionStartedAtMs: now,
+          walkRowId: null,
         });
+      }
+      // Pre-show walkthrough: a shared cursor for rehearsing the sheet with
+      // the crew. No timers, no session — just a highlight every device sees.
+      case "walk": {
+        if (s.state === "running" || s.state === "paused") return "show is live — use the transport";
+        return next({ walkRowId: rowId ?? null });
       }
       case "pause": {
         if (s.state !== "running") return "not running";
