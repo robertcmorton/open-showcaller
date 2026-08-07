@@ -11,6 +11,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.6.2] — 2026-08-07
+
+### Changed
+- **The big item timer sits dead-centre at the top of the screen** and everything else in the top bar arranges itself around it: title, planned start/duration/end on the left; the Item/Show/Projected-End readouts, connection dots, and event clock on the right. The centring accounts for the side navigation, so the timer is on the true centreline of the screen, not just the content area. On phones the timer takes the first row (still centred) with the rest stacking beneath.
+
 ## [0.6.1] — 2026-08-07
 
 ### Fixed

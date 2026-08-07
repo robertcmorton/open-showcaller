@@ -912,16 +912,17 @@ kbd {
   font-size: var(--fs-sm);
 }
 .with-sidenav {
-  padding-left: 232px;
+  --sidenav-pad: 232px;
+  padding-left: var(--sidenav-pad);
   transition: padding-left var(--t-med) var(--ease);
 }
 .with-sidenav.sidenav-closed {
-  padding-left: 34px;
+  --sidenav-pad: 34px;
 }
 @media (max-width: 900px) {
   .with-sidenav,
   .with-sidenav.sidenav-closed {
-    padding-left: 0;
+    --sidenav-pad: 0px;
   }
   .sidenav {
     box-shadow: var(--shadow-overlay);
@@ -1129,6 +1130,56 @@ kbd {
   margin: 0 -1.5rem;
   padding: 0 1.5rem 2px;
   border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Header = three regions: the timer owns the true centre of the screen and
+   everything else sits around it (equal 1fr sides keep the centre centred). */
+.topbar-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 1.25rem;
+  margin-bottom: 0.6rem;
+}
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.topbar-center {
+  justify-self: center;
+  min-width: 0;
+  /* The sidenav pushes the content area right — pull the timer back by half
+     that padding so it sits on the true centreline of the SCREEN. */
+  transform: translateX(calc(var(--sidenav-pad, 0px) / -2));
+  transition: transform var(--t-med) var(--ease);
+}
+.topbar-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem 1rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  /* Phones stack: timer first (still centred), then the title row, then readouts. */
+  .topbar-head {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 6px;
+  }
+  .topbar-center {
+    grid-row: 1;
+  }
+  .topbar-center:empty {
+    display: none;
+  }
+  .topbar-right {
+    justify-content: flex-start;
+  }
 }
 
 /* Column resize handles: the grabbable right edge of each header cell. */

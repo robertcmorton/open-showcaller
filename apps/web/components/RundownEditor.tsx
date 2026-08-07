@@ -781,7 +781,8 @@ export function RundownEditor({
     <WithSideNav title={meta.name} settings={settings}>
     <div style={{ padding: "0.6rem 1.5rem 1.25rem" }}>
       <div className="show-topbar no-print" ref={topbarRef}>
-      <header style={{ display: "flex", alignItems: "center", gap: "1.5rem", marginBottom: "0.6rem", flexWrap: "wrap" }}>
+      <header className="topbar-head">
+        <div className="topbar-left">
         <h1 style={{ fontSize: "1.15rem", fontWeight: 650, margin: 0, letterSpacing: "-0.01em" }}>{meta.name}</h1>
         {mode !== "show" && <span className="chip">{mode === "edit" ? "EDIT — no transport" : "VIEW ONLY"}</span>}
         <button
@@ -847,16 +848,19 @@ export function RundownEditor({
             })()}
           </div>
         </div>
-        {live && activeRow && (
-          <BigTimer
-            live={live}
-            paused={isPaused ?? false}
-            title={activeRow.title}
-            plannedSec={activeRow.durationSec}
-          />
-        )}
-        <LiveReadouts live={live} use24h={meta.use24h} />
-        <div style={{ marginLeft: "auto", display: "flex", gap: 16, alignItems: "center" }}>
+        </div>
+        <div className="topbar-center">
+          {live && activeRow && (
+            <BigTimer
+              live={live}
+              paused={isPaused ?? false}
+              title={activeRow.title}
+              plannedSec={activeRow.durationSec}
+            />
+          )}
+        </div>
+        <div className="topbar-right">
+          <LiveReadouts live={live} use24h={meta.use24h} />
           <span className={`status-dot hide-mobile ${connected ? "ok" : ""}`}>doc</span>
           <span className={`status-dot hide-mobile ${channel.connected ? "ok" : ""}`}>show</span>
           <HeaderClock use24h={meta.use24h} timeZone={channel.timezone} />
