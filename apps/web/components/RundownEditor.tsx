@@ -567,6 +567,22 @@ export function RundownEditor({
   const richColumns = allRichColumns.filter((c) => !hiddenCols.has(c.key));
   const titleColumn = columns.find((c) => c.kind === "title");
 
+  // Column order as rendered — each resize handle moves the boundary between
+  // a column and the one after it, so the table's outer edges stay pinned.
+  const orderedColKeys = [
+    "rownum",
+    "title",
+    "start",
+    "duration",
+    ...(showZero ? ["zero"] : []),
+    ...richColumns.map((c) => c.key),
+  ];
+  const nextColKey = (key: string): string | null => {
+    const i = orderedColKeys.indexOf(key);
+    return i >= 0 && i < orderedColKeys.length - 1 ? orderedColKeys[i + 1]! : null;
+  };
+  const fixedStyle = tableStyle(orderedColKeys);
+
   const richColClass = (column: ColumnDef): string =>
     column.kind !== "richtext" ? "" : `col-rich${column.key === meta.roleColumnKey ? " col-role" : ""}`;
 
@@ -1057,26 +1073,16 @@ export function RundownEditor({
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <div className={`grid-scroll ${mobileAllCols ? "mobile-show-all" : ""}`} style={{ maxHeight: gridMaxH }}>
-        <table
-          className="rundown-grid"
-          style={tableStyle([
-            "rownum",
-            "title",
-            "start",
-            "duration",
-            ...(showZero ? ["zero"] : []),
-            ...richColumns.map((c) => c.key),
-          ])}
-        >
+        <table className={`rundown-grid ${fixedStyle ? "cols-fixed" : ""}`} style={fixedStyle}>
           <thead>
             <tr>
-              <th data-colkey="rownum" style={{ width: colWidths["rownum"] }}>{resizeHandle("rownum")}</th>
-              <th data-colkey="title" style={{ width: colWidths["title"] }}>Title{resizeHandle("title")}</th>
-              <th data-colkey="start" style={{ width: colWidths["start"] }}>Start{resizeHandle("start")}</th>
-              <th data-colkey="duration" style={{ width: colWidths["duration"] }}>Duration{resizeHandle("duration")}</th>
+              <th data-colkey="rownum" style={{ width: colWidths["rownum"] }}>{resizeHandle("rownum", nextColKey("rownum"))}</th>
+              <th data-colkey="title" style={{ width: colWidths["title"] }}>Title{resizeHandle("title", nextColKey("title"))}</th>
+              <th data-colkey="start" style={{ width: colWidths["start"] }}>Start{resizeHandle("start", nextColKey("start"))}</th>
+              <th data-colkey="duration" style={{ width: colWidths["duration"] }}>Duration{resizeHandle("duration", nextColKey("duration"))}</th>
               {showZero && (
                 <th data-colkey="zero" style={{ width: colWidths["zero"] }} title="Countdown to the next anchored time">
-                  Zero{resizeHandle("zero")}
+                  Zero{resizeHandle("zero", nextColKey("zero"))}
                 </th>
               )}
               {richColumns.map((c) => {
@@ -1089,7 +1095,7 @@ export function RundownEditor({
                     style={w ? { width: w, minWidth: Math.min(w, 140) } : undefined}
                   >
                     {c.title}
-                    {resizeHandle(c.key)}
+                    {resizeHandle(c.key, nextColKey(c.key))}
                   </th>
                 );
               })}
@@ -1147,6 +1153,8 @@ export function RundownEditor({
                           ref={timeInputRef}
                           className="inline-edit"
                           autoFocus
+                          size={1}
+                          style={{ width: "100%", boxSizing: "border-box" }}
                           defaultValue={
                             rowRecord.hardStartSec != null
                               ? formatTimeOfDay(rowRecord.hardStartSec, meta.use24h)

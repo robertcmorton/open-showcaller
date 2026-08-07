@@ -63,23 +63,27 @@ export function GuestView({ token }: { token: string }) {
         </button>
       </header>
 
-      <div style={{ overflowX: "auto" }}>
-      <table
-        className="rundown-grid"
-        style={tableStyle(["rownum", "title", "start", "duration", ...richColumns.map((c) => c.key)])}
-      >
+      {(() => {
+        const orderedKeys = ["rownum", "title", "start", "duration", ...richColumns.map((c) => c.key)];
+        const nextOf = (key: string): string | null => {
+          const i = orderedKeys.indexOf(key);
+          return i >= 0 && i < orderedKeys.length - 1 ? orderedKeys[i + 1]! : null;
+        };
+        const fixedStyle = tableStyle(orderedKeys);
+        return (
+      <table className={`rundown-grid ${fixedStyle ? "cols-fixed" : ""}`} style={fixedStyle}>
         <thead>
           <tr>
-            <th data-colkey="rownum" style={{ width: widths["rownum"] }}>#{handle("rownum")}</th>
-            <th data-colkey="title" style={{ width: widths["title"] }}>Title{handle("title")}</th>
-            <th data-colkey="start" style={{ width: widths["start"] }}>Start{handle("start")}</th>
-            <th data-colkey="duration" style={{ width: widths["duration"] }}>Duration{handle("duration")}</th>
+            <th data-colkey="rownum" style={{ width: widths["rownum"] }}>#{handle("rownum", nextOf("rownum"))}</th>
+            <th data-colkey="title" style={{ width: widths["title"] }}>Title{handle("title", nextOf("title"))}</th>
+            <th data-colkey="start" style={{ width: widths["start"] }}>Start{handle("start", nextOf("start"))}</th>
+            <th data-colkey="duration" style={{ width: widths["duration"] }}>Duration{handle("duration", nextOf("duration"))}</th>
             {richColumns.map((c) => {
               const w = widths[c.key] ?? (c as { width?: number }).width;
               return (
                 <th key={c.id} data-colkey={c.key} style={w ? { width: w } : undefined}>
                   {c.title}
-                  {handle(c.key)}
+                  {handle(c.key, nextOf(c.key))}
                 </th>
               );
             })}
@@ -108,7 +112,8 @@ export function GuestView({ token }: { token: string }) {
           })}
         </tbody>
       </table>
-      </div>
+        );
+      })()}
     </main>
   );
 }

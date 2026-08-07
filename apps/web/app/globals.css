@@ -1215,6 +1215,22 @@ kbd {
   min-width: 680px;
 }
 
+/* Custom column widths: edges pinned, no horizontal scroll — a squeezed
+   column wraps its text onto extra lines instead. */
+.rundown-grid.cols-fixed {
+  min-width: 0;
+}
+.rundown-grid.cols-fixed td {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+@media (max-width: 760px) {
+  /* "All columns" on a phone still needs the side-scroll to be readable. */
+  .grid-scroll.mobile-show-all .rundown-grid.cols-fixed {
+    min-width: 680px;
+  }
+}
+
 /* ---------- Mobile ---------- */
 
 .admin-main {

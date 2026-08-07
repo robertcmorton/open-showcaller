@@ -11,6 +11,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.7.1] — 2026-08-07
+
+### Fixed
+- **Column resizing keeps the table's outer edges pinned.** A drag now moves only the boundary between a column and its right-hand neighbour — width transfers between the two, the total never changes, and the horizontal scrollbar is gone. A squeezed column wraps its text onto extra lines instead of pushing the table wider. The last column has no handle (its right edge is the table edge), and "All columns" on a phone keeps its side-scroll.
+- **Editing a Start time no longer widens the column.** The inline editor now fits inside the cell instead of forcing it out to the input's default width.
+
 ## [0.7.0] — 2026-08-07
 
 ### Changed
