@@ -226,13 +226,14 @@ export function RundownEditor({
   // The timing-check issue currently on screen: its rows are highlighted in
   // the grid and the disagreeing row is scrolled into view.
   const [gapFocus, setGapFocus] = useState<{ fromId: string; toId: string } | null>(null);
-  // The selection bar sits just above the first selected row, inside the
-  // scroller so it moves with the sheet.
+  // The selection bar floats just BELOW the last selected row — never on top
+  // of the rows being acted on — inside the scroller so it moves with them.
   const [selBarTop, setSelBarTop] = useState(36);
   useEffect(() => {
     if (selected.size === 0) return;
-    const tr = document.querySelector(".rundown-grid tbody tr.selected") as HTMLElement | null;
-    if (tr) setSelBarTop(Math.max(36, tr.offsetTop - 46));
+    const trs = document.querySelectorAll(".rundown-grid tbody tr.selected");
+    const last = trs[trs.length - 1] as HTMLElement | undefined;
+    if (last) setSelBarTop(last.offsetTop + last.offsetHeight + 4);
   }, [selected, rows.length]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!gapFocus) return;
@@ -1244,8 +1245,8 @@ export function RundownEditor({
         )}
         <div className={`grid-scroll ${mobileAllCols ? "mobile-show-all" : ""}`}>
         {canEditContent && selected.size > 0 && (
-          // Anchored just above the first selected row — the actions clearly
-          // belong to the rows they act on, and scroll with them.
+          // Floats just below the last selected row — the actions clearly
+          // belong to the rows they act on without covering any of them.
           <div className="selection-bar" style={{ position: "absolute", top: selBarTop, left: 8, zIndex: 6 }}>
             <span className="count">{selected.size} selected</span>
             <button className="btn btn-sm" onClick={duplicateSelected}>
@@ -1268,21 +1269,24 @@ export function RundownEditor({
             >
               Skip
             </button>
-            <Dropdown label="Outcome" className="btn btn-sm">
+            <Dropdown label="Mark as ending…" className="btn btn-sm">
+              <div style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", padding: "4px 9px", maxWidth: 230, lineHeight: 1.5 }}>
+                Tags these rows as one of the sheet's alternate endings. Imports usually tag them automatically — the
+                actual result is picked live with the Full time buttons at the top.
+              </div>
               {(
                 [
-                  ["win", "Win"],
-                  ["lose", "Lose"],
-                  ["draw", "Draw (final result)"],
+                  ["win", "Win ending"],
+                  ["lose", "Lose ending"],
+                  ["draw", "Draw ending (final result)"],
                   ["golden", "Golden point (extra time)"],
-                  [null, "Not an outcome branch"],
+                  [null, "Not an ending — always plays"],
                 ] as const
               ).map(([value, label]) => (
                 <button
                   key={String(value)}
                   type="button"
                   className="menu-item"
-                  title="Tag the selected rows as an alternate ending — at full time the caller picks one branch and the others skip themselves"
                   onClick={() => doc.transact(() => selected.forEach((id) => yRows.get(id)?.set("outcome", value)))}
                 >
                   <span className="check" />

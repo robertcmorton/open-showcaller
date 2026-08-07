@@ -11,6 +11,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.12.3] — 2026-08-08
+
+### Changed
+- **The row-selection popup floats below the selected rows** instead of covering them.
+- The popup's "Outcome" item is now **"Mark as ending…"** with an explanation inside — it tags rows as alternate endings (imports usually do this automatically); the live result is picked with the Full time buttons at the top, as before.
+
 ## [0.12.2] — 2026-08-08
 
 ### Fixed
