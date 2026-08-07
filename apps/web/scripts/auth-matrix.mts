@@ -301,6 +301,49 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   opConn.provider.destroy();
 }
 
+// ── New surfaces: profile self-service, named/revocable codes, walk gate ──────
+{
+  check("profile: token sign-in PATCH /me → 400", (await req("/me", ADMIN, { method: "PATCH", body: JSON.stringify({ name: "x" }) })).status === 400);
+  const acct = (await req("/users", ADMIN, {
+    method: "POST",
+    body: JSON.stringify({ name: "Matrix Profile", email: "matrix.profile@example.com", password: "profile-pass-1", grants: [{ kind: "view", targetId: eventA.body.id }] }),
+  })).body as { id: string };
+  const ses = (await req("/auth/login", null, { method: "POST", body: JSON.stringify({ email: "matrix.profile@example.com", password: "profile-pass-1" }) })).body
+    .token as string;
+  check("profile: user PATCH /me name → 200", (await req("/me", ses, { method: "PATCH", body: JSON.stringify({ name: "Matrix Renamed" }) })).status === 200);
+  const meAfter = await req("/me", ses);
+  check("profile: /me reflects name + email", meAfter.body?.name === "Matrix Renamed" && meAfter.body?.email === "matrix.profile@example.com", meAfter.body);
+  await req(`/users/${acct.id}`, ADMIN, { method: "DELETE" });
+
+  const named = await req(`/rundowns/${rdA.body.id}/join-codes`, ADMIN, { method: "POST", body: JSON.stringify({ role: "follower", label: "Matrix Cam 2" }) });
+  check("codes: label stored on create", named.body?.label === "Matrix Cam 2", named.body);
+  const list = await req(`/rundowns/${rdA.body.id}/join-codes`, ADMIN);
+  const row = (list.body as any[]).find((c) => c.joinCode === named.body.code);
+  check("codes: viewer cannot revoke → 401", (await req(`/rundowns/${rdA.body.id}/join-codes/${row.id}`, viewer.accessToken, { method: "DELETE" })).status === 401);
+  check("codes: manager revoke → 200", (await req(`/rundowns/${rdA.body.id}/join-codes/${row.id}`, eventMgr.accessToken, { method: "DELETE" })).status === 200);
+  check("codes: revoked code no longer resolves", (await req(`/codes/${encodeURIComponent(named.body.code)}`, null)).status !== 200);
+
+  // The pre-show walkthrough shares the transport's caller gate.
+  const walk = await new Promise<any>((resolve) => {
+    const ws = new WebSocket(`${WS}/?rundown=${rdA.body.id}`);
+    const timer = setTimeout(() => {
+      ws.close();
+      resolve(null);
+    }, 4000);
+    ws.addEventListener("open", () => ws.send(JSON.stringify({ v: 1, t: "hello", auth: { kind: "session", token: viewer.accessToken }, device: "console" })));
+    ws.addEventListener("message", (e) => {
+      const msg = JSON.parse(String(e.data));
+      if (msg.t === "welcome") ws.send(JSON.stringify({ v: 1, t: "cmd", id: "t-walk", action: "walk" }));
+      if (msg.t === "cmd_error" || msg.t === "show_state") {
+        clearTimeout(timer);
+        ws.close();
+        resolve(msg);
+      }
+    });
+  });
+  check("walk: follower rejected", walk?.t === "cmd_error", walk);
+}
+
 // ── Cleanup fixtures ──────────────────────────────────────────────────────────
 for (const u of [viewer, eventMgr, companyMgr, superUser]) await req(`/users/${u.id}`, ADMIN, { method: "DELETE" });
 await req(`/events/${eventB.body.id}`, ADMIN, { method: "DELETE" });

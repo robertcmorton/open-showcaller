@@ -130,7 +130,10 @@ export function createApiHandler(
       const ctx = await authContext(handle, req);
       const eventId = await eventIdForRundown(rundownId);
       if (eventId && (await canManageEvent(handle, ctx, eventId))) return true;
-      json(res, 401, { error: "management access required" });
+      // A missing rundown is "not found", not "no access" — but only say so
+      // to authenticated callers, so anonymous probes can't test what exists.
+      if (!eventId && ctx) json(res, 404, { error: "rundown not found" });
+      else json(res, 401, { error: "management access required" });
       return false;
     };
 

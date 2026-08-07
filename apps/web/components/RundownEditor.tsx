@@ -578,17 +578,25 @@ export function RundownEditor({
   };
 
   const exportCsv = (): void => {
-    const header = ["Type", "Title", "Start", "Duration", ...richColumns.map((c) => c.title)];
+    // Columns in the sheet's order, with the sheet's own header names.
+    const header = ["Type", ...orderedColumns.map((c) => c.title)];
     const body = rows.map((r, i) => [
       r.type,
-      r.title,
-      r.untimed && r.hardStartSec == null
-        ? ""
-        : timing.rows[i]!.startSec != null
-          ? formatTimeOfDay(timing.rows[i]!.startSec!, true)
-          : "",
-      r.durationSec != null ? formatDuration(r.durationSec) : "",
-      ...richColumns.map((c) => r.cells[c.key] ?? ""),
+      ...orderedColumns.map((c) =>
+        c.kind === "title"
+          ? r.title
+          : c.kind === "startTime"
+            ? r.untimed && r.hardStartSec == null
+              ? ""
+              : timing.rows[i]!.startSec != null
+                ? formatTimeOfDay(timing.rows[i]!.startSec!, true)
+                : ""
+            : c.kind === "duration"
+              ? r.durationSec != null
+                ? formatDuration(r.durationSec)
+                : ""
+              : (r.cells[c.key] ?? ""),
+      ),
     ]);
     const blob = new Blob([serializeCsv([header, ...body])], { type: "text/csv" });
     const a = document.createElement("a");
@@ -604,7 +612,7 @@ export function RundownEditor({
       versionLabel: meta.versionLabel,
       use24h: meta.use24h,
       keyTimes,
-      richColumns,
+      columns: orderedColumns,
       widthFor: (key) => colWidths[key] ?? columns.find((c) => c.key === key)?.width,
       rows,
       timing,

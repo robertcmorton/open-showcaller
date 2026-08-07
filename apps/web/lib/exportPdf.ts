@@ -14,8 +14,9 @@ export interface PdfExportInput {
   versionLabel: string;
   use24h: boolean;
   keyTimes: KeyTime[];
-  /** Rich columns to include, in order (already filtered to visible). */
-  richColumns: ColumnDef[];
+  /** ALL columns to include in display order — the source sheet's order —
+   *  already filtered to visible (title / startTime / duration / richtext). */
+  columns: ColumnDef[];
   /** Effective display width per column key (user override or imported hint). */
   widthFor: (key: string) => number | undefined;
   rows: ProjectedRow[];
@@ -40,17 +41,21 @@ export async function exportRundownPdf(input: PdfExportInput): Promise<void> {
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 10;
 
-  // Column layout: fixed structural widths, the rest shared proportionally to
-  // the on-screen widths (user-resized or imported).
+  // Column layout mirrors the sheet's order: fixed widths for start/duration
+  // wherever they sit, the rest shared proportionally to the on-screen widths.
   const numW = 8;
   const startW = 19;
   const durW = 15;
-  const flexible = pageW - margin * 2 - numW - startW - durW;
-  const weights = [Math.max(120, input.widthFor("title") ?? 200), ...input.richColumns.map((c) => Math.max(70, input.widthFor(c.key) ?? 120))];
-  const totalWeight = weights.reduce((a, b) => a + b, 0);
-  const mmFor = (w: number) => (w / totalWeight) * flexible;
+  const fixedFor = (c: ColumnDef): number | null =>
+    c.kind === "startTime" ? startW : c.kind === "duration" ? durW : null;
+  const flexible =
+    pageW - margin * 2 - numW - input.columns.reduce((sum, c) => sum + (fixedFor(c) ?? 0), 0);
+  const weightFor = (c: ColumnDef): number =>
+    c.kind === "title" ? Math.max(120, input.widthFor(c.key) ?? 200) : Math.max(70, input.widthFor(c.key) ?? 120);
+  const totalWeight = input.columns.filter((c) => fixedFor(c) == null).reduce((sum, c) => sum + weightFor(c), 0);
+  const mmFor = (c: ColumnDef) => (weightFor(c) / totalWeight) * flexible;
 
-  const head = [["#", "Title", "Start", "Dur", ...input.richColumns.map((c) => c.title)]];
+  const head = [["#", ...input.columns.map((c) => c.title)]];
   const columnCount = head[0]!.length;
 
   type Cell = string | { content: string; colSpan?: number; styles?: Record<string, unknown> };
@@ -80,10 +85,9 @@ export async function exportRundownPdf(input: PdfExportInput): Promise<void> {
     const dur = r.type === "milestone" ? "—" : r.durationSec != null ? formatDuration(r.durationSec) : "";
     body.push([
       String(i + 1),
-      r.title,
-      start,
-      dur,
-      ...input.richColumns.map((c) => r.cells[c.key] ?? ""),
+      ...input.columns.map((c) =>
+        c.kind === "title" ? r.title : c.kind === "startTime" ? start : c.kind === "duration" ? dur : (r.cells[c.key] ?? ""),
+      ),
     ]);
     rowMeta.push({ fill: rowFill(r.color), skipped: r.skipped === true, group: false });
   });
@@ -114,10 +118,18 @@ export async function exportRundownPdf(input: PdfExportInput): Promise<void> {
     headStyles: { fillColor: [34, 38, 46], textColor: [255, 255, 255], fontSize: 7, fontStyle: "bold" },
     columnStyles: {
       0: { cellWidth: numW, halign: "right", textColor: [130, 134, 142] },
-      1: { cellWidth: mmFor(weights[0]!), fontStyle: "bold" },
-      2: { cellWidth: startW, halign: "left" },
-      3: { cellWidth: durW },
-      ...Object.fromEntries(input.richColumns.map((c, idx) => [4 + idx, { cellWidth: mmFor(weights[idx + 1]!) }])),
+      ...Object.fromEntries(
+        input.columns.map((c, idx) => [
+          idx + 1,
+          c.kind === "startTime"
+            ? { cellWidth: startW, halign: "left" }
+            : c.kind === "duration"
+              ? { cellWidth: durW }
+              : c.kind === "title"
+                ? { cellWidth: mmFor(c), fontStyle: "bold" }
+                : { cellWidth: mmFor(c) },
+        ]),
+      ),
     },
     didParseCell: (data) => {
       if (data.section !== "body") return;

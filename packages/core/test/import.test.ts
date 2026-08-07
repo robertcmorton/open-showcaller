@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyRows, detectHeaderRow, detectRoles, findRoleColumn, mapColumns, mergeWrappedRows, parseDurationLoose, parseTimeLoose, planImport, suggestDurationFix, suggestTimeFix } from "../src/import";
+import { classifyRows, detectHeaderRow, detectOutcomes, detectRoles, findRoleColumn, mapColumns, mergeWrappedRows, parseDurationLoose, parseTimeLoose, planImport, suggestDurationFix, suggestTimeFix } from "../src/import";
 
 describe("parseDurationLoose", () => {
   it("parses worded durations", () => {
@@ -359,5 +359,39 @@ describe("parseDurationLoose summed parts", () => {
     expect(parseDurationLoose("40mins + 3mins")).toBe(43 * 60);
     expect(parseDurationLoose("1 hr + 15 mins")).toBe(75 * 60);
     expect(parseDurationLoose("5 + banana")).toBeNull();
+  });
+});
+
+describe("detectOutcomes", () => {
+  const row = (title: string): import("../src/import").ClassifiedRow => ({
+    kind: "cue",
+    title,
+    startSec: null,
+    startRaw: null,
+    durationSec: null,
+    durationRaw: null,
+    cells: {},
+    sourceIndex: 0,
+  });
+
+  it("tags ending blocks from their banners, draw-at-fulltime as golden", () => {
+    const rows = [
+      row("Kick off"),
+      row("Fulltime - HOME TEAM WIN"),
+      row("Celebration"),
+      row("Fulltime - HOME TEAM LOSE"),
+      row("Wrap"),
+      row("Full Time (DRAW)"),
+      row("GOLDEN POINT Kick off"),
+      row("GP Try"),
+    ];
+    detectOutcomes(rows);
+    expect(rows.map((r) => r.outcome ?? null)).toEqual([null, "win", "win", "lose", "lose", "golden", "golden", "golden"]);
+  });
+
+  it("leaves sheets without ending banners untouched", () => {
+    const rows = [row("Walk in"), row("Anthem"), row("Full time siren")];
+    detectOutcomes(rows);
+    expect(rows.every((r) => !r.outcome)).toBe(true);
   });
 });

@@ -76,7 +76,7 @@ export function TransportBar({
   if (channel.role !== "caller" && channel.role !== "admin") return null;
 
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
       {!isLive && (
         <button
           className="btn btn-positive"

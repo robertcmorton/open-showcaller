@@ -27,3 +27,30 @@ describe("rundown doc round-trip", () => {
     expect(projected.rows).toHaveLength(1);
   });
 });
+
+describe("sheet-faithful columns and outcome tags", () => {
+  it("orders columns per the sheet, keeps its header names, and round-trips outcomes", () => {
+    const doc = buildRundownDoc(
+      [
+        { type: "cue", title: "A", durationSec: 60, outcome: "win" },
+        { type: "cue", title: "B", durationSec: 30 },
+      ],
+      { name: "Order", baseTitles: { title: "ACTIVITY", start: "TIME", duration: "DUR" } },
+      [{ key: "loc", title: "LOCATION" }],
+      true,
+      [],
+      ["start", "duration", "title", "loc"],
+    );
+    const projected = projectRundownDoc(decodeDoc(encodeDoc(doc)));
+    expect(projected.columns.map((c) => c.key)).toEqual(["start", "duration", "title", "loc"]);
+    expect(projected.columns.map((c) => c.title)).toEqual(["TIME", "DUR", "ACTIVITY", "LOCATION"]);
+    expect(projected.rows[0]!.outcome).toBe("win");
+    expect(projected.rows[1]!.outcome).toBeNull();
+  });
+
+  it("appends unlisted keys and ignores unknown keys in the order", () => {
+    const doc = buildRundownDoc([{ type: "cue", title: "A" }], {}, [{ key: "loc", title: "LOC" }], true, [], ["duration", "ghost", "loc"]);
+    const { columns } = projectRundownDoc(doc);
+    expect(columns.map((c) => c.key)).toEqual(["duration", "loc", "title", "start"]);
+  });
+});

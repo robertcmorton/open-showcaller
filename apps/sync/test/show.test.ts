@@ -35,3 +35,16 @@ describe("ShowStateMachine", () => {
     expect(m.current.seq).toBe(3);
   });
 });
+
+describe("pre-show walkthrough", () => {
+  it("moves the cursor while idle, clears on start, and refuses while live", () => {
+    const m = new ShowStateMachine();
+    expect(m.apply("walk", "row-3")).toMatchObject({ state: "idle", walkRowId: "row-3" });
+    expect(m.apply("walk", undefined)).toMatchObject({ walkRowId: null });
+    m.apply("walk", "row-5");
+    expect(m.apply("start", "row-1")).toMatchObject({ state: "running", walkRowId: null });
+    expect(m.apply("walk", "row-2")).toBe("show is live — use the transport");
+    m.apply("stop", undefined);
+    expect(m.apply("walk", "row-7")).toMatchObject({ state: "ended", walkRowId: "row-7" });
+  });
+});

@@ -11,6 +11,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.12.2] — 2026-08-08
+
+### Fixed
+- **PDF and CSV exports follow the sheet's column order** with its own header names, matching the on-screen grid.
+- The LIVE chip wraps onto the next line on phones instead of clipping off the edge.
+- Managing a rundown that no longer exists answers 404 for signed-in callers instead of 401.
+
+### Added
+- Regression tests for the newest live behaviours: walkthrough transitions in the show machine, ending-block auto-detection, and the sheet-order/column-name/outcome document round-trip (63 tests across the suites).
+- The locked-server access matrix grew to **58 checks** — profile self-service gates, named join codes and revocation, and the walkthrough command gate — and passes clean.
+
 ## [0.12.1] — 2026-08-08
 
 ### Fixed
