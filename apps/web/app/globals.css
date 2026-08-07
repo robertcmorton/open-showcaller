@@ -519,11 +519,18 @@ input.inline-edit {
   background: var(--raised);
 }
 
+/* The cue row: heavy light rails above and below make the live position
+   unmistakable at a glance. (--cue-rail is reused by every state combo —
+   box-shadow doesn't compose across rules.) */
+:root {
+  --cue-rail: inset 0 2px 0 rgba(255, 255, 255, 0.75), inset 0 -2px 0 rgba(255, 255, 255, 0.75);
+}
 .rundown-grid tr.active-row td {
   background: rgba(76, 141, 255, 0.1);
+  box-shadow: var(--cue-rail);
 }
 .rundown-grid tr.active-row td:first-child {
-  box-shadow: inset 4px 0 0 var(--accent);
+  box-shadow: var(--cue-rail), inset 4px 0 0 var(--accent);
 }
 
 .row-number {
@@ -536,12 +543,6 @@ input.inline-edit {
 }
 tr:hover .row-number {
   color: var(--text-2);
-}
-
-.anchor-flag {
-  color: var(--warn);
-  margin-right: 4px;
-  cursor: pointer;
 }
 
 .duration-muted {
@@ -765,7 +766,7 @@ kbd {
   background: rgba(76, 141, 255, 0.05);
 }
 .rundown-grid tr.active-row.paused td:first-child {
-  box-shadow: inset 4px 0 0 var(--warn);
+  box-shadow: var(--cue-rail), inset 4px 0 0 var(--warn);
 }
 
 /* ---------- Print (formatted export via the browser's PDF printer) ---------- */
@@ -988,7 +989,7 @@ kbd {
   box-shadow: inset 3px 0 0 #2dd4bf;
 }
 .rundown-grid tr.my-role-row.active-row td:first-child {
-  box-shadow: inset 4px 0 0 var(--accent), inset 7px 0 0 #2dd4bf;
+  box-shadow: var(--cue-rail), inset 4px 0 0 var(--accent), inset 7px 0 0 #2dd4bf;
 }
 
 .role-bar {

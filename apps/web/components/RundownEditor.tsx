@@ -28,6 +28,7 @@ import { Dropdown, HeaderClock, Icon } from "./ui";
 import { SideNavSection, WithSideNav } from "./SideNav";
 import { RoleBar, RolePicker, highlightRoles, matchingRole } from "./RoleBar";
 import { RichCellText } from "./RichCellText";
+import { useColWidths } from "../lib/useColWidths";
 import { useShowChannel } from "../lib/showChannel";
 import { useLiveTiming } from "../lib/useLiveTiming";
 import { useRundownDoc } from "../lib/useRundownDoc";
@@ -148,6 +149,9 @@ function BigTimer({
 }) {
   const remaining = live.remainingInRowSec;
   const over = remaining != null && remaining < 0;
+  // The red state waits a full second past zero so a cue handing over to the
+  // next row (follow-clock advances within a second) never flashes red.
+  const overLate = remaining != null && remaining < -1;
   const amber =
     !over && remaining != null && plannedSec != null && plannedSec > 0 && remaining <= Math.min(60, plannedSec * 0.2);
   const display =
@@ -156,7 +160,7 @@ function BigTimer({
       : over
         ? `+${formatDuration(live.rowOverSec)}`
         : formatDuration(remaining);
-  const stateClass = paused ? "paused-state" : over ? "over" : amber ? "amber" : "under";
+  const stateClass = paused ? "paused-state" : overLate ? "over" : amber || over ? "amber" : "under";
   const frac =
     plannedSec != null && plannedSec > 0 ? Math.min(1, Math.max(0, live.elapsedInRowSec / plannedSec)) : 0;
   return (
@@ -208,7 +212,7 @@ export function RundownEditor({
   const [hiddenCols, setHiddenCols] = useState<ReadonlySet<string>>(new Set());
   // Per-user column width overrides (drag the header edges); imported sheets
   // still provide the starting widths.
-  const [colWidths, setColWidths] = useState<Record<string, number>>({});
+  const { widths: colWidths, handle: resizeHandle, tableStyle } = useColWidths(COL_WIDTHS_KEY(rundownId));
   const [showZero, setShowZero] = useState(false);
   const [followScroll, setFollowScroll] = useState(true);
   // A user can hold several roles at once (Camera 1 AND PA). Stored per browser.
@@ -249,8 +253,6 @@ export function RundownEditor({
     try {
       const raw = localStorage.getItem(HIDDEN_COLS_KEY(rundownId));
       if (raw) setHiddenCols(new Set(JSON.parse(raw) as string[]));
-      const widths = localStorage.getItem(COL_WIDTHS_KEY(rundownId));
-      if (widths) setColWidths(JSON.parse(widths) as Record<string, number>);
       setShowZero(localStorage.getItem(`oc:zerocol:${rundownId}`) === "1");
       const storedRoles = localStorage.getItem(`oc:myrole:${rundownId}`);
       if (storedRoles) {
@@ -273,51 +275,6 @@ export function RundownEditor({
     setHiddenCols(next);
     localStorage.setItem(HIDDEN_COLS_KEY(rundownId), JSON.stringify([...next]));
   };
-
-  /** Drag a header's right edge to resize its column; stored per browser. */
-  const startResize = (e: React.PointerEvent, key: string): void => {
-    e.preventDefault();
-    e.stopPropagation();
-    const th = (e.target as HTMLElement).closest("th");
-    if (!th) return;
-    const startW = th.getBoundingClientRect().width;
-    const startX = e.clientX;
-    let last = Math.round(startW);
-    const move = (ev: PointerEvent) => {
-      last = Math.min(720, Math.max(56, Math.round(startW + ev.clientX - startX)));
-      setColWidths((prev) => ({ ...prev, [key]: last }));
-    };
-    const up = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      setColWidths((prev) => {
-        const next = { ...prev, [key]: last };
-        localStorage.setItem(COL_WIDTHS_KEY(rundownId), JSON.stringify(next));
-        return next;
-      });
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-  };
-
-  /** Double-click a handle: back to the column's natural / imported width. */
-  const resetWidth = (key: string): void => {
-    setColWidths((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      localStorage.setItem(COL_WIDTHS_KEY(rundownId), JSON.stringify(next));
-      return next;
-    });
-  };
-
-  const resizeHandle = (key: string) => (
-    <span
-      className="col-resize no-print"
-      title="Drag to resize — double-click to reset"
-      onPointerDown={(e) => startResize(e, key)}
-      onDoubleClick={() => resetWidth(key)}
-    />
-  );
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -589,9 +546,15 @@ export function RundownEditor({
     });
   };
 
-  const commitTime = (rowId: string, raw: string): void => {
+  /** Empty clears the fixed time (back to auto flow); an unchanged value is a
+   *  no-op so opening the editor and clicking away never pins a flowing row. */
+  const commitTime = (rowId: string, raw: string, currentSec: number | null): void => {
     const trimmed = raw.trim();
-    setRowField(rowId, "hardStartSec", trimmed === "" ? null : parseTimeOfDay(trimmed));
+    if (trimmed === "") setRowField(rowId, "hardStartSec", null);
+    else {
+      const sec = parseTimeOfDay(trimmed);
+      if (sec != null && sec !== currentSec) setRowField(rowId, "hardStartSec", sec);
+    }
     setEditingTime(null);
   };
 
@@ -1094,19 +1057,34 @@ export function RundownEditor({
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <div className={`grid-scroll ${mobileAllCols ? "mobile-show-all" : ""}`} style={{ maxHeight: gridMaxH }}>
-        <table className="rundown-grid">
+        <table
+          className="rundown-grid"
+          style={tableStyle([
+            "rownum",
+            "title",
+            "start",
+            "duration",
+            ...(showZero ? ["zero"] : []),
+            ...richColumns.map((c) => c.key),
+          ])}
+        >
           <thead>
             <tr>
-              <th style={{ width: colWidths["rownum"] }}>{resizeHandle("rownum")}</th>
-              <th style={{ width: colWidths["title"] }}>Title{resizeHandle("title")}</th>
-              <th style={{ width: colWidths["start"] }}>Start{resizeHandle("start")}</th>
-              <th style={{ width: colWidths["duration"] }}>Duration{resizeHandle("duration")}</th>
-              {showZero && <th title="Countdown to the next anchored time">Zero</th>}
+              <th data-colkey="rownum" style={{ width: colWidths["rownum"] }}>{resizeHandle("rownum")}</th>
+              <th data-colkey="title" style={{ width: colWidths["title"] }}>Title{resizeHandle("title")}</th>
+              <th data-colkey="start" style={{ width: colWidths["start"] }}>Start{resizeHandle("start")}</th>
+              <th data-colkey="duration" style={{ width: colWidths["duration"] }}>Duration{resizeHandle("duration")}</th>
+              {showZero && (
+                <th data-colkey="zero" style={{ width: colWidths["zero"] }} title="Countdown to the next anchored time">
+                  Zero{resizeHandle("zero")}
+                </th>
+              )}
               {richColumns.map((c) => {
                 const w = colWidths[c.key] ?? c.width;
                 return (
                   <th
                     key={c.id}
+                    data-colkey={c.key}
                     className={richColClass(c)}
                     style={w ? { width: w, minWidth: Math.min(w, 140) } : undefined}
                   >
@@ -1145,7 +1123,9 @@ export function RundownEditor({
                         const cell = renderRichCell(rowRecord, titleColumn);
                         if (activeRowId !== rowRecord.id || !live || rowRecord.durationSec == null || rowRecord.durationSec <= 0)
                           return cell;
-                        const over = live.remainingInRowSec != null && live.remainingInRowSec < 0;
+                        // Red only after a full second over — the moment between a cue
+                        // ending and the next taking over must not flash red.
+                        const over = live.remainingInRowSec != null && live.remainingInRowSec < -1;
                         const frac = over
                           ? 1
                           : live.remainingInRowSec != null
@@ -1162,28 +1142,23 @@ export function RundownEditor({
                       <td />
                     )}
                     <td className="mono" onDoubleClick={canEditContent ? () => setEditingTime(rowRecord.id) : undefined}>
-                      {rowRecord.hardStartSec != null && (
-                        <span
-                          className="anchor-flag"
-                          title="Anchored start — click to reset to auto"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (canEditContent) setRowField(rowRecord.id, "hardStartSec", null);
-                          }}
-                        >
-                          ⚑
-                        </span>
-                      )}
                       {editingTime === rowRecord.id ? (
                         <input
                           ref={timeInputRef}
                           className="inline-edit"
                           autoFocus
-                          defaultValue={rowRecord.hardStartSec != null ? formatTimeOfDay(rowRecord.hardStartSec, true) : ""}
+                          defaultValue={
+                            rowRecord.hardStartSec != null
+                              ? formatTimeOfDay(rowRecord.hardStartSec, meta.use24h)
+                              : t.startSec != null
+                                ? formatTimeOfDay(t.startSec, meta.use24h)
+                                : ""
+                          }
                           placeholder="9:30 am"
-                          onBlur={(e) => commitTime(rowRecord.id, e.currentTarget.value)}
+                          onFocus={(e) => e.currentTarget.select()}
+                          onBlur={(e) => commitTime(rowRecord.id, e.currentTarget.value, t.startSec ?? null)}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter") commitTime(rowRecord.id, e.currentTarget.value);
+                            if (e.key === "Enter") commitTime(rowRecord.id, e.currentTarget.value, t.startSec ?? null);
                             if (e.key === "Escape") setEditingTime(null);
                           }}
                         />
@@ -1278,9 +1253,9 @@ export function RundownEditor({
       <p className="no-print hide-mobile" style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", marginTop: "1rem" }}>
         {canEditContent ? (
           <>
-            Double-click a cell to edit · double-click Duration for hide/mute · double-click Start to anchor (⚑ resets)
-            · <kbd>⇧</kbd>/<kbd>⌘</kbd>-click row numbers for multi-select · drag row numbers to reorder · edits sync
-            live.
+            Double-click a cell to edit · double-click Start to set a fixed time (clear it to return to auto flow) ·
+            double-click Duration to edit, hide, or mute · <kbd>⇧</kbd>/<kbd>⌘</kbd>-click row numbers for multi-select
+            · drag row numbers to reorder · edits sync live.
           </>
         ) : (
           <>Read-only view — live position highlights as the show runs. Use the Columns menu to tailor what you see.</>

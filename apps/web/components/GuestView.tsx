@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { computeTiming, formatDuration, formatTimeOfDay, type PlanRow } from "@opencall/core";
 import { API_URL } from "../lib/api";
+import { useColWidths } from "../lib/useColWidths";
 
 interface GuestProjection {
   meta: { name: string; use24h: boolean; plannedStartSec: number | null; versionLabel: string | null };
@@ -19,6 +20,7 @@ interface GuestProjection {
 export function GuestView({ token }: { token: string }) {
   const [data, setData] = useState<GuestProjection | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { widths, handle, tableStyle } = useColWidths(`oc:colwidths:guest:${token}`);
 
   useEffect(() => {
     fetch(`${API_URL}/guest/${token}`)
@@ -61,18 +63,26 @@ export function GuestView({ token }: { token: string }) {
         </button>
       </header>
 
-      <table className="rundown-grid">
+      <div style={{ overflowX: "auto" }}>
+      <table
+        className="rundown-grid"
+        style={tableStyle(["rownum", "title", "start", "duration", ...richColumns.map((c) => c.key)])}
+      >
         <thead>
           <tr>
-            <th>#</th>
-            <th>Title</th>
-            <th>Start</th>
-            <th>Duration</th>
-            {richColumns.map((c) => (
-              <th key={c.id} style={(c as { width?: number }).width ? { width: (c as { width?: number }).width } : undefined}>
-                {c.title}
-              </th>
-            ))}
+            <th data-colkey="rownum" style={{ width: widths["rownum"] }}>#{handle("rownum")}</th>
+            <th data-colkey="title" style={{ width: widths["title"] }}>Title{handle("title")}</th>
+            <th data-colkey="start" style={{ width: widths["start"] }}>Start{handle("start")}</th>
+            <th data-colkey="duration" style={{ width: widths["duration"] }}>Duration{handle("duration")}</th>
+            {richColumns.map((c) => {
+              const w = widths[c.key] ?? (c as { width?: number }).width;
+              return (
+                <th key={c.id} data-colkey={c.key} style={w ? { width: w } : undefined}>
+                  {c.title}
+                  {handle(c.key)}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
@@ -98,6 +108,7 @@ export function GuestView({ token }: { token: string }) {
           })}
         </tbody>
       </table>
+      </div>
     </main>
   );
 }

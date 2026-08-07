@@ -11,6 +11,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.7.0] — 2026-08-07
+
+### Changed
+- **Column resizing is solid, not elastic.** Dragging a header edge now moves only that column — the first drag freezes every column at its current width, so neighbours stop shifting around under the pointer. Double-clicking any handle returns the whole table to its natural widths. The read-only guest view gets the same draggable columns.
+- **The cue row is unmistakable**: heavy light rails above and below the live row (on top of the existing tint and edge marker) make the current position readable from across a control room.
+- **Fixed start times are set by double-clicking the time — the ⚑ flag is gone.** The editor opens prefilled with the row's current time (selected, ready to overtype); clearing the box returns the row to automatic flow-on timing. Closing the editor without changing anything no longer pins the row. Double-clicking Duration opens its editor the same way, with Hide/Mute alongside.
+
+### Fixed
+- **No more red flash at cue handovers.** The progress bars held red for a moment just before a cue's end and could carry it into the next row; the red overrun state now waits a full second past zero (the big timer bridges through amber), so a cue handing over cleanly never flashes red — a genuine overrun still turns red immediately after that second.
+
 ## [0.6.2] — 2026-08-07
 
 ### Changed
