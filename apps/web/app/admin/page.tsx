@@ -12,7 +12,7 @@ import {
   type EventSummary,
   type TemplateSummary,
 } from "../../lib/api";
-import { Dropdown, Icon } from "../../components/ui";
+import { BrandMark, Dropdown, Icon } from "../../components/ui";
 import { ImportPanel } from "../../components/ImportPanel";
 import { SideNavSection, WithSideNav } from "../../components/SideNav";
 import { imageFileToDataUrl, pickImage } from "../../lib/pickImage";
@@ -524,7 +524,7 @@ export default function AdminPage() {
 
   if (locked)
     return (
-      <div data-theme="light" style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
+      <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
         <TokenGate onUnlocked={reload} />
       </div>
     );
@@ -539,30 +539,28 @@ export default function AdminPage() {
       </SideNavSection>
       {me?.role === "admin" && <AdminNavSection />}
       <SideNavSection heading="Credentials">
-        {me?.role === "user" && (
-          <div style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", padding: "2px 9px" }}>
-            Signed in as {me.name}
-          </div>
-        )}
-        {me?.role === "user" && (
-          <button
-            type="button"
-            className="menu-item"
-            onClick={() => {
-              const current = window.prompt("Current password (leave empty if you never had one)");
-              if (current === null) return;
-              const next = window.prompt("New password (at least 8 characters)");
-              if (!next) return;
-              void api
-                .changePassword(current, next)
-                .then(() => window.alert("Password changed. Other signed-in devices were signed out."))
-                .catch((err) => window.alert(String(err)));
-            }}
-          >
-            <span className="check" />
-            Change password…
-          </button>
-        )}
+        <div style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", padding: "2px 9px", lineHeight: 1.5 }}>
+          {me?.role === "admin" ? (
+            <>
+              Signed in as <strong style={{ color: "var(--text-2)" }}>Administrator</strong> — full access
+            </>
+          ) : me?.role === "company" ? (
+            <>
+              Signed in as <strong style={{ color: "var(--text-2)" }}>{me.teamName}</strong> — company access
+            </>
+          ) : me?.role === "user" ? (
+            <>
+              Signed in as <strong style={{ color: "var(--text-2)" }}>{me.name}</strong>
+              {me.canManage ? " — manager" : " — view access"}
+            </>
+          ) : (
+            "Not signed in"
+          )}
+        </div>
+        <Link className="menu-item" href="/account">
+          <span className="check" />
+          My account
+        </Link>
         {getAdminToken() ? (
           <button
             type="button"
@@ -591,12 +589,13 @@ export default function AdminPage() {
   );
 
   return (
-    <div data-theme="light" style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
       <WithSideNav title={me?.role === "company" ? me.teamName : "Admin"} settings={settings}>
       <main className="admin-main">
         <header style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: "1.5rem" }}>
           <div style={{ flex: 1 }}>
-            <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em", margin: 0 }}>
+            <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.02em", margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
+              <BrandMark size={28} />
               OpenCall{" "}
               <span style={{ color: "var(--text-3)", fontWeight: 500 }}>
                 {me?.role === "company" ? me.teamName : me?.role === "user" ? me.name : "admin"}
@@ -1021,9 +1020,11 @@ export default function AdminPage() {
                     No events yet for this company.
                   </div>
                 )}
-                <div>
-                  <CreateEventForm teamId={group.real ? group.id : undefined} onCreated={reload} />
-                </div>
+                {(me?.role === "admin" || me?.role === "company") && (
+                  <div>
+                    <CreateEventForm teamId={group.real ? group.id : undefined} onCreated={reload} />
+                  </div>
+                )}
               </div>
             </section>
           ))}

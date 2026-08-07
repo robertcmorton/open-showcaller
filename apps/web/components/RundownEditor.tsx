@@ -226,6 +226,14 @@ export function RundownEditor({
   // The timing-check issue currently on screen: its rows are highlighted in
   // the grid and the disagreeing row is scrolled into view.
   const [gapFocus, setGapFocus] = useState<{ fromId: string; toId: string } | null>(null);
+  // The selection bar sits just above the first selected row, inside the
+  // scroller so it moves with the sheet.
+  const [selBarTop, setSelBarTop] = useState(36);
+  useEffect(() => {
+    if (selected.size === 0) return;
+    const tr = document.querySelector(".rundown-grid tbody tr.selected") as HTMLElement | null;
+    if (tr) setSelBarTop(Math.max(36, tr.offsetTop - 46));
+  }, [selected, rows.length]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!gapFocus) return;
     document.querySelector("tr.gap-row-to")?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -1147,90 +1155,6 @@ export function RundownEditor({
             }}
           />
 
-          {canEditContent && selected.size > 0 && (
-            <div className="selection-bar">
-              <span className="count">{selected.size} selected</span>
-              <button className="btn btn-sm" onClick={duplicateSelected}>
-                Duplicate
-              </button>
-              <button className="btn btn-sm" onClick={toggleGroupSelected}>
-                Group
-              </button>
-              <button
-                className="btn btn-sm"
-                title="Skip: keeps the row visible but removes it from timing and transport — the show catches back up to the original anchors"
-                onClick={() =>
-                  doc.transact(() =>
-                    selected.forEach((id) => {
-                      const yRow = yRows.get(id);
-                      yRow?.set("skipped", !(yRow.get("skipped") as boolean | undefined));
-                    }),
-                  )
-                }
-              >
-                Skip
-              </button>
-              <Dropdown label="Outcome" className="btn btn-sm">
-                {(
-                  [
-                    ["win", "Win"],
-                    ["lose", "Lose"],
-                    ["draw", "Draw (final result)"],
-                    ["golden", "Golden point (extra time)"],
-                    [null, "Not an outcome branch"],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={String(value)}
-                    type="button"
-                    className="menu-item"
-                    title="Tag the selected rows as an alternate ending — at full time the caller picks one branch and the others skip themselves"
-                    onClick={() => doc.transact(() => selected.forEach((id) => yRows.get(id)?.set("outcome", value)))}
-                  >
-                    <span className="check" />
-                    {label}
-                  </button>
-                ))}
-              </Dropdown>
-              {[
-                ["rgba(229,72,77,0.16)", "Red"],
-                ["rgba(232,176,60,0.16)", "Amber"],
-                ["rgba(63,214,143,0.14)", "Green"],
-                ["rgba(76,141,255,0.15)", "Blue"],
-                ["rgba(167,139,250,0.16)", "Purple"],
-              ].map(([color, label]) => (
-                <button
-                  key={color}
-                  className="color-swatch"
-                  title={`Highlight ${label}`}
-                  style={{ background: color }}
-                  onClick={() =>
-                    doc.transact(() => selected.forEach((id) => yRows.get(id)?.set("color", color)))
-                  }
-                />
-              ))}
-              <button
-                className="color-swatch"
-                title="Clear highlight"
-                style={{ background: "transparent" }}
-                onClick={() => doc.transact(() => selected.forEach((id) => yRows.get(id)?.set("color", null)))}
-              >
-                ✕
-              </button>
-              <button className="btn btn-sm btn-danger" onClick={deleteSelected}>
-                Delete
-              </button>
-              <button
-                className="btn btn-sm btn-ghost"
-                onClick={() => {
-                  setSelected(new Set());
-                  setLastSelected(null);
-                }}
-              >
-                ✕
-              </button>
-            </div>
-          )}
         </div>
       </div>
       </div>
@@ -1311,6 +1235,91 @@ export function RundownEditor({
           </button>
         )}
         <div className={`grid-scroll ${mobileAllCols ? "mobile-show-all" : ""}`}>
+        {canEditContent && selected.size > 0 && (
+          // Anchored just above the first selected row — the actions clearly
+          // belong to the rows they act on, and scroll with them.
+          <div className="selection-bar" style={{ position: "absolute", top: selBarTop, left: 8, zIndex: 6 }}>
+            <span className="count">{selected.size} selected</span>
+            <button className="btn btn-sm" onClick={duplicateSelected}>
+              Duplicate
+            </button>
+            <button className="btn btn-sm" onClick={toggleGroupSelected}>
+              Group
+            </button>
+            <button
+              className="btn btn-sm"
+              title="Skip: keeps the row visible but removes it from timing and transport — the show catches back up to the original anchors"
+              onClick={() =>
+                doc.transact(() =>
+                  selected.forEach((id) => {
+                    const yRow = yRows.get(id);
+                    yRow?.set("skipped", !(yRow.get("skipped") as boolean | undefined));
+                  }),
+                )
+              }
+            >
+              Skip
+            </button>
+            <Dropdown label="Outcome" className="btn btn-sm">
+              {(
+                [
+                  ["win", "Win"],
+                  ["lose", "Lose"],
+                  ["draw", "Draw (final result)"],
+                  ["golden", "Golden point (extra time)"],
+                  [null, "Not an outcome branch"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={String(value)}
+                  type="button"
+                  className="menu-item"
+                  title="Tag the selected rows as an alternate ending — at full time the caller picks one branch and the others skip themselves"
+                  onClick={() => doc.transact(() => selected.forEach((id) => yRows.get(id)?.set("outcome", value)))}
+                >
+                  <span className="check" />
+                  {label}
+                </button>
+              ))}
+            </Dropdown>
+            {[
+              ["rgba(229,72,77,0.16)", "Red"],
+              ["rgba(232,176,60,0.16)", "Amber"],
+              ["rgba(63,214,143,0.14)", "Green"],
+              ["rgba(76,141,255,0.15)", "Blue"],
+              ["rgba(167,139,250,0.16)", "Purple"],
+            ].map(([color, label]) => (
+              <button
+                key={color}
+                className="color-swatch"
+                title={`Highlight ${label}`}
+                style={{ background: color }}
+                onClick={() => doc.transact(() => selected.forEach((id) => yRows.get(id)?.set("color", color)))}
+              />
+            ))}
+            <button
+              className="color-swatch"
+              title="Clear highlight"
+              style={{ background: "transparent" }}
+              onClick={() => doc.transact(() => selected.forEach((id) => yRows.get(id)?.set("color", null)))}
+            >
+              ✕
+            </button>
+            <button className="btn btn-sm btn-danger" onClick={deleteSelected}>
+              Delete
+            </button>
+            <button
+              className="btn btn-sm btn-ghost"
+              title="Clear selection"
+              onClick={() => {
+                setSelected(new Set());
+                setLastSelected(null);
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
         <table className={`rundown-grid ${fixedStyle ? "cols-fixed" : ""}`} style={fixedStyle}>
           <thead>
             <tr>

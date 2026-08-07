@@ -11,6 +11,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.11.0] — 2026-08-07
+
+### Added
+- **My account page** (`/account`): see who you're signed in as and what you can access; email accounts edit their name, email, and password there. The sidebar's Credentials section now states your identity and access level on every dashboard, with a My account link.
+- Creation rights follow the hierarchy end to end: admins create companies, events, and views; company sign-ins create events and views; event access creates view links only — the dashboard now hides what each tier can't do (the server always enforced it).
+
+### Changed
+- **One palette everywhere**: the dashboard and admin pages now share the show surfaces' dark theme instead of switching to light, and the favicon's mark (the little rundown with its live row and go dot) brands the sidebar and dashboard header.
+- **The timing check fixes whole chains in one action**: "Change X's start … & shift below" moves every fixed time under it by the same correction — inserting a row no longer means resolving each downstream disagreement one by one.
+- **The selection bar floats beside the rows it acts on** — anchored just above the first selected row and scrolling with the sheet, instead of sitting detached in the toolbar.
+- README and the build spec refreshed to the current feature set (the AI-assistant deploy notes now describe the migration-at-boot behaviour verified by the Docker test).
+
 ## [0.10.0] — 2026-08-07
 
 ### Added

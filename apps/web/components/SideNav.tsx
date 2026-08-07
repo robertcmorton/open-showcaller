@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { BrandMark } from "./ui";
 
 /**
  * App shell with the persistent left settings panel: navigation (main page,
@@ -42,7 +43,8 @@ export function WithSideNav({
         {open ? "◂" : "▸"}
       </button>
       <aside className={`sidenav no-print ${open ? "" : "closed"}`}>
-        <Link href="/" className="sidenav-brand">
+        <Link href="/" className="sidenav-brand" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <BrandMark size={20} />
           OpenCall
         </Link>
         {title && <div className="sidenav-title">{title}</div>}

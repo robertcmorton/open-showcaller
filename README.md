@@ -6,12 +6,14 @@ Producers build a minute-by-minute rundown of a show (corporate keynotes, confer
 
 ## What it does today
 
-- **Rundown editor** — collaborative real-time grid (every edit syncs live to every open screen), cascade timing with anchored (⚑) hard start times, milestones, section banners, row colours, key times, durations that can be hidden or muted, per-user column visibility and drag-resizable column widths.
-- **Run sheets in** — import XLSX / XLS / CSV / **PDF** run sheets with a mapping preview: columns mirror the source sheet exactly, wrapped PDF rows merge back into one row per item, roles (WHO/ROLE columns) are detected and colour-coded automatically.
-- **Show calling** — start/pause/advance a live show; the active row highlights everywhere, a big centre-top timer counts the active item (green/amber/red), skipped rows drop out of timing so the show catches back up, and a reconcile wizard resolves imported sheets whose times and durations disagree.
-- **Crew screens** — `/show` (full console), `/edit` (content only), `/view` (read-only), plus `/follow`, `/timer`, and `/prompter` companion surfaces. Everyone can pick "my role" to get personal highlights and an on-air countdown bar.
-- **Access control** — admin token, per-company showcaller tokens, per-user accounts with grants (admin / company / event / view-only), and per-rundown join codes. View grants get read-only documents, enforced server-side.
-- **Operations** — event companies → events → rundowns hierarchy, archive, templates, snapshots and restore, as-run show reports (CSV), guest passes with column filtering, DST-correct event-timezone clocks, print/CSV export, and a server-kept error log reviewable from the admin dashboard.
+- **Rundown editor** — collaborative real-time grid (every edit syncs live to every open screen), cascade timing with fixed start times set by double-clicking, milestones, section banners, row colours, hidden/muted durations, undo/redo over every row edit, per-user column visibility, boundary-transfer column resizing (edges stay pinned), and rename-on-double-click column headers.
+- **Run sheets in** — import XLSX / XLS / CSV / **PDF** run sheets with a full-length mapping preview: columns keep the sheet's own names and order, wrapped PDF rows merge back into one row per item, roles (WHO/ROLE columns) are detected and colour-coded, alternate-ending blocks (win / lose / golden point) tag themselves from their banners, and a fix-it list repairs unparseable cells with context. "Update import" re-reads the stored sheet with the latest pipeline in one click.
+- **Show calling** — start/pause/advance a live show; the active cue row grows with a CUE badge and a full-cell progress sweep, a big dead-centre timer counts the item (green/amber/red), skipped rows drop out of timing, and edits ripple: changing a duration or a start time shifts every fixed time below it (one undo reverses all of it). A timing check explains, in plain words, every place a sheet's times and durations disagree — and fixes the whole chain in one action.
+- **Runs itself when it must** — server-driven clock-follow advances the show along the TIME column with every console closed (the live fail-safe); the showcaller stays in charge on the fly. A pre-show walkthrough mode steps a shared highlight through the sheet on every device before the show starts.
+- **Sport-aware endings** — events can carry a sport (NRL first): at full time the console offers Win / Lose / ⚡ Golden point, golden point loops back to a final Win / Lose / Draw pick, and the chooser pulses as the decision point approaches (position-based, so stoppage time never breaks it).
+- **Crew screens** — `/show` (full console), `/edit` (content only), `/view` (read-only), plus `/follow`, `/timer`, and `/prompter` companion surfaces. Everyone can pick "my role" (several at once) for personal highlights and an on-air countdown bar.
+- **Access control** — admin token, per-company showcaller tokens, per-user email+password accounts with grants (admin / company / event / view-only), a self-service account page, and per-rundown join codes that carry the holder's name and revoke instantly. View grants get read-only documents, enforced server-side.
+- **Operations** — event companies → events → rundowns hierarchy, archive, templates, snapshots and in-place restore, as-run show reports (CSV), guest passes with column filtering, DST-correct event-timezone clocks chosen from a worldwide dropdown, print/PDF/CSV export, and a server-kept error log reviewable from the admin dashboard.
 
 The product spec lives in [BUILD_PROMPT.md](BUILD_PROMPT.md); the realtime protocol in [PROTOCOL.md](PROTOCOL.md); the data model in [docs/DATA-MODEL.md](docs/DATA-MODEL.md); history in [CHANGELOG.md](CHANGELOG.md).
 
@@ -44,7 +46,7 @@ OpenCall is two services plus a database:
 |---|---|---|---|
 | **web** | Next.js frontend | 3000 | `GET /` → 200 |
 | **sync** | HTTP API + show WebSocket (`/`) + doc WebSocket (`/doc`) — one port | 8787 (or `PORT`) | `GET /me` → `{"role":null}` when locked |
-| **PostgreSQL** | data store (schema auto-creates on boot — no migration step) | 5432 | `pg_isready` |
+| **PostgreSQL** | data store (versioned migrations apply automatically at boot — no manual step) | 5432 | `pg_isready` |
 
 ### Environment variables
 
@@ -133,7 +135,7 @@ This repository is written so that an AI coding assistant (Claude, ChatGPT, Copi
 
 A prompt you can paste into your assistant:
 
-> Deploy the open-source app OpenCall (https://github.com/robertcmorton/opencall) on <my VPS / Railway / Render / Fly>. Follow the README's Self-hosting section. It is a pnpm/Turborepo monorepo with two services — `apps/web` (Next.js, port 3000) and `apps/sync` (HTTP + two WebSocket paths on one port, default 8787) — plus PostgreSQL. The schema auto-creates on boot; there is no migration step. Generate a strong ADMIN_TOKEN, set ALLOW_DEV_JOIN=0, and set the three NEXT_PUBLIC_* variables on the web build to the sync service's public https/wss URL. Make sure WebSocket upgrades are proxied to the sync service. When done, run the README's "Verify a deployment" curl checks, confirm `/me` returns {"role":null} without the token, and hand me the web URL and the ADMIN_TOKEN you generated.
+> Deploy the open-source app OpenCall (https://github.com/robertcmorton/opencall) on <my VPS / Railway / Render / Fly>. Follow the README's Self-hosting section. It is a pnpm/Turborepo monorepo with two services — `apps/web` (Next.js, port 3000) and `apps/sync` (HTTP + two WebSocket paths on one port, default 8787) — plus PostgreSQL. Versioned migrations apply automatically when the sync service boots; there is no manual migration step. Generate a strong ADMIN_TOKEN, set ALLOW_DEV_JOIN=0, and set the three NEXT_PUBLIC_* variables on the web build to the sync service's public https/wss URL. Make sure WebSocket upgrades are proxied to the sync service. When done, run the README's "Verify a deployment" curl checks, confirm `/me` returns {"role":null} without the token, and hand me the web URL and the ADMIN_TOKEN you generated.
 
 Notes that save assistants time:
 

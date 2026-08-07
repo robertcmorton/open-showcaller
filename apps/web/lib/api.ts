@@ -100,6 +100,8 @@ export interface JoinCodeSummary {
 
 export const api = {
   events: (includeArchived = false) => request<EventSummary[]>(`/events${includeArchived ? "?archived=1" : ""}`),
+  updateMe: (body: { name?: string; email?: string }) =>
+    request<{ ok: true }>("/me", { method: "PATCH", body: JSON.stringify(body) }),
   me: () =>
     request<{
       role: "admin" | "company" | "user" | null;
@@ -107,6 +109,7 @@ export const api = {
       teamId?: string;
       teamName?: string;
       name?: string;
+      email?: string | null;
       canManage?: boolean;
       grants?: { kind: string; targetId: string }[];
     }>("/me"),

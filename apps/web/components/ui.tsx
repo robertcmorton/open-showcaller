@@ -89,6 +89,20 @@ const stroke = {
   strokeLinejoin: "round",
 } as const;
 
+/** The favicon's mark — a tiny rundown with its live row and go dot. */
+export function BrandMark({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 96 96" aria-hidden style={{ flexShrink: 0 }}>
+      <rect width="96" height="96" rx="18" fill="var(--raised)" />
+      <rect x="16" y="20" width="64" height="10" rx="3" fill="var(--warn)" opacity="0.55" />
+      <rect x="16" y="36" width="64" height="10" rx="3" fill="var(--accent)" />
+      <rect x="16" y="52" width="64" height="10" rx="3" fill="var(--border)" />
+      <rect x="16" y="68" width="40" height="10" rx="3" fill="var(--border)" />
+      <circle cx="72" cy="73" r="9" fill="var(--under)" />
+    </svg>
+  );
+}
+
 export const Icon = {
   play: (
     <svg width="13" height="13" viewBox="0 0 16 16">

@@ -65,3 +65,35 @@ Start with Phase 1. Before writing code, propose for my review: (a) the Postgres
 ---
 
 **Status:** all seven phases above are shipped and deployed. The next milestone — run-sheet import (XLSX/XLS/CSV/PDF upload), role-based screens (Admin/Showcaller/Edit/View), live active-row highlighting, and a full UI modernization — is specified in [BUILD_PROMPT_2.md](BUILD_PROMPT_2.md).
+
+---
+
+## Where the build is now (2026-08-07, v0.11.0)
+
+Everything above shipped, and the product has grown past the original spec.
+The additions, so future direction-setting starts from reality:
+
+- **Live fail-safe**: server-driven clock-follow — the server itself advances
+  the show along the TIME column with every console closed; pause holds,
+  manual moves self-correct, the mode survives restarts.
+- **Pre-show walkthrough**: a shared cursor (Prev/Next before the show) that
+  every connected screen follows — for talking the crew through the sheet.
+- **Sport-aware endings**: events carry a sport (NRL first). Alternate ending
+  blocks (win / lose / draw / golden point) are tagged on import from their
+  banners or by hand; at full time the caller picks the real result and the
+  other endings skip themselves everywhere, with golden point looping back to
+  a final win/lose/draw pick. The chooser nudges by sheet position, never by
+  clock, so stoppage time across different sports can't break it.
+- **Ripple timing model**: editing a duration or a fixed start shifts every
+  fixed time below by the same delta in one undoable transaction; the timing
+  check resolves a whole chain of disagreements in one action.
+- **Fidelity**: imported sheets keep their column names and (department)
+  order, their own row numbers, and their untimed sub-rows; any column
+  renames on double-click; the import preview shows every row.
+- **Identity**: email+password accounts with a self-service account page,
+  named revocable join codes, tiered creation rights (admin → company →
+  event → view), and a persistent server-side error log.
+
+Next major directions parked for later: full sheet-order for the structural
+columns, more sports/styles (soccer penalty shoot-outs etc.), emailed join
+codes, and deeper as-run reporting.

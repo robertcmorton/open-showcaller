@@ -235,14 +235,37 @@ export function createApiHandler(
         if (!ctx) json(res, 200, { role: null });
         else if (ctx.kind === "admin") json(res, 200, { role: "admin" });
         else if (ctx.kind === "company") json(res, 200, { role: "company", teamId: ctx.teamId, teamName: ctx.teamName });
-        else if (ctx.kind === "user")
+        else if (ctx.kind === "user") {
+          const row = await db.query.users.findFirst({ where: eq(schema.users.id, ctx.userId), columns: { email: true } });
           json(res, 200, {
             role: "user",
             name: ctx.name,
+            email: row?.email ?? null,
             grants: ctx.grants,
             canManage: ctx.grants.some((g) => g.kind !== "view"),
           });
-        else json(res, 200, { role: null });
+        } else json(res, 200, { role: null });
+        return true;
+      }
+
+      // Self-service profile for account sign-ins (token sign-ins have none).
+      if (req.method === "PATCH" && pathname === "/me") {
+        const ctx = await resolveBearer(handle, bearerToken(req));
+        if (ctx?.kind !== "user") {
+          json(res, 400, { error: "sign in with an email account to edit a profile" });
+          return true;
+        }
+        const body = await readJson(req);
+        const patch: Record<string, unknown> = {};
+        if (typeof body.name === "string" && body.name.trim()) patch.name = body.name.trim().slice(0, 120);
+        if (typeof body.email === "string" && /.+@.+\..+/.test(body.email.trim())) patch.email = body.email.trim().toLowerCase();
+        try {
+          if (Object.keys(patch).length > 0) await db.update(schema.users).set(patch).where(eq(schema.users.id, ctx.userId));
+        } catch {
+          json(res, 409, { error: "that email is already in use" });
+          return true;
+        }
+        json(res, 200, { ok: true });
         return true;
       }
 

@@ -158,18 +158,26 @@ export function ReconcilePanel({
             className="btn btn-sm"
             style={{ flexShrink: 0 }}
             onClick={() => {
+              // One fix clears the whole chain: the correction shifts THIS
+              // row's fixed time and every fixed time below it by the same
+              // amount — no walking the sheet gap by gap.
               doc.transact(() => {
-                yRows.get(to.id)?.set("hardStartSec", null);
+                const delta = -current.gapSec;
+                for (let i = current.toIndex; i < rows.length; i++) {
+                  const r = rows[i]!;
+                  if (r.hardStartSec != null) yRows.get(r.id)?.set("hardStartSec", r.hardStartSec + delta);
+                }
               });
             }}
           >
             Change “{(to.title || "untitled").slice(0, 24)}” start to{" "}
-            {to.hardStartSec != null ? formatTimeOfDay(to.hardStartSec - current.gapSec, use24h) : "—"}
+            {to.hardStartSec != null ? formatTimeOfDay(to.hardStartSec - current.gapSec, use24h) : "—"} &amp; shift below
           </button>
           <span style={{ fontSize: "var(--fs-xs)", color: "var(--text-2)" }}>
-            Trust the durations: the printed{" "}
-            <span className="mono">{to.hardStartSec != null ? formatTimeOfDay(to.hardStartSec, use24h) : "—"}</span> is dropped
-            and the row starts when the items above finish, moving with them from now on.
+            Trust the durations: this row moves to{" "}
+            <span className="mono">{to.hardStartSec != null ? formatTimeOfDay(to.hardStartSec - current.gapSec, use24h) : "—"}</span>{" "}
+            and <strong>every fixed time below shifts with it</strong> — one fix, the whole sheet agrees again. One undo
+            reverses it all.
           </span>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>

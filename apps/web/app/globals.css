@@ -336,11 +336,12 @@ input.inline-edit {
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  background: var(--accent-soft);
+  background: var(--overlay);
   border: 1px solid var(--accent);
   border-radius: var(--r-md);
   font-size: var(--fs-sm);
   animation: menu-in var(--t-fast) var(--ease);
+  box-shadow: var(--shadow-overlay);
 }
 .selection-bar .count {
   color: var(--accent-text);
@@ -1233,6 +1234,9 @@ kbd {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: var(--r-lg);
+  /* Positioning context for the selection bar, which floats above the
+     first selected row and scrolls with the sheet. */
+  position: relative;
 }
 
 /* The show page fits the screen exactly: the grid takes whatever height the

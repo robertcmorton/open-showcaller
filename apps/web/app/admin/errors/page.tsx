@@ -23,7 +23,7 @@ export default function AdminErrorsPage() {
   }, [router]);
 
   return (
-    <div data-theme="light" style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
       <WithSideNav title="Error log" settings={<AdminNavSection active="errors" />}>
         <main className="admin-main">
           <header style={{ marginBottom: "1.25rem" }}>
