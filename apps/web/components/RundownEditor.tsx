@@ -124,6 +124,9 @@ function cloneRow(source: Y.Map<unknown>, newId: string): Y.Map<unknown> {
   return copy;
 }
 
+/** The ad-hoc cue pool is parked (kept in code, hidden in the UI). */
+const CUE_POOL_ENABLED = false;
+
 const HIDDEN_COLS_KEY = (rundownId: string) => `oc:hiddencols:${rundownId}`;
 const COL_WIDTHS_KEY = (rundownId: string) => `oc:colwidths:${rundownId}`;
 
@@ -1121,13 +1124,21 @@ export function RundownEditor({
             >
               ↻ Redo
             </button>
-            <button className="btn" onClick={() => addRow("cue")}>
+            <button className="btn" onClick={() => addRow("cue")} title="A timed item the show steps through — the normal row">
               {Icon.plus} Row
             </button>
-            <button className="btn" onClick={() => addRow("group")}>
+            <button
+              className="btn"
+              onClick={() => addRow("group")}
+              title="A section heading (PRE-GAME, HALF TIME) — organises the sheet into blocks; it has no time and the transport steps past it"
+            >
               {Icon.plus} Group
             </button>
-            <button className="btn" onClick={() => addRow("milestone")} title="A timed marker with no duration — gates open, kick-off, doors">
+            <button
+              className="btn"
+              onClick={() => addRow("milestone")}
+              title="A fixed moment on the clock (DOORS 6:00 PM, KICK-OFF) — marks a time without being something you play; it has no duration"
+            >
               {Icon.plus} Milestone
             </button>
           </>
@@ -1297,18 +1308,18 @@ export function RundownEditor({
             >
               Skip
             </button>
-            <Dropdown label="Mark as ending…" className="btn btn-sm">
+            <Dropdown label="Win / lose / draw rows…" className="btn btn-sm">
               <div style={{ color: "var(--text-3)", fontSize: "var(--fs-xs)", padding: "4px 9px", maxWidth: 230, lineHeight: 1.5 }}>
-                Tags these rows as one of the sheet's alternate endings. Imports usually tag them automatically — the
-                actual result is picked live with the Full time buttons at the top.
+                These rows only play for one game result. Pick which one they belong to — at full time you choose the
+                real result with the buttons at the top, and the rest skip themselves. Imports usually set this for you.
               </div>
               {(
                 [
-                  ["win", "Win ending"],
-                  ["lose", "Lose ending"],
-                  ["draw", "Draw ending (final result)"],
-                  ["golden", "Golden point (extra time)"],
-                  [null, "Not an ending — always plays"],
+                  ["win", "Play these when we WIN"],
+                  ["lose", "Play these when we LOSE"],
+                  ["draw", "Play these on a DRAW"],
+                  ["golden", "Play these in EXTRA TIME (golden point)"],
+                  [null, "Always play these (not result-specific)"],
                 ] as const
               ).map(([value, label]) => (
                 <button
@@ -1578,7 +1589,8 @@ export function RundownEditor({
         </div>
       </DndContext>
 
-      <CuePool doc={doc} mode={mode} channel={channel} />
+      {/* Cue pool parked for now (2026-08-08, user call) — flip to re-enable. */}
+      {CUE_POOL_ENABLED && <CuePool doc={doc} mode={mode} channel={channel} />}
       {myRoles.length > 0 && activeRowId && <div style={{ height: 72 }} />}
       {myRoles.length > 0 && (
         <RoleBar

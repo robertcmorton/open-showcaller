@@ -11,6 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.13.1] — 2026-08-08
+
+### Changed
+- **The cue pool is parked** — hidden from the show page for now (the code stays, one switch re-enables it).
+- The result-rows menu speaks plainly: "Win / lose / draw rows…" with options like "Play these when we WIN" and "Play these in EXTRA TIME (golden point)".
+- Row, Group, and Milestone buttons explain themselves on hover — a Row is a timed item the show steps through, a Group is a section heading the transport steps past, a Milestone pins a clock moment with no duration.
+
 ## [0.13.0] — 2026-08-08
 
 ### Added
