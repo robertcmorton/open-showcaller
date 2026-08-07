@@ -68,7 +68,7 @@ Start with Phase 1. Before writing code, propose for my review: (a) the Postgres
 
 ---
 
-## Where the build is now (2026-08-07, v0.11.0)
+## Where the build is now (2026-08-07, v0.12.0)
 
 Everything above shipped, and the product has grown past the original spec.
 The additions, so future direction-setting starts from reality:
@@ -94,6 +94,7 @@ The additions, so future direction-setting starts from reality:
   named revocable join codes, tiered creation rights (admin → company →
   event → view), and a persistent server-side error log.
 
-Next major directions parked for later: full sheet-order for the structural
-columns, more sports/styles (soccer penalty shoot-outs etc.), emailed join
-codes, and deeper as-run reporting.
+Since v0.12.0 the grids also render columns in the source sheet's exact
+left-to-right order (TIME before ACTIVITY when the sheet says so).
+Next major directions parked for later: more sports/styles (soccer penalty
+shoot-outs etc.), emailed join codes, and deeper as-run reporting.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as Y from "yjs";
 import { ulid } from "ulid";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
@@ -702,15 +702,15 @@ export function RundownEditor({
     });
   };
 
-  // Column order as rendered — each resize handle moves the boundary between
-  // a column and the one after it, so the table's outer edges stay pinned.
+  // Columns render in the DOC's order — which mirrors the source sheet, so a
+  // run sheet with TIME before ACTIVITY looks the same on screen. The Zero
+  // column (synthetic) rides directly after the duration column.
+  const orderedColumns = columns.filter(
+    (c) => c.kind === "title" || c.kind === "startTime" || c.kind === "duration" || (c.kind === "richtext" && !hiddenCols.has(c.key)),
+  );
   const orderedColKeys = [
     "rownum",
-    "title",
-    "start",
-    "duration",
-    ...(showZero ? ["zero"] : []),
-    ...richColumns.map((c) => c.key),
+    ...orderedColumns.flatMap((c) => (c.kind === "duration" && showZero ? [c.key, "zero"] : [c.key])),
   ];
   const nextColKey = (key: string): string | null => {
     const i = orderedColKeys.indexOf(key);
@@ -1324,46 +1324,14 @@ export function RundownEditor({
           <thead>
             <tr>
               <th data-colkey="rownum" style={{ width: colWidths["rownum"] }}>{resizeHandle("rownum", nextColKey("rownum"))}</th>
-              <th
-                data-colkey="title"
-                style={{ width: colWidths["title"] }}
-                title={canEditContent ? "Double-click to rename this column" : undefined}
-                onDoubleClick={() => renameColumn(titleColumn)}
-              >
-                {titleColumn?.title ?? "Title"}
-                {resizeHandle("title", nextColKey("title"))}
-              </th>
-              <th
-                data-colkey="start"
-                style={{ width: colWidths["start"] }}
-                title={canEditContent ? "Double-click to rename this column" : undefined}
-                onDoubleClick={() => renameColumn(startColumn)}
-              >
-                {startColumn?.title ?? "Start"}
-                {resizeHandle("start", nextColKey("start"))}
-              </th>
-              <th
-                data-colkey="duration"
-                style={{ width: colWidths["duration"] }}
-                title={canEditContent ? "Double-click to rename this column" : undefined}
-                onDoubleClick={() => renameColumn(durationColumn)}
-              >
-                {durationColumn?.title ?? "Duration"}
-                {resizeHandle("duration", nextColKey("duration"))}
-              </th>
-              {showZero && (
-                <th data-colkey="zero" style={{ width: colWidths["zero"] }} title="Countdown to the next anchored time">
-                  Zero{resizeHandle("zero", nextColKey("zero"))}
-                </th>
-              )}
-              {richColumns.map((c) => {
-                const w = colWidths[c.key] ?? c.width;
-                return (
+              {orderedColumns.map((c) => {
+                const w = c.kind === "richtext" ? (colWidths[c.key] ?? c.width) : colWidths[c.key];
+                const th = (
                   <th
                     key={c.id}
                     data-colkey={c.key}
                     className={richColClass(c)}
-                    style={w ? { width: w, minWidth: Math.min(w, 140) } : undefined}
+                    style={w ? { width: w, ...(c.kind === "richtext" ? { minWidth: Math.min(w, 140) } : {}) } : undefined}
                     title={canEditContent ? "Double-click to rename this column" : undefined}
                     onDoubleClick={() => renameColumn(c)}
                   >
@@ -1371,6 +1339,16 @@ export function RundownEditor({
                     {resizeHandle(c.key, nextColKey(c.key))}
                   </th>
                 );
+                if (c.kind === "duration" && showZero)
+                  return (
+                    <Fragment key={c.id}>
+                      {th}
+                      <th data-colkey="zero" style={{ width: colWidths["zero"] }} title="Countdown to the next anchored time">
+                        Zero{resizeHandle("zero", nextColKey("zero"))}
+                      </th>
+                    </Fragment>
+                  );
+                return th;
               })}
             </tr>
           </thead>
@@ -1401,95 +1379,105 @@ export function RundownEditor({
                     disabled={!canEditContent}
                     onSelect={(e) => canEditContent && selectRow(rowRecord.id, e)}
                   >
-                    {titleColumn ? (
-                      (() => {
-                        const cell = renderRichCell(rowRecord, titleColumn);
-                        if (activeRowId !== rowRecord.id || !live || rowRecord.durationSec == null || rowRecord.durationSec <= 0)
-                          return cell;
-                        // Red only after a full second over — the moment between a cue
-                        // ending and the next taking over must not flash red.
-                        const over = live.remainingInRowSec != null && live.remainingInRowSec < -1;
-                        const frac = over
-                          ? 1
-                          : live.remainingInRowSec != null
-                            ? Math.min(1, Math.max(0, 1 - live.remainingInRowSec / rowRecord.durationSec))
-                            : 0;
+                    {orderedColumns.map((col) => {
+                      if (col.kind === "richtext") return renderRichCell(rowRecord, col);
+                      if (col.kind === "title") {
+                        const cell = (() => {
+                          const plain = renderRichCell(rowRecord, col);
+                          if (activeRowId !== rowRecord.id || !live || rowRecord.durationSec == null || rowRecord.durationSec <= 0)
+                            return plain;
+                          // Red only after a full second over — the moment between a cue
+                          // ending and the next taking over must not flash red.
+                          const over = live.remainingInRowSec != null && live.remainingInRowSec < -1;
+                          const frac = over
+                            ? 1
+                            : live.remainingInRowSec != null
+                              ? Math.min(1, Math.max(0, 1 - live.remainingInRowSec / rowRecord.durationSec))
+                              : 0;
+                          return (
+                            <td className="mono-progress" style={{ position: "relative" }}>
+                              {rowRecord.cells[col.key] ?? ""}
+                              <BarFill className={`row-progress ${over ? "over" : ""}`} frac={frac} />
+                            </td>
+                          );
+                        })();
+                        return <Fragment key={col.id}>{cell}</Fragment>;
+                      }
+                      if (col.kind === "startTime")
                         return (
-                          <td key="title-live" className="mono-progress" style={{ position: "relative" }}>
-                            {rowRecord.cells[titleColumn.key] ?? ""}
-                            <BarFill className={`row-progress ${over ? "over" : ""}`} frac={frac} />
+                          <td
+                            key={col.id}
+                            className="mono"
+                            style={{ position: "relative" }}
+                            onDoubleClick={canEditContent ? () => setEditingTime(rowRecord.id) : undefined}
+                          >
+                            {editingTime === rowRecord.id ? (
+                              // The editor OVERLAYS the cell; the invisible copy of the
+                              // display text keeps the column width pixel-identical, so
+                              // opening it never shifts the layout.
+                              <>
+                                <span style={{ visibility: "hidden" }}>
+                                  {t.startSec != null ? formatTimeOfDay(t.startSec, meta.use24h) : "—"}
+                                </span>
+                                <input
+                                  ref={timeInputRef}
+                                  className="inline-edit"
+                                  autoFocus
+                                  size={1}
+                                  style={{ position: "absolute", inset: "1px 2px", width: "calc(100% - 4px)", boxSizing: "border-box" }}
+                                  defaultValue={
+                                    rowRecord.hardStartSec != null
+                                      ? formatTimeOfDay(rowRecord.hardStartSec, meta.use24h)
+                                      : t.startSec != null
+                                        ? formatTimeOfDay(t.startSec, meta.use24h)
+                                        : ""
+                                  }
+                                  placeholder="9:30 am"
+                                  onFocus={(e) => e.currentTarget.select()}
+                                  onBlur={(e) => commitTime(rowRecord.id, e.currentTarget.value, t.startSec ?? null)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") commitTime(rowRecord.id, e.currentTarget.value, t.startSec ?? null);
+                                    if (e.key === "Escape") setEditingTime(null);
+                                  }}
+                                />
+                              </>
+                            ) : rowRecord.untimed && rowRecord.hardStartSec == null ? (
+                              // The source sheet left this row untimed (a sub-cue) —
+                              // faithful blank instead of an invented cascade time.
+                              <span style={{ color: "var(--text-3)" }} title="Untimed in the source sheet — double-click to set a time">
+                                —
+                              </span>
+                            ) : t.startSec != null ? (
+                              formatTimeOfDay(t.startSec, meta.use24h)
+                            ) : (
+                              "—"
+                            )}
                           </td>
                         );
-                      })()
-                    ) : (
-                      <td />
-                    )}
-                    <td
-                      className="mono"
-                      style={{ position: "relative" }}
-                      onDoubleClick={canEditContent ? () => setEditingTime(rowRecord.id) : undefined}
-                    >
-                      {editingTime === rowRecord.id ? (
-                        // The editor OVERLAYS the cell; the invisible copy of the
-                        // display text keeps the column width pixel-identical, so
-                        // opening it never shifts the layout.
-                        <>
-                          <span style={{ visibility: "hidden" }}>
-                            {t.startSec != null ? formatTimeOfDay(t.startSec, meta.use24h) : "—"}
-                          </span>
-                          <input
-                            ref={timeInputRef}
-                            className="inline-edit"
-                            autoFocus
-                            size={1}
-                            style={{ position: "absolute", inset: "1px 2px", width: "calc(100% - 4px)", boxSizing: "border-box" }}
-                            defaultValue={
-                              rowRecord.hardStartSec != null
-                                ? formatTimeOfDay(rowRecord.hardStartSec, meta.use24h)
-                                : t.startSec != null
-                                  ? formatTimeOfDay(t.startSec, meta.use24h)
-                                  : ""
-                            }
-                            placeholder="9:30 am"
-                            onFocus={(e) => e.currentTarget.select()}
-                            onBlur={(e) => commitTime(rowRecord.id, e.currentTarget.value, t.startSec ?? null)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") commitTime(rowRecord.id, e.currentTarget.value, t.startSec ?? null);
-                              if (e.key === "Escape") setEditingTime(null);
-                            }}
-                          />
-                        </>
-                      ) : rowRecord.untimed && rowRecord.hardStartSec == null ? (
-                        // The source sheet left this row untimed (a sub-cue) —
-                        // faithful blank instead of an invented cascade time.
-                        <span style={{ color: "var(--text-3)" }} title="Untimed in the source sheet — double-click to set a time">
-                          —
-                        </span>
-                      ) : t.startSec != null ? (
-                        formatTimeOfDay(t.startSec, meta.use24h)
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    {renderDurationCell(rowRecord)}
-                    {showZero && (
-                      <td className="mono" style={{ color: "var(--text-2)" }}>
-                        {(() => {
-                          const start = t.startSec;
-                          if (start == null) return "";
-                          for (let j = i; j < rows.length; j++) {
-                            const other = rows[j]!;
-                            const ot = timing.rows[j]!;
-                            if (other.hardStartSec != null && ot.startSec != null && j > i) {
-                              const zero = ot.startSec - start;
-                              return zero > 0 ? `-${formatDuration(zero)}` : "";
-                            }
-                          }
-                          return "";
-                        })()}
-                      </td>
-                    )}
-                    {richColumns.map((c) => renderRichCell(rowRecord, c))}
+                      // duration column (the synthetic Zero column rides after it)
+                      return (
+                        <Fragment key={col.id}>
+                          {renderDurationCell(rowRecord)}
+                          {showZero && (
+                            <td className="mono" style={{ color: "var(--text-2)" }}>
+                              {(() => {
+                                const start = t.startSec;
+                                if (start == null) return "";
+                                for (let j = i; j < rows.length; j++) {
+                                  const other = rows[j]!;
+                                  const ot = timing.rows[j]!;
+                                  if (other.hardStartSec != null && ot.startSec != null && j > i) {
+                                    const zero = ot.startSec - start;
+                                    return zero > 0 ? `-${formatDuration(zero)}` : "";
+                                  }
+                                }
+                                return "";
+                              })()}
+                            </td>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </SortableRow>
                 );
                 });

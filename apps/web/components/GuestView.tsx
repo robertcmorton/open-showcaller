@@ -41,7 +41,10 @@ export function GuestView({ token }: { token: string }) {
 
   const { meta, columns, rows } = data;
   const timing = computeTiming(rows, meta.plannedStartSec);
-  const richColumns = columns.filter((c) => c.kind === "richtext");
+  // Columns render in the doc's order, which mirrors the source sheet.
+  const orderedColumns = columns.filter(
+    (c) => c.kind === "title" || c.kind === "startTime" || c.kind === "duration" || c.kind === "richtext",
+  );
 
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: "2rem 1.2rem" }}>
@@ -64,7 +67,7 @@ export function GuestView({ token }: { token: string }) {
       </header>
 
       {(() => {
-        const orderedKeys = ["rownum", "title", "start", "duration", ...richColumns.map((c) => c.key)];
+        const orderedKeys = ["rownum", ...orderedColumns.map((c) => c.key)];
         const nextOf = (key: string): string | null => {
           const i = orderedKeys.indexOf(key);
           return i >= 0 && i < orderedKeys.length - 1 ? orderedKeys[i + 1]! : null;
@@ -75,10 +78,7 @@ export function GuestView({ token }: { token: string }) {
         <thead>
           <tr>
             <th data-colkey="rownum" style={{ width: widths["rownum"] }}>#{handle("rownum", nextOf("rownum"))}</th>
-            <th data-colkey="title" style={{ width: widths["title"] }}>Title{handle("title", nextOf("title"))}</th>
-            <th data-colkey="start" style={{ width: widths["start"] }}>Start{handle("start", nextOf("start"))}</th>
-            <th data-colkey="duration" style={{ width: widths["duration"] }}>Duration{handle("duration", nextOf("duration"))}</th>
-            {richColumns.map((c) => {
+            {orderedColumns.map((c) => {
               const w = widths[c.key] ?? (c as { width?: number }).width;
               return (
                 <th key={c.id} data-colkey={c.key} style={w ? { width: w } : undefined}>
@@ -99,14 +99,19 @@ export function GuestView({ token }: { token: string }) {
                 style={{ background: row.type !== "group" && row.color ? row.color : undefined }}
               >
                 <td className="row-number mono" style={{ cursor: "default" }}>
-                  {i + 1}
+                  {(row as { sourceNumber?: string }).sourceNumber ?? i + 1}
                 </td>
-                <td style={{ fontWeight: row.type === "group" ? 600 : 400 }}>{row.title}</td>
-                <td className="mono">{t.startSec != null ? formatTimeOfDay(t.startSec, meta.use24h) : "—"}</td>
-                <td className="mono">{row.durationSec != null ? formatDuration(row.durationSec) : ""}</td>
-                {richColumns.map((c) => (
-                  <td key={c.id}>{row.cells[c.key] ?? ""}</td>
-                ))}
+                {orderedColumns.map((c) =>
+                  c.kind === "title" ? (
+                    <td key={c.id} style={{ fontWeight: row.type === "group" ? 600 : 400 }}>{row.title}</td>
+                  ) : c.kind === "startTime" ? (
+                    <td key={c.id} className="mono">{t.startSec != null ? formatTimeOfDay(t.startSec, meta.use24h) : "—"}</td>
+                  ) : c.kind === "duration" ? (
+                    <td key={c.id} className="mono">{row.durationSec != null ? formatDuration(row.durationSec) : ""}</td>
+                  ) : (
+                    <td key={c.id}>{row.cells[c.key] ?? ""}</td>
+                  ),
+                )}
               </tr>
             );
           })}

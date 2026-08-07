@@ -154,6 +154,12 @@ export function createApiHandler(
       }
     };
 
+    /** Column keys in the source sheet's left-to-right order, if supplied. */
+    const columnOrderOf = (body: Record<string, unknown>): string[] =>
+      Array.isArray(body.columnOrder)
+        ? (body.columnOrder as unknown[]).filter((k): k is string => typeof k === "string").slice(0, 100)
+        : [];
+
     /** The sheet's own header names for the structural columns, if supplied. */
     const baseTitlesOf = (body: Record<string, unknown>): { title?: string; start?: string; duration?: string } | undefined => {
       const raw = body.baseTitles;
@@ -838,6 +844,7 @@ export function createApiHandler(
             extraColumns,
             extraColumns.length > 0, // importer path: mirror the source sheet's columns exactly
             importRoles,
+            columnOrderOf(body),
           );
         }
 
@@ -927,6 +934,7 @@ export function createApiHandler(
           extraColumns,
           extraColumns.length > 0,
           importRoles,
+          columnOrderOf(body),
         );
         const epoch = rundown.docEpoch + 1;
         const sourceFile = sourceFileValue(body.sourceFileB64);

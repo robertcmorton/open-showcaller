@@ -92,6 +92,10 @@ export function buildRundownDoc(
   extraColumns: { key: string; title: string; width?: number }[] = [],
   replaceDepartments = false,
   roles: { name: string; color: string }[] = [],
+  /** Column keys in the SOURCE SHEET's left-to-right order — including where
+   *  "title"/"start"/"duration" sit. Grids render this order. Keys not listed
+   *  append after; unknown keys are ignored. */
+  columnOrder: string[] = [],
 ): Y.Doc {
   const doc = new Y.Doc();
   doc.transact(() => {
@@ -105,11 +109,10 @@ export function buildRundownDoc(
     const columns = doc.getArray<Y.Map<unknown>>("columns");
     const columnIdByKey = new Map<string, string>();
     const baseColumns = replaceDepartments ? DEFAULT_COLUMNS.filter((c) => c.kind !== "richtext") : DEFAULT_COLUMNS;
+    // Assemble every column def keyed, then push in the sheet's order.
+    type Def = { key: string; title: string; kind: string; builtin?: boolean; width?: number };
+    const defs = new Map<string, Def>();
     for (const def of baseColumns) {
-      const col = new Y.Map();
-      const colId = ulid();
-      col.set("id", colId);
-      col.set("key", def.key);
       const sheetTitle =
         def.kind === "title"
           ? docMeta.baseTitles?.title
@@ -118,23 +121,33 @@ export function buildRundownDoc(
             : def.kind === "duration"
               ? docMeta.baseTitles?.duration
               : undefined;
-      col.set("title", sheetTitle || def.title);
-      col.set("kind", def.kind);
-      if (def.builtin) col.set("builtin", true);
-      columns.push([col]);
-      columnIdByKey.set(def.key, colId);
+      defs.set(def.key, { key: def.key, title: sheetTitle || def.title, kind: def.kind, builtin: def.builtin });
     }
     for (const extra of extraColumns) {
-      if (columnIdByKey.has(extra.key)) continue;
+      if (defs.has(extra.key)) continue;
+      defs.set(extra.key, { key: extra.key, title: extra.title, kind: "richtext", width: extra.width });
+    }
+    const pushOrder: Def[] = [];
+    const seen = new Set<string>();
+    for (const key of columnOrder) {
+      const d = defs.get(key);
+      if (d && !seen.has(key)) {
+        pushOrder.push(d);
+        seen.add(key);
+      }
+    }
+    for (const d of defs.values()) if (!seen.has(d.key)) pushOrder.push(d);
+    for (const def of pushOrder) {
       const col = new Y.Map();
       const colId = ulid();
       col.set("id", colId);
-      col.set("key", extra.key);
-      col.set("title", extra.title);
-      col.set("kind", "richtext");
-      if (extra.width) col.set("width", Math.round(extra.width));
+      col.set("key", def.key);
+      col.set("title", def.title);
+      col.set("kind", def.kind);
+      if (def.builtin) col.set("builtin", true);
+      if (def.width) col.set("width", Math.round(def.width));
       columns.push([col]);
-      columnIdByKey.set(extra.key, colId);
+      columnIdByKey.set(def.key, colId);
     }
 
     const yRoles = doc.getArray<Y.Map<unknown>>("roles");

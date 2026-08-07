@@ -11,6 +11,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.12.0] — 2026-08-07
+
+### Changed
+- **The grid now mirrors the source sheet's column order exactly** — including the structural columns. A sheet laid out `# · TIME · DURATION · ACTIVITY · LOCATION …` renders in that order on every surface (console, editor, view, guest), with the live progress bar, time editor, duration popover, and column resizing all following their columns. New imports pick this up automatically ("Update import…" upgrades existing rundowns); rundowns that predate this keep their current layout.
+
 ## [0.11.0] — 2026-08-07
 
 ### Added

@@ -378,6 +378,15 @@ export function ImportPanel({
       const h = i >= 0 ? headers[i]?.trim() : undefined;
       return h || undefined;
     };
+    // …and their exact left-to-right POSITIONS: the grid renders this order,
+    // so a sheet with TIME before ACTIVITY looks the same on screen.
+    const columnOrder: string[] = [];
+    for (const t of mapping) {
+      const key =
+        t.kind === "title" ? "title" : t.kind === "start" ? "start" : t.kind === "duration" ? "duration" : t.kind === "department" && usedKeys.has(t.key) ? t.key : null;
+      if (key && !columnOrder.includes(key)) columnOrder.push(key);
+    }
+    if (roleColumn.length > 0) columnOrder.push("roles");
     const buildPayload = async () => {
       const payload: Parameters<typeof api.replaceRundownContent>[1] = {
         rows: seedRows,
@@ -386,6 +395,7 @@ export function ImportPanel({
         roleColumnKey: roleKey ?? (roles.length > 0 ? "roles" : null),
         plannedStartSec: firstStart,
         baseTitles: { title: headerFor("title"), start: headerFor("start"), duration: headerFor("duration") },
+        columnOrder,
       };
       if (sourceFile && sourceFile.size <= 12_000_000) {
         payload.sourceName = sourceFile.name;
