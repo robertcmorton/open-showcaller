@@ -193,6 +193,8 @@ export const showSessions = pgTable(
     endedAt: timestamp("ended_at", { withTimezone: true }),
     callerUserId: text("caller_user_id").references(() => users.id),
     seq: bigint("seq", { mode: "number" }).notNull().default(0),
+    /** Server-driven clock-follow: the scheduler advances this session along the TIME column, no console required. */
+    clockFollow: boolean("clock_follow").notNull().default(false),
   },
   (t) => [
     uniqueIndex("one_live_session_per_rundown")
@@ -201,7 +203,7 @@ export const showSessions = pgTable(
   ],
 );
 
-export const transitionTypes = ["start", "pause", "resume", "next", "prev", "jump", "stop", "fire"] as const;
+export const transitionTypes = ["start", "pause", "resume", "next", "prev", "jump", "stop", "fire", "clock_on", "clock_off"] as const;
 
 export const showTransitions = pgTable("show_transitions", {
   id: id().primaryKey(),

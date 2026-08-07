@@ -38,6 +38,7 @@ export class PersistentShowStore {
           pausedAtMs: row.pausedAt?.getTime() ?? null,
           pausedAccumMs: row.pausedAccumMs,
           sessionStartedAtMs: row.startedAt.getTime(),
+          clockFollow: row.clockFollow,
         });
       }
     }
@@ -85,6 +86,7 @@ export class PersistentShowStore {
       startedAt: new Date(state.sessionStartedAtMs ?? Date.now()),
       endedAt: state.state === "ended" ? new Date() : null,
       seq: state.seq,
+      clockFollow: state.clockFollow,
     };
     await db
       .insert(schema.showSessions)

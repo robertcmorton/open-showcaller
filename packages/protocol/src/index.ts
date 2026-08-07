@@ -30,7 +30,9 @@ export const HelloMsg = z.object({
 export const PingMsg = z.object({ ...envelope, t: z.literal("ping"), t0: z.number() });
 
 // "fire" logs an untimed pool cue to the as-run record without moving the show.
-export const CmdAction = z.enum(["start", "pause", "resume", "next", "prev", "jump", "stop", "fire"]);
+// "clock_on"/"clock_off" toggle SERVER-driven clock-follow: the server itself
+// advances the show along the TIME column — no console needs to stay open.
+export const CmdAction = z.enum(["start", "pause", "resume", "next", "prev", "jump", "stop", "fire", "clock_on", "clock_off"]);
 export type CmdAction = z.infer<typeof CmdAction>;
 
 export const CmdMsg = z
@@ -60,6 +62,8 @@ export const ShowStatePayload = z.object({
   pausedAtMs: z.number().nullable(),
   pausedAccumMs: z.number().nonnegative(),
   sessionStartedAtMs: z.number().nullable(),
+  /** Server-driven clock-follow is active for this session (additive v1.4). */
+  clockFollow: z.boolean().default(false),
 });
 export type ShowStatePayload = z.infer<typeof ShowStatePayload>;
 

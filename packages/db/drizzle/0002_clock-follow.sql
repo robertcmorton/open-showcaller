@@ -1,0 +1,1 @@
+ALTER TABLE "show_sessions" ADD COLUMN "clock_follow" boolean DEFAULT false NOT NULL;

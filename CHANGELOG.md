@@ -11,6 +11,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.6.0] — 2026-08-07
+
+### Changed
+- **Clock-follow now runs on the server** — the live fail-safe. With Follow clock on, the show advances itself along the TIME column with **every console closed**: the server computes the scheduled row each second in the event's timezone and moves the show there, and the mode survives server restarts (it is part of the durable session). The showcaller stays in charge on the fly: edits to times, durations, skips, or order take effect within a second (the live document is read directly, ahead of its debounced save); **Pause holds the show** in place; manual jumps are corrected at the next tick while following; toggling off returns full manual control. The toggle state is shared — every open console sees "Following clock" light up.
+
 ## [0.5.0] — 2026-08-07
 
 ### Added

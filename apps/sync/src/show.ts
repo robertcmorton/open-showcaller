@@ -19,6 +19,7 @@ export class ShowStateMachine {
       pausedAtMs: null,
       pausedAccumMs: 0,
       sessionStartedAtMs: null,
+      clockFollow: false,
     };
   }
 
@@ -73,7 +74,18 @@ export class ShowStateMachine {
       }
       case "stop": {
         if (s.state === "idle" || s.state === "ended") return "not live";
-        return next({ state: "ended", activeRowId: null, activeRowStartedAtMs: null, pausedAtMs: null });
+        return next({ state: "ended", activeRowId: null, activeRowStartedAtMs: null, pausedAtMs: null, clockFollow: false });
+      }
+      // Server-driven clock-follow: while on (and the show is RUNNING, not
+      // paused), the server's scheduler advances the active row along the
+      // TIME column — no console needs to stay open. Pause holds the show.
+      case "clock_on": {
+        if (s.state !== "running" && s.state !== "paused") return "not live";
+        return next({ clockFollow: true });
+      }
+      case "clock_off": {
+        if (s.state !== "running" && s.state !== "paused") return "not live";
+        return next({ clockFollow: false });
       }
       // "fire" is handled by the server before the state machine — it logs to
       // the as-run record and never transitions state.

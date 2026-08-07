@@ -8,8 +8,11 @@ import {
   type Role,
   type ServerMsg,
 } from "@opencall/protocol";
-import { createDb, ensureSchema, schema } from "@opencall/db";
-import { and, eq, isNull } from "drizzle-orm";
+import { computeTiming, zoneSecondsOfDay, type PlanTiming } from "@opencall/core";
+import { createDb, decodeDoc, ensureSchema, projectRundownDoc, schema } from "@opencall/db";
+import type { ProjectedRow } from "@opencall/db/doc";
+import { and, eq, isNull, ne } from "drizzle-orm";
+import type * as Y from "yjs";
 import { ulid } from "ulid";
 import { createDocServer } from "./doc-server";
 import { createApiHandler, logServerError } from "./api";
@@ -271,6 +274,99 @@ const heartbeat = setInterval(() => {
   for (const [ws] of clients) send(ws, { v: PROTOCOL_VERSION, t: "hb" });
 }, HEARTBEAT_MS);
 heartbeat.unref();
+
+// ── Server-driven clock-follow ────────────────────────────────────────────────
+// While a session has clockFollow on and is RUNNING, the SERVER advances it
+// along the TIME column — no console needs to stay open (live fail-safe).
+// Sessions are discovered from the DB each tick, so follow survives restarts
+// and resumes with zero clients. The showcaller steers it on the fly: doc
+// edits re-project immediately (live doc preferred over stored bytes), pause
+// holds the position, manual jumps are corrected at the next tick, and
+// clock_off returns full manual control.
+
+const projectionCache = new Map<string, { key: string; rows: ProjectedRow[]; timing: PlanTiming }>();
+const timezoneCache = new Map<string, { tz: string | null; at: number }>();
+
+function clockTargetRow(rows: ProjectedRow[], timing: PlanTiming, nowSec: number): string | null {
+  let target: string | null = null;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]!;
+    if (r.type === "group" || r.skipped) continue;
+    if (r.untimed && r.hardStartSec == null) continue;
+    const start = timing.rows[i]!.startSec;
+    if (start != null && start <= nowSec) target = r.id;
+  }
+  return target;
+}
+
+let clockTicking = false;
+async function clockTick(): Promise<void> {
+  if (clockTicking) return; // never overlap slow ticks
+  clockTicking = true;
+  try {
+    const live = await dbHandle.db.query.showSessions.findMany({
+      where: and(eq(schema.showSessions.clockFollow, true), ne(schema.showSessions.state, "ended")),
+      columns: { rundownId: true },
+    });
+    for (const { rundownId } of live) {
+      const machine = await showStore.get(rundownId);
+      const current = machine.current;
+      if (current.state !== "running" || !current.clockFollow) continue; // paused = held
+
+      const rundown = await dbHandle.db.query.rundowns.findFirst({
+        where: eq(schema.rundowns.id, rundownId),
+        columns: { doc: true, docEpoch: true, docUpdatedAt: true, eventId: true, plannedStartSec: true },
+      });
+      if (!rundown?.doc) continue;
+
+      // The live in-memory doc (when anyone is editing) beats the debounced
+      // store — on-the-fly time changes take effect within a tick.
+      const liveDoc = docServer.documents.get(`${rundownId}@${rundown.docEpoch}`) as Y.Doc | undefined;
+      let rows: ProjectedRow[];
+      let timing: PlanTiming;
+      if (liveDoc) {
+        const projected = projectRundownDoc(liveDoc);
+        rows = projected.rows;
+        timing = computeTiming(rows, projected.meta.plannedStartSec ?? rundown.plannedStartSec);
+      } else {
+        const key = `${rundown.docEpoch}:${rundown.docUpdatedAt?.getTime() ?? 0}`;
+        let cached = projectionCache.get(rundownId);
+        if (!cached || cached.key !== key) {
+          const projected = projectRundownDoc(decodeDoc(rundown.doc));
+          cached = { key, rows: projected.rows, timing: computeTiming(projected.rows, projected.meta.plannedStartSec ?? rundown.plannedStartSec) };
+          projectionCache.set(rundownId, cached);
+        }
+        rows = cached.rows;
+        timing = cached.timing;
+      }
+
+      let tzEntry = timezoneCache.get(rundown.eventId);
+      if (!tzEntry || Date.now() - tzEntry.at > 60_000) {
+        const event = await dbHandle.db.query.events.findFirst({
+          where: eq(schema.events.id, rundown.eventId),
+          columns: { timezone: true },
+        });
+        tzEntry = { tz: event?.timezone ?? null, at: Date.now() };
+        timezoneCache.set(rundown.eventId, tzEntry);
+      }
+
+      const nowSec = zoneSecondsOfDay(Date.now(), tzEntry.tz ?? undefined);
+      const target = clockTargetRow(rows, timing, nowSec);
+      if (!target || target === current.activeRowId) continue;
+
+      const result = machine.apply("jump", target);
+      if (typeof result === "string") continue;
+      broadcast(rundownId, { v: PROTOCOL_VERSION, t: "show_state", ...result });
+      showStore.persist(rundownId, result, "jump", target);
+    }
+  } catch (err) {
+    console.error("[sync] clock-follow tick failed:", err);
+  } finally {
+    clockTicking = false;
+  }
+}
+const clockLoop = setInterval(() => void clockTick(), 1000);
+clockLoop.unref();
 
 httpServer.listen(PORT, () => {
   console.log(`[sync] api + show channel + /doc channel on :${PORT}  (protocol v${PROTOCOL_VERSION})`);
