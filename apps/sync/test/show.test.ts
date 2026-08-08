@@ -48,3 +48,23 @@ describe("pre-show walkthrough", () => {
     expect(m.apply("walk", "row-7")).toMatchObject({ state: "ended", walkRowId: "row-7" });
   });
 });
+
+describe("clock-follow backdating", () => {
+  it("records a row as starting when the SHEET says, not when the follower noticed", () => {
+    // Following the clock at 20:27 lands on a row the sheet started at 19:37.
+    // Recording it as beginning now would report the show 50 minutes late and
+    // put 51 minutes back on an item with 2 left.
+    const m = new ShowStateMachine();
+    m.apply("start", "row-1", 1_000);
+    const plannedStartMs = 10_000_000;
+    const noticedMs = plannedStartMs + 50 * 60 * 1000;
+    const jumped = m.apply("jump", "row-408", noticedMs, plannedStartMs);
+    expect(jumped).toMatchObject({ activeRowId: "row-408", activeRowStartedAtMs: plannedStartMs });
+  });
+
+  it("a person pressing Next still starts the row now", () => {
+    const m = new ShowStateMachine();
+    m.apply("start", "row-1", 1_000);
+    expect(m.apply("next", "row-2", 5_000)).toMatchObject({ activeRowStartedAtMs: 5_000 });
+  });
+});

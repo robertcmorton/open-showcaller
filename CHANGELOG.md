@@ -11,6 +11,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.22.1] — 2026-08-08
+
+### Fixed
+- **Following the clock reported the show as running late when it was running exactly on the clock.** When the clock follower moved onto a row, the row was recorded as beginning at that moment — but the sheet may say it began half an hour ago, and following the clock means being *on* it. A show picked up mid-way through a 53-minute item read 51 minutes still to run and 50 minutes over, with a projected end nearly an hour past the planned one. The follower now records a row as starting when the sheet says it started, so the item counts down correctly and the drift reads zero. A person pressing Next or jumping still starts the row there and then.
+
+
 ## [0.22.0] — 2026-08-08
 
 ### Added

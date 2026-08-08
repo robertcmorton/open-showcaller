@@ -361,11 +361,21 @@ async function clockTick(): Promise<void> {
         timezoneCache.set(rundown.eventId, tzEntry);
       }
 
-      const nowSec = zoneSecondsOfDay(Date.now(), tzEntry.tz ?? undefined);
+      const nowMs = Date.now();
+      const nowSec = zoneSecondsOfDay(nowMs, tzEntry.tz ?? undefined);
       const target = clockTargetRow(rows, timing, nowSec);
       if (!target || target === current.activeRowId) continue;
 
-      const result = machine.apply("jump", target);
+      // The row began when the SHEET says it began, not at the moment the
+      // follower noticed. Following the clock means the show is on the clock:
+      // backdating keeps the item's countdown honest and the drift at zero,
+      // instead of reporting however long ago the row was due to start.
+      const targetIndex = rows.findIndex((r) => r.id === target);
+      const plannedStartSec = targetIndex >= 0 ? timing.rows[targetIndex]?.startSec ?? null : null;
+      const startedAtMs =
+        plannedStartSec != null && plannedStartSec <= nowSec ? nowMs - (nowSec - plannedStartSec) * 1000 : nowMs;
+
+      const result = machine.apply("jump", target, nowMs, startedAtMs);
       if (typeof result === "string") continue;
       broadcast(rundownId, { v: PROTOCOL_VERSION, t: "show_state", ...result });
       showStore.persist(rundownId, result, "jump", target);

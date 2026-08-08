@@ -33,8 +33,21 @@ export class ShowStateMachine {
     this.state = state;
   }
 
-  /** Apply a transport command. Returns the new state, or an error string. */
-  apply(action: CmdAction, rowId: string | undefined, now = Date.now()): ShowStatePayload | string {
+  /**
+   * Apply a transport command. Returns the new state, or an error string.
+   *
+   * `startedAtMs` backdates the row's start, and exists for one caller: the
+   * clock follower. When the show is driven by the wall clock, moving onto a
+   * row does NOT mean the row has just begun — the sheet may say it started
+   * half an hour ago — and recording it as beginning now makes the item
+   * countdown and the show's drift both wrong by that amount.
+   */
+  apply(
+    action: CmdAction,
+    rowId: string | undefined,
+    now = Date.now(),
+    startedAtMs?: number,
+  ): ShowStatePayload | string {
     const s = this.state;
     const next = (patch: Partial<ShowStatePayload>): ShowStatePayload => {
       this.state = { ...s, ...patch, seq: s.seq + 1 };
@@ -78,7 +91,12 @@ export class ShowStateMachine {
       case "jump": {
         if (s.state !== "running" && s.state !== "paused") return "not live";
         // Row ordering lives in the doc; the caller supplies the target row id.
-        return next({ activeRowId: rowId ?? s.activeRowId, activeRowStartedAtMs: now, pausedAccumMs: 0, pausedAtMs: s.state === "paused" ? now : null });
+        return next({
+          activeRowId: rowId ?? s.activeRowId,
+          activeRowStartedAtMs: startedAtMs ?? now,
+          pausedAccumMs: 0,
+          pausedAtMs: s.state === "paused" ? now : null,
+        });
       }
       case "stop": {
         if (s.state === "idle" || s.state === "ended") return "not live";
