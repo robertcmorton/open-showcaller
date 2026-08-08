@@ -18,7 +18,25 @@ const DOC_WS_URL = resolveSyncUrl(process.env.NEXT_PUBLIC_DOC_WS_URL, "ws://loca
  * the hook refetches the epoch and, if it moved, reconnects with a FRESH
  * Y.Doc — pre-restore state can never merge back.
  */
-export function useRundownDoc(rundownId: string, joinCode?: string): { doc: Y.Doc; connected: boolean; synced: boolean } {
+/** What the document connection is doing — surfaced in the diagnostics bar. */
+export interface DocStatus {
+  connected: boolean;
+  synced: boolean;
+  /** Last thing that happened, in words a person can read out of a screenshot. */
+  phase: string;
+  authFailed: boolean;
+  attempts: number;
+  epoch: number | null;
+  url: string;
+  /** Kind of credential sent — never the credential itself. */
+  tokenKind: string;
+  lastError: string | null;
+}
+
+export function useRundownDoc(
+  rundownId: string,
+  joinCode?: string,
+): { doc: Y.Doc; connected: boolean; synced: boolean; status: DocStatus } {
   const [epoch, setEpoch] = useState<number | null>(null);
   const [doc, setDoc] = useState(() => new Y.Doc());
   const [connected, setConnected] = useState(false);
@@ -27,16 +45,29 @@ export function useRundownDoc(rundownId: string, joinCode?: string): { doc: Y.Do
   // is legitimately empty. Surfaces use this to say "loading" rather than
   // claiming the rundown has no rows.
   const [synced, setSynced] = useState(false);
+  const [phase, setPhase] = useState("starting");
+  const [authFailed, setAuthFailed] = useState(false);
+  const [attempts, setAttempts] = useState(0);
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [tokenKind, setTokenKind] = useState("none");
   const [, setTick] = useState(0);
 
   const fetchEpoch = (id: string): Promise<number> =>
     fetch(`${API_URL}/rundowns/${id}/epoch`)
-      .then((r) => r.json() as Promise<{ epoch?: number }>)
+      .then((r) => {
+        if (!r.ok) throw new Error(`epoch HTTP ${r.status}`);
+        return r.json() as Promise<{ epoch?: number }>;
+      })
       .then((b) => b.epoch ?? 0)
-      .catch(() => 0);
+      .catch((err) => {
+        // The API being unreachable is itself the diagnosis worth showing.
+        setLastError(`epoch: ${String(err?.message ?? err)}`);
+        return 0;
+      });
 
   useEffect(() => {
     let cancelled = false;
+    setPhase("fetching epoch");
     void fetchEpoch(rundownId).then((e) => {
       if (!cancelled) setEpoch(e);
     });
@@ -50,16 +81,51 @@ export function useRundownDoc(rundownId: string, joinCode?: string): { doc: Y.Do
     const fresh = new Y.Doc();
     setDoc(fresh);
     setSynced(false);
-    const token = joinCode ?? localStorage.getItem("oc:admintoken") ?? "dev";
+    const stored = localStorage.getItem("oc:admintoken");
+    const token = joinCode ?? stored ?? "dev";
+    // Only ever record the KIND of credential — a screenshot must never carry
+    // the credential itself.
+    setTokenKind(
+      joinCode
+        ? "join code"
+        : !stored
+          ? "none (dev)"
+          : stored.startsWith("ses_")
+            ? "session"
+            : stored.startsWith("usr_")
+              ? "personal"
+              : stored.startsWith("co_")
+                ? "company"
+                : "admin",
+    );
+    setPhase("connecting");
+    setAttempts((n) => n + 1);
     const provider = new HocuspocusProvider({
       url: DOC_WS_URL,
       name: `${rundownId}@${epoch}`,
       document: fresh,
       token,
-      onConnect: () => setConnected(true),
-      onSynced: () => setSynced(true),
-      onDisconnect: () => setConnected(false),
-      onAuthenticationFailed: () => {
+      onConnect: () => {
+        setConnected(true);
+        setPhase("connected, waiting for content");
+      },
+      onSynced: () => {
+        setSynced(true);
+        setPhase("synced");
+      },
+      onDisconnect: () => {
+        setConnected(false);
+        setPhase("disconnected, retrying");
+      },
+      onClose: ({ event }: { event: { code?: number; reason?: string } }) => {
+        if (event?.code && event.code !== 1000) {
+          setLastError(`socket closed ${event.code}${event.reason ? ` ${event.reason}` : ""}`);
+        }
+      },
+      onAuthenticationFailed: ({ reason }: { reason?: string }) => {
+        setAuthFailed(true);
+        setPhase("authentication refused");
+        setLastError(`auth refused${reason ? `: ${reason}` : ""}`);
         // Possibly a stale epoch after an in-place restore — follow it.
         void fetchEpoch(rundownId).then((current) => {
           if (current !== epoch) setEpoch(current);
@@ -74,7 +140,12 @@ export function useRundownDoc(rundownId: string, joinCode?: string): { doc: Y.Do
     };
   }, [rundownId, joinCode, epoch]);
 
-  return { doc, connected, synced };
+  return {
+    doc,
+    connected,
+    synced,
+    status: { connected, synced, phase, authFailed, attempts, epoch, url: DOC_WS_URL, tokenKind, lastError },
+  };
 }
 
 /** Keeps the screen awake while the surface is visible (companion surfaces in show use). */

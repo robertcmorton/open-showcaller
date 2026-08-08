@@ -11,6 +11,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.17.0] — 2026-08-08
+
+### Added
+- **A diagnostics readout for screens that won't load.** When a run sheet has not arrived after a few seconds, a strip appears across the bottom stating, in plain words, exactly how far the connection got: the app version and build, which sheet and which sign-in kind, whether the content channel is connecting or was refused, whether the show channel is connected, whether the device is online, the server address being used, and the last error. A photo of that strip is enough to diagnose the fault without any developer tools. It carries a Copy button and a Retry button, and never prints a credential — only the *kind* of credential in use. Add `?diag=1` to any rundown address to show it deliberately.
+- The document connection now reports **authentication refusals and socket closures** instead of failing silently — a refused connection that could not be recovered previously left the screen waiting forever with nothing to show for it.
+
+### Fixed
+- **Form fields lost their styling** (background, border, padding) in 0.14.2 — a selector was accidentally split while fixing the phone-width overflow. Restored.
+
 ## [0.16.0] — 2026-08-08
 
 ### Added

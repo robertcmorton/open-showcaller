@@ -29,6 +29,7 @@ import { SideNavSection, WithSideNav } from "./SideNav";
 import { RoleBar, RolePicker, highlightRoles, matchingRole } from "./RoleBar";
 import { RichCellText } from "./RichCellText";
 import { useColWidths } from "../lib/useColWidths";
+import { DiagnosticsBar } from "./DiagnosticsBar";
 import { useShowChannel } from "../lib/showChannel";
 import { useLiveTiming } from "../lib/useLiveTiming";
 import { useRundownDoc } from "../lib/useRundownDoc";
@@ -259,7 +260,7 @@ export function RundownEditor({
 }) {
   const isShow = mode === "show";
   const canEditContent = mode !== "view";
-  const { doc, connected, synced } = useRundownDoc(rundownId, joinCode);
+  const { doc, connected, synced, status: docStatus } = useRundownDoc(rundownId, joinCode);
   // The hook re-renders on every doc update, so projecting during render stays fresh.
   const { meta, keyTimes, roles, columns, rows } = projectRundownDoc(doc);
   const timing = computeTiming(rows, meta.plannedStartSec);
@@ -1754,6 +1755,12 @@ export function RundownEditor({
             </div>
           );
         })()}
+
+      <DiagnosticsBar
+        rundownId={rundownId}
+        doc={docStatus}
+        show={{ connected: channel.connected, role: channel.role, timezone: channel.timezone }}
+      />
 
       {CUE_POOL_ENABLED && <CuePool doc={doc} mode={mode} channel={channel} />}
       {myRoles.length > 0 && activeRowId && <div style={{ height: 72 }} />}
