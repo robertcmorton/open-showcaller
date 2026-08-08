@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import * as Y from "yjs";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import { API_URL } from "./api";
+import { resolveSyncUrl } from "./syncUrl";
 
-const DOC_WS_URL = process.env.NEXT_PUBLIC_DOC_WS_URL ?? "ws://localhost:8787/doc";
+const DOC_WS_URL = resolveSyncUrl(process.env.NEXT_PUBLIC_DOC_WS_URL, "ws://localhost:8787/doc");
 
 /**
  * Shared rundown document connection; re-renders the consumer on every doc

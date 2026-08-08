@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, copyViewOnlyLink, type SnapshotSummary } from "../lib/api";
+import { api, API_URL, copyViewOnlyLink, type SnapshotSummary } from "../lib/api";
 import type { ColumnDef } from "@opencall/db/doc";
 
 const panelStyle: React.CSSProperties = {
@@ -201,7 +201,7 @@ export function HistoryPanel({ rundownId, onClose }: { rundownId: string; onClos
         <a
           className="btn btn-sm"
           style={{ textDecoration: "none" }}
-          href={`${process.env.NEXT_PUBLIC_SYNC_HTTP_URL ?? "http://localhost:8787"}/rundowns/${rundownId}/report?format=csv`}
+          href={`${API_URL}/rundowns/${rundownId}/report?format=csv`}
           download
         >
           Download as-run report (CSV)

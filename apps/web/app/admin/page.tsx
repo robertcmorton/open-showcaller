@@ -481,7 +481,15 @@ export default function AdminPage() {
   const [locked, setLocked] = useState(false);
   // Import panel target: an event (new rundown), optionally replacing an existing rundown's content.
   const [importFor, setImportFor] = useState<{ eventId: string; replace?: { id: string; name: string } } | null>(null);
-  const [me, setMe] = useState<{ role: "admin" | "company" | "user" | null; teamName?: string; name?: string; canManage?: boolean } | null>(null);
+  const [me, setMe] = useState<{
+    role: "admin" | "company" | "user" | null;
+    devOpen?: boolean;
+    teamId?: string;
+    teamName?: string;
+    name?: string;
+    canManage?: boolean;
+    grants?: { kind: string; targetId: string }[];
+  } | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [companies, setCompanies] = useState<{ id: string; name: string; companyToken: string | null; logo: string | null; eventCount: number }[]>([]);
 
@@ -524,6 +532,26 @@ export default function AdminPage() {
     const name = window.prompt(`Rename ${kind}`, current);
     if (!name || name === current) return;
     void (kind === "event" ? api.patchEvent(id, { name }) : api.patchRundown(id, { name })).then(reload);
+  };
+
+  // What this sign-in may do, mirroring the server's rules so the dashboard
+  // only offers what will actually be allowed. Admins and company tokens
+  // manage everything they can see; account holders manage an event when a
+  // grant covers the event itself or the company that owns it — a view grant
+  // never does.
+  const grants = me?.grants ?? [];
+  const canManageRow = (event: EventSummary): boolean => {
+    if (me?.role === "admin" || me?.role === "company" || me?.devOpen) return true;
+    if (me?.role !== "user") return false;
+    return grants.some(
+      (g) => (g.kind === "event" && g.targetId === event.id) || (g.kind === "company" && g.targetId === event.teamId),
+    );
+  };
+  /** Creating events needs company-level reach over the group being added to. */
+  const canCreateEventsIn = (teamId: string | null): boolean => {
+    if (me?.role === "admin" || me?.role === "company" || me?.devOpen) return true;
+    if (me?.role !== "user") return false;
+    return grants.some((g) => g.kind === "company" && (teamId == null || g.targetId === teamId));
   };
 
   // Events appear underneath their company. Admin sees every company;
@@ -869,30 +897,28 @@ export default function AdminPage() {
                         {r.description ?? ""} {r.showDate ? `· ${r.showDate}` : ""}
                       </span>
                     </span>
-                    <Link
-                      href={`/show/${r.id}`}
-                      className="btn btn-sm btn-primary"
-                      style={{ textDecoration: "none" }}
-                      title="Showcaller console: full transport (start, pause, next) plus live editing — the caller's screen"
-                    >
-                      Show
-                    </Link>
-                    <Link
-                      href={`/edit/${r.id}`}
-                      className="btn btn-sm"
-                      style={{ textDecoration: "none" }}
-                      title="Edit the sheet with no transport controls — safe for producers preparing content"
-                    >
-                      Edit
-                    </Link>
-                    <Link
-                      href={`/view/${r.id}`}
-                      className="btn btn-sm"
-                      style={{ textDecoration: "none" }}
-                      title="Read-only: follows the live show, nothing can be changed — for anyone who just watches"
-                    >
-                      View
-                    </Link>
+                    {/* One button, decided by YOUR access: managers open the
+                        console; view-only access opens the read-only view.
+                        The other surfaces live in the ⋯ menu. */}
+                    {canManageRow(event) ? (
+                      <Link
+                        href={`/show/${r.id}`}
+                        className="btn btn-sm btn-primary"
+                        style={{ textDecoration: "none" }}
+                        title="The showcaller console: run the show (start, pause, next) and edit live — everything in one screen"
+                      >
+                        Open show
+                      </Link>
+                    ) : (
+                      <Link
+                        href={`/view/${r.id}`}
+                        className="btn btn-sm btn-primary"
+                        style={{ textDecoration: "none" }}
+                        title="Read-only: follows the live show — your access level for this event"
+                      >
+                        View
+                      </Link>
+                    )}
                     {(
                       [
                         ["follow", "Crew companion for phones — tracks the live cue with your role highlighted"],
@@ -904,8 +930,18 @@ export default function AdminPage() {
                         {view}
                       </Link>
                     ))}
+                    {canManageRow(event) && (
                     <span className="hide-mobile">
                       <Dropdown label="⋯" className="btn btn-sm btn-ghost">
+                        <Link href={`/edit/${r.id}`} className="menu-item" style={{ textDecoration: "none" }} title="Edit the sheet with no transport controls — safe while preparing content">
+                          <span className="check" />
+                          Edit content
+                        </Link>
+                        <Link href={`/view/${r.id}`} className="menu-item" style={{ textDecoration: "none" }} title="Read-only: follows the live show, nothing can be changed">
+                          <span className="check" />
+                          Read-only view
+                        </Link>
+                        <div className="menu-sep" />
                         <button
                           type="button"
                           className="menu-item"
@@ -954,6 +990,8 @@ export default function AdminPage() {
                         </div>
                       </Dropdown>
                     </span>
+                    )}
+                    {canManageRow(event) && (
                     <MobileActions>
                       <button
                         type="button"
@@ -1000,6 +1038,7 @@ export default function AdminPage() {
                         />
                       </div>
                     </MobileActions>
+                    )}
                   </li>
                 ))}
                 {event.rundowns.length === 0 && (
@@ -1044,7 +1083,7 @@ export default function AdminPage() {
                     No events yet for this company.
                   </div>
                 )}
-                {(me?.role === "admin" || me?.role === "company") && (
+                {canCreateEventsIn(group.real ? group.id : null) && (
                   <div>
                     <CreateEventForm teamId={group.real ? group.id : undefined} onCreated={reload} />
                   </div>

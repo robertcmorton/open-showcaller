@@ -8,8 +8,9 @@ import {
   type Role,
   type ShowStatePayload,
 } from "@opencall/protocol";
+import { resolveSyncUrl } from "./syncUrl";
 
-const SHOW_WS_URL = process.env.NEXT_PUBLIC_SYNC_WS_URL ?? "ws://localhost:8787";
+const SHOW_WS_URL = resolveSyncUrl(process.env.NEXT_PUBLIC_SYNC_WS_URL, "ws://localhost:8787");
 const OFFSET_SAMPLES = 5;
 
 export interface ShowChannel {

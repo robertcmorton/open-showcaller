@@ -4,6 +4,13 @@
    [data-theme="light"] rescopes tokens for dashboard surfaces.
    ============================================================ */
 
+html {
+  /* Show surfaces stay put on touch devices: no double-tap zoom, and iOS
+     never re-flows type when a phone is rotated. */
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+}
+
 :root {
   /* Native form controls (date calendars, scrollbars) render for dark. */
   color-scheme: dark;

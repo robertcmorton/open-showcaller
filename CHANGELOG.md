@@ -11,6 +11,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.14.0] — 2026-08-08
+
+### Fixed
+- **Phones and tablets on your network now open the show.** The app reached the sync server at "localhost", which on a visiting iPad or iPhone means *that device* — so nothing connected and the status dot stayed red (on a phone the sheet never appeared at all). Each device now resolves the server against the address it loaded the page from, so opening the dashboard by network address just works, with no configuration. A configured URL still wins, and an https page keeps a secure connection.
+- **Company access can create events.** A person whose account carries a company grant could manage that company's events but was refused when adding a new one — creation demanded an admin or a company *token*. Company-level access now creates events inside its own company (and only there); event-only and view grants still cannot.
+
+### Changed
+- **One button per rundown, decided by your access**: managers get **Open show** (the console), view-only access gets **View**. Edit content and the read-only view moved into the ⋯ menu, which is hidden entirely from people who can't manage the rundown.
+- **Pinch and double-tap zoom are locked** on phones and tablets, so a stray gesture can't leave a crew member zoomed into a corner of the sheet mid-show. (The browser's own accessibility zoom is untouched.)
+
 ## [0.13.1] — 2026-08-08
 
 ### Changed

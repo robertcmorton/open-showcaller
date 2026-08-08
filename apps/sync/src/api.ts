@@ -752,8 +752,13 @@ export function createApiHandler(
 
       if (req.method === "POST" && pathname === "/events") {
         const ctx = await authContext(handle, req);
-        if (ctx?.kind !== "admin" && ctx?.kind !== "company") {
-          json(res, 401, { error: "admin or company token required" });
+        // Company-level reach creates events: an admin anywhere, a company
+        // token in its own company, an account holder in the companies their
+        // grants cover. (An event-only or view grant never creates events.)
+        const companyGrants =
+          ctx?.kind === "user" ? ctx.grants.filter((g) => g.kind === "company").map((g) => g.targetId) : [];
+        if (!ctx || (ctx.kind !== "admin" && ctx.kind !== "company" && companyGrants.length === 0)) {
+          json(res, 401, { error: "admin or company access required" });
           return true;
         }
         const body = await readJson(req);
@@ -764,12 +769,17 @@ export function createApiHandler(
           return true;
         }
         const id = ulid();
-        const teamId =
-          ctx.kind === "company"
-            ? ctx.teamId
-            : typeof body.teamId === "string" && body.teamId
-              ? body.teamId
-              : await defaultTeamId();
+        const asked = typeof body.teamId === "string" && body.teamId ? body.teamId : null;
+        let teamId: string;
+        if (ctx.kind === "company") teamId = ctx.teamId;
+        else if (companyGrants.length > 0) {
+          // An account holder creates only inside a company they manage.
+          teamId = asked ?? companyGrants[0]!;
+          if (!companyGrants.includes(teamId)) {
+            json(res, 403, { error: "that company is outside your access" });
+            return true;
+          }
+        } else teamId = asked ?? (await defaultTeamId());
         await db.insert(schema.events).values({
           id,
           teamId,

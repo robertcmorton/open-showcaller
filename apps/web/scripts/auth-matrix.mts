@@ -100,6 +100,30 @@ const superUser = await mkUser("Matrix Super", [{ kind: "admin" }]);
   check("companyMgr: PATCH Event A → 200", (await req(`/events/${eventA.body.id}`, companyMgr.accessToken, { method: "PATCH", body: JSON.stringify({ name: "Matrix Event A" }) })).status === 200);
 }
 {
+  // Company-level access creates events; narrower grants must not.
+  const made = await req("/events", companyMgr.accessToken, {
+    method: "POST",
+    body: JSON.stringify({ name: "Matrix CompanyMgr Event", teamId: company.body.id, startDate: "2026-08-08", endDate: "2026-08-08" }),
+  });
+  check("companyMgr: creates an event in its company → 201", made.status === 201, made.body);
+  const seen = (await req("/events", companyMgr.accessToken)).body as any[];
+  check("companyMgr: the new event is visible to it", seen.some((e) => e.id === made.body?.id), seen.map((e: any) => e.name));
+  const foreign = await req("/events", companyMgr.accessToken, {
+    method: "POST",
+    body: JSON.stringify({ name: "Matrix Elsewhere", teamId: eventB.body.teamId ?? "team-nope", startDate: "2026-08-08", endDate: "2026-08-08" }),
+  });
+  check("companyMgr: cannot create in another company → 403", foreign.status === 403, foreign.body);
+  check(
+    "eventMgr: event-only grant cannot create events → 401",
+    (await req("/events", eventMgr.accessToken, { method: "POST", body: JSON.stringify({ name: "Matrix Nope", startDate: "2026-08-08", endDate: "2026-08-08" }) })).status === 401,
+  );
+  check(
+    "viewer: view grant cannot create events → 401",
+    (await req("/events", viewer.accessToken, { method: "POST", body: JSON.stringify({ name: "Matrix Nope 2", startDate: "2026-08-08", endDate: "2026-08-08" }) })).status === 401,
+  );
+  if (made.body?.id) await req(`/events/${made.body.id}`, ADMIN, { method: "DELETE" });
+}
+{
   const me = await req("/me", superUser.accessToken);
   check("admin-grant user: /me → admin", me.body?.role === "admin", me.body);
   const ev = await req("/events", superUser.accessToken);

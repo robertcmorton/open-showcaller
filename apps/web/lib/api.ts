@@ -2,8 +2,9 @@
 
 import { parseCsv, parseDurationShorthand, parseTimeOfDay } from "@opencall/core";
 import { DEFAULT_COLUMNS, type SeedRow } from "@opencall/db/doc";
+import { resolveSyncUrl } from "./syncUrl";
 
-export const API_URL = process.env.NEXT_PUBLIC_SYNC_HTTP_URL ?? "http://localhost:8787";
+export const API_URL = resolveSyncUrl(process.env.NEXT_PUBLIC_SYNC_HTTP_URL, "http://localhost:8787");
 
 export interface RundownSummary {
   id: string;
