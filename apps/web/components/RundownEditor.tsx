@@ -311,6 +311,8 @@ export function RundownEditor({
   const [myRoles, setMyRoles] = useState<string[]>([]);
   // Touch devices have no hover, so the nudges dock at the bottom instead —
   // clear of the role bar, which is also fixed to the bottom.
+  // Sheet-building controls are tucked away while the show is live.
+  const [editTools, setEditTools] = useState(false);
   const [dockBottom, setDockBottom] = useState(0);
   useEffect(() => {
     const measure = () => {
@@ -1264,18 +1266,33 @@ export function RundownEditor({
             ◷ {clockFollow ? "Following clock" : "Follow clock"}
           </button>
         )}
+        {/* Undo stays out in the open while the show runs: the timing nudges are
+            row changes, so a mis-tapped −30 is undone with one press — which is
+            exactly the moment you cannot go hunting through a menu. */}
         {canEditContent && (
-          // Building a sheet is desk work. On a phone these five push the sheet
-          // itself off the screen, and the phone is where the sheet is READ.
+          <button
+            className="btn btn-sm hide-mobile"
+            disabled={undoMgr.undoStack.length === 0}
+            title="Undo the last row change (⌘Z) — including a timing nudge, live or not"
+            onClick={() => undoMgr.undo()}
+          >
+            ↺ Undo
+          </button>
+        )}
+        {/* Building the sheet is desk work. While the show is LIVE it sits
+            behind a disclosure — nothing is taken away, but the bar you call
+            the show from stays down to the things you call it with. */}
+        {canEditContent && showLive && (
+          <button
+            className={`btn btn-sm hide-mobile ${editTools ? "is-on" : ""}`}
+            title="Add rows and redo changes while the show is running"
+            onClick={() => setEditTools((v) => !v)}
+          >
+            {editTools ? "✕ Editing" : "✎ Edit sheet"}
+          </button>
+        )}
+        {canEditContent && (!showLive || editTools) && (
           <span className="hide-mobile" style={{ display: "contents" }}>
-            <button
-              className="btn btn-sm"
-              disabled={undoMgr.undoStack.length === 0}
-              title="Undo the last row change (⌘Z) — including deletes, live or not"
-              onClick={() => undoMgr.undo()}
-            >
-              ↺ Undo
-            </button>
             <button
               className="btn btn-sm"
               disabled={undoMgr.redoStack.length === 0}

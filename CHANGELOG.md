@@ -11,6 +11,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.23.1] — 2026-08-08
+
+### Changed
+- **The live bar is down to what a show is called with.** While the show is running, adding rows, groups and milestones — and redo — sit behind an "Edit sheet" button rather than in the row you are calling from. Nothing is taken away; building a sheet is simply not what that bar is for once the show has started. Undo stays in the open, because the timing nudges are row changes and a mis-tapped −30 needs one press to put right.
+
+
 ## [0.23.0] — 2026-08-08
 
 ### Fixed
