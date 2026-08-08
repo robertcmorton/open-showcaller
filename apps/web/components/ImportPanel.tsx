@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   buildSheet,
   classifySheet,
+  looksLikeBotchedValue,
   detectRoles,
   findRoleColumn,
   formatDuration,
@@ -210,13 +211,17 @@ export function ImportPanel({
       summaries.push({
         rowNumber: n,
         title: r.title || (r.kind === "banner" ? "— section —" : "—"),
-        time: r.startSec != null ? formatTimeOfDay(r.startSec, false) : r.startRaw ? `⚠ ${r.startRaw}` : "",
-        dur: r.durationSec != null ? formatDuration(r.durationSec) : r.durationRaw ? `⚠ ${r.durationRaw}` : "",
+        time: r.startSec != null ? formatTimeOfDay(r.startSec, false) : r.startRaw ? (looksLikeBotchedValue(r.startRaw) ? `⚠ ${r.startRaw}` : r.startRaw) : "",
+        dur: r.durationSec != null ? formatDuration(r.durationSec) : r.durationRaw ? (looksLikeBotchedValue(r.durationRaw) ? `⚠ ${r.durationRaw}` : r.durationRaw) : "",
       });
       const at = summaries.length - 1;
-      if (r.startRaw)
+      // Only offer a fix where one is plausibly needed. A TIME or DUR cell
+      // holding a label ("Interchange", "Head Coach", "TBC") is the sheet
+      // using the column for something else, not a value typed wrong — the
+      // text is kept beside the column either way.
+      if (r.startRaw && looksLikeBotchedValue(r.startRaw))
         pending.push({ key: `${r.sourceIndex}:start`, rowNumber: n, title: r.title, kind: "start", raw: r.startRaw, suggestion: suggestTimeFix(r.startRaw), sourceIndex: r.sourceIndex, at });
-      if (r.durationRaw)
+      if (r.durationRaw && looksLikeBotchedValue(r.durationRaw))
         pending.push({ key: `${r.sourceIndex}:duration`, rowNumber: n, title: r.title, kind: "duration", raw: r.durationRaw, suggestion: suggestDurationFix(r.durationRaw), sourceIndex: r.sourceIndex, at });
     }
     return pending
@@ -524,13 +529,15 @@ export function ImportPanel({
                         const raw = (grid[r.sourceIndex]?.[col] ?? "").trim();
                         let display: React.ReactNode = raw;
                         let bad = false;
+                        // Amber means "this needs your attention". A label in a
+                        // time column does not — it is simply text, kept as text.
                         if (target.kind === "start" && raw) {
-                          bad = r.startRaw != null;
-                          display = bad ? raw : r.startSec != null ? formatTimeOfDay(r.startSec, false) : raw;
+                          bad = r.startRaw != null && looksLikeBotchedValue(r.startRaw);
+                          display = r.startSec != null ? formatTimeOfDay(r.startSec, false) : raw;
                         }
                         if (target.kind === "duration" && raw) {
-                          bad = r.durationRaw != null;
-                          display = bad ? raw : r.durationSec != null ? formatDuration(r.durationSec) : raw;
+                          bad = r.durationRaw != null && looksLikeBotchedValue(r.durationRaw);
+                          display = r.durationSec != null ? formatDuration(r.durationSec) : raw;
                         }
                         return (
                           <td

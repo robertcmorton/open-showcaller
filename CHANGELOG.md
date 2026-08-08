@@ -11,6 +11,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.20.1] — 2026-08-08
+
+### Fixed
+- **The import stopped demanding fixes for cells that were never wrong.** A run sheet uses its TIME and DUR columns for other things on some rows — a team list puts positions there ("Fullback", "Interchange", "Head Coach"), a pre-show row says "TBC" — and every one was reported as a cell that "couldn't be parsed", with a box asking for a correction that does not exist. On one 25-page sheet that was 66 false alarms and nothing else. A value is only queried now when it was plainly reaching for a time or a duration; those all contain a digit. The text is kept beside its column either way, so nothing is lost by not asking.
+
 ## [0.20.0] — 2026-08-08
 
 ### Added

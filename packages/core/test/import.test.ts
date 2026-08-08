@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSheet, classifySheet, findCueTypeColumn, PROMPTER_TAG, classifyRows, detectHeaderRow, detectOutcomes, detectRoles, findRoleColumn, mapColumns, mergeWrappedRows, parseDurationLoose, parseTimeLoose, planImport, suggestDurationFix, suggestTimeFix, UNPARSED_DURATION_KEY } from "../src/import";
+import { buildSheet, classifySheet, looksLikeBotchedValue, findCueTypeColumn, PROMPTER_TAG, classifyRows, detectHeaderRow, detectOutcomes, detectRoles, findRoleColumn, mapColumns, mergeWrappedRows, parseDurationLoose, parseTimeLoose, planImport, suggestDurationFix, suggestTimeFix, UNPARSED_DURATION_KEY } from "../src/import";
 
 describe("parseDurationLoose", () => {
   it("parses worded durations", () => {
@@ -556,5 +556,21 @@ describe("script detection", () => {
     const grid = sheet();
     const mapping = mapColumns(grid[0]!, grid.slice(1));
     expect(findCueTypeColumn(mapping, classifySheet(grid, 0, mapping))).toBe("scr");
+  });
+});
+
+describe("looksLikeBotchedValue", () => {
+  it("treats a label in a time column as content, not an error", () => {
+    // A team list puts positions in the duration column; a pre-show row says
+    // TBC. The sheet is right — there is nothing for anyone to fix.
+    for (const v of ["Interchange", "Head Coach", "Fullback", "Second Row", "TBC", "Assistant Coach"]) {
+      expect(looksLikeBotchedValue(v)).toBe(false);
+    }
+  });
+
+  it("still flags a value that was reaching for a time or duration", () => {
+    for (const v of ["7.3O pm", "0:9O:00", "2 mins x", "12:", "1030hrs?"]) {
+      expect(looksLikeBotchedValue(v)).toBe(true);
+    }
   });
 });

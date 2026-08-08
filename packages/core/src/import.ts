@@ -376,6 +376,17 @@ const ITEM_NUMBER = /^\d{1,4}[a-z]?$/i;
  * both. Every sheet imported that way lost its numbering. Anything that turns
  * a grid into rows must come through here.
  */
+/**
+ * Is this cell a botched time or duration, or simply not one?
+ *
+ * A run sheet uses its TIME and DUR columns for other things on some rows — a
+ * team list puts positions there, a pre-show row says "TBC". Those are not
+ * mistakes to be corrected; the sheet is right and there is nothing to fix.
+ * Only a value that was clearly REACHING for a time deserves to be flagged,
+ * and every one of those has a digit in it ("7.3O pm", "0:9O:00", "2 mins").
+ */
+export const looksLikeBotchedValue = (raw: string): boolean => /\d/.test(raw);
+
 export function classifySheet(
   grid: string[][],
   headerIndex: number,
