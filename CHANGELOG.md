@@ -11,6 +11,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.20.0] — 2026-08-08
+
+### Added
+- **The prompter now fills itself from the run sheet.** Sheets set the words a presenter reads in italic, and that is what the import reads: those passages are marked **`prompter`** in the sheet's own cue column (SCR, TYPE, SOURCE — whichever the sheet uses, recognised by its contents rather than its name). The prompter shows every marked row with the time it is due and its item number, so the person reading knows how long they have as well as what to say. Marking or unmarking a row by hand does the same thing — the decision is visible and editable in the sheet, not buried.
+- Italic **labels** are deliberately left alone. A track name or an all-caps lighting direction is not something to put in front of a presenter mid-show, so a marked passage has to read as speech. Short lines inside a read still come along — a "&lt;Captain to speak&gt;" between two spoken lines belongs with them — as does the bold line that pays a welcome off ("…please welcome to the field, THE CAPTAIN!"), and a line whose italics the author simply missed mid-sentence.
+- Sheets that carry a Script column of their own still work exactly as before.
+
+### Fixed
+- **The end of a line could land in the wrong columns.** Where a sentence changes formatting part-way and runs wider than its cell — a welcome that finishes with a name in bold — the tail was filed under WHO and NOTES, so "…a true icon of the sport, HER NAME!" lost its last two words. Text is now kept together unless a real column border separates it.
+- **A passage of script no longer imports as a section header.** Rows holding nothing but text were classified as headings, which rendered a paragraph of script as a grey banner across the sheet and discarded the row's other cells with it.
+
 ## [0.19.0] — 2026-08-08
 
 ### Fixed

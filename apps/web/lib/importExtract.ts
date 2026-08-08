@@ -18,6 +18,11 @@ export interface ExtractedSheet {
   lineMeta?: { page: number; y: number }[];
   /** PDF only: the table's ruled horizontal lines per page — authoritative row boundaries. */
   rowLines?: { page: number; ys: number[] }[];
+  /**
+   * PDF only: text that was set in ITALIC. Run sheets italicise the words a
+   * presenter reads aloud, so this is what tells script apart from cue text.
+   */
+  italicText?: string[];
 }
 
 /**
@@ -209,28 +214,45 @@ async function extractPdf(buffer: ArrayBuffer, loader?: PdfjsLoader): Promise<Ex
     /** Rendered width, so a run can be placed by its CENTRE rather than its left edge. */
     w: number;
     text: string;
+    italic: boolean;
   }
 
   const pages: Run[][] = [];
   const rowLines: { page: number; ys: number[] }[] = [];
   const ruleXs: number[] = [];
+  // Font id → is it an italic face. Resolving a font requires its operator
+  // list to have run, which also gives us the ruled lines, so both happen here.
+  const italicFonts = new Map<string, boolean>();
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p);
-    const content = await page.getTextContent();
-    const runs: Run[] = [];
-    for (const item of content.items) {
-      if (!("str" in item) || !item.str.trim()) continue;
-      const [, , , , x, y] = item.transform as number[];
-      runs.push({ x: x!, y: y!, w: (item as { width?: number }).width ?? 0, text: item.str });
-    }
-    pages.push(runs);
+    let rules: { ys: number[]; xs: number[] } | null = null;
     try {
-      const rules = await extractRules(page, pdfjs.OPS as unknown as Record<string, number>);
+      rules = await extractRules(page, pdfjs.OPS as unknown as Record<string, number>);
       if (rules.ys.length > 0) rowLines.push({ page: p - 1, ys: rules.ys });
       ruleXs.push(...rules.xs);
     } catch {
       // No rules extracted → the merge falls back to nearest-number heuristics.
     }
+    const content = await page.getTextContent();
+    const runs: Run[] = [];
+    for (const item of content.items) {
+      if (!("str" in item) || !item.str.trim()) continue;
+      const [, , , , x, y] = item.transform as number[];
+      const fontId = (item as { fontName?: string }).fontName ?? "";
+      let italic = italicFonts.get(fontId);
+      if (italic === undefined) {
+        italic = false;
+        try {
+          const font = (page as unknown as { commonObjs: { get: (k: string) => { name?: string; italic?: boolean } } }).commonObjs.get(fontId);
+          italic = font?.italic === true || /italic|oblique/i.test(font?.name ?? "");
+        } catch {
+          // Font not resolvable — treat as upright rather than guessing.
+        }
+        italicFonts.set(fontId, italic);
+      }
+      runs.push({ x: x!, y: y!, w: (item as { width?: number }).width ?? 0, text: item.str, italic });
+    }
+    pages.push(runs);
   }
   if (pages.every((runs) => runs.length === 0)) {
     throw new Error("This PDF has no text layer (likely a scan) — export it from the original spreadsheet instead.");
@@ -295,6 +317,7 @@ async function extractPdf(buffer: ArrayBuffer, loader?: PdfjsLoader): Promise<Ex
   };
 
   const columnCount = ruled ? columnEdges.length : bands.length;
+  const italicText = new Set<string>();
   const grid: string[][] = [];
   const lineMeta: { page: number; y: number }[] = [];
   pages.forEach((runs, pageIndex) => {
@@ -305,10 +328,35 @@ async function extractPdf(buffer: ArrayBuffer, loader?: PdfjsLoader): Promise<Ex
     const flush = () => {
       if (line.length === 0) return;
       const cells: string[] = Array.from({ length: columnCount }, () => "");
+      // Italic is tracked per CELL: a cue title with an italic aside is not
+      // script, but a cell entirely in italic is a line someone reads out.
+      const cellRuns: { italic: number; total: number }[] = Array.from({ length: columnCount }, () => ({ italic: 0, total: 0 }));
+      // A sentence that changes formatting mid-way ("**WELCOME** proud … man
+      // **THEIR NAME!**") arrives as several runs, and a long one overflows its
+      // cell into the space beside it. Placed independently, its tail lands in
+      // the next columns — the end of a read filed under WHO and NOTES.
+      //
+      // Two runs are the same cell when they are touching (a word space, ~2pt)
+      // AND no ruled column border separates them. A real column boundary has
+      // both: a wide gap and a border.
+      const GLUE_GAP = 8; // pt — wider than a word space, far narrower than a column gap
+      let prevEnd: number | null = null;
+      let prevBand = 0;
       for (const run of line) {
-        const band = bandFor(run);
+        const gapStart: number | null = prevEnd;
+        const touching: boolean =
+          gapStart != null && run.x - gapStart < GLUE_GAP && !columnEdges.some((edge) => edge > gapStart && edge <= run.x);
+        const band = touching ? prevBand : bandFor(run);
         cells[band] = cells[band] ? `${cells[band]} ${run.text.trim()}` : run.text.trim();
+        cellRuns[band]!.total += 1;
+        if (run.italic) cellRuns[band]!.italic += 1;
+        prevEnd = run.x + run.w;
+        prevBand = band;
       }
+      cells.forEach((text, i) => {
+        const seen = cellRuns[i]!;
+        if (text.trim() && seen.total > 0 && seen.italic === seen.total) italicText.add(text.trim());
+      });
       grid.push(cells);
       lineMeta.push({ page: pageIndex, y: line[0]!.y });
       line = [];
@@ -331,5 +379,5 @@ async function extractPdf(buffer: ArrayBuffer, loader?: PdfjsLoader): Promise<Ex
     const next = spans[i + 1];
     return next != null ? Math.round((next - x) * 1.25) : null;
   });
-  return { grid, widths, lineMeta, rowLines };
+  return { grid, widths, lineMeta, rowLines, italicText: [...italicText] };
 }

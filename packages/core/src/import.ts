@@ -114,6 +114,7 @@ const CUE_TYPE_TOKENS = new Set([
   "audio", "gfx", "vtr", "led", "pa", "mc", "ga", "dj", "hk", "crew", "pyro",
   "lighting", "super", "takeover", "score", "note", "cam", "live vision",
   "live vsn", "gfx and led", "vtr and led", "gfx & led", "dj booth", "sting",
+  "trk", "track", "vt", "cam", "scr", "ob", "ppt", "stills",
 ]);
 
 function normalizeHeader(cell: string): string {
@@ -244,6 +245,8 @@ export interface ClassifiedRow {
   /** Detected outcome branch ("win" | "lose" | "draw" | "golden") — sport
    *  sheets carry alternate full-time endings; the caller picks one live. */
   outcome?: string | null;
+  /** Words meant to be READ ALOUD, not performed — feeds the prompter. */
+  script?: boolean;
 }
 
 /**
@@ -373,7 +376,12 @@ const ITEM_NUMBER = /^\d{1,4}[a-z]?$/i;
  * both. Every sheet imported that way lost its numbering. Anything that turns
  * a grid into rows must come through here.
  */
-export function classifySheet(grid: string[][], headerIndex: number, mapping: ColumnTarget[]): ClassifiedRow[] {
+export function classifySheet(
+  grid: string[][],
+  headerIndex: number,
+  mapping: ColumnTarget[],
+  italicText?: string[],
+): ClassifiedRow[] {
   const rows = classifyRows(grid, headerIndex, mapping);
   // Row numbering mirrors the sheet: each row carries ITS OWN number (first
   // line of it for merged rows); rows the sheet didn't number get none.
@@ -385,7 +393,102 @@ export function classifySheet(grid: string[][], headerIndex: number, mapping: Co
     }
   }
   detectOutcomes(rows);
+  detectScript(rows, italicText);
   return rows;
+}
+
+/**
+ * Marks the rows that are WORDS TO BE READ ALOUD rather than things to do.
+ *
+ * Run sheets set them in italic — a presenter's read, an interview question,
+ * an announcement — and that is the signal used here, because it is the one
+ * the sheet's author actually intended. A row counts as script when its title
+ * text was italic in the source and it carries no time, duration or cue type
+ * of its own: an italic aside inside a normal cue is decoration, not a read.
+ *
+ * Without italics (a CSV, a plain export) nothing is marked, which is the
+ * honest outcome — inventing script from sentence length would put stage
+ * directions and notes in front of a presenter mid-show.
+ */
+/**
+ * Words in sentences, as opposed to a label or an instruction.
+ *
+ * Case carries the distinction on a run sheet: things said are written like
+ * speech ("Please welcome to the field, tonight's special guest!"),
+ * while cues and directions are shouted in capitals ("LX - STAGE BACK LIGHTS
+ * ON", "WALK-ON - EDIT 2"). Length alone puts those in front of a presenter.
+ */
+const isProse = (line: string): boolean => {
+  const words = line.split(/\s+/).filter(Boolean);
+  const spoken = words.filter((w) => /^[a-z]/.test(w)).length;
+  if (words.length >= 6 && spoken >= 3) return true;
+  return /[.!?]$/.test(line) && words.length >= 3 && spoken >= 1;
+};
+
+export function detectScript(rows: ClassifiedRow[], italicText?: string[]): void {
+  if (!italicText || italicText.length === 0) return;
+  const italic = new Set(italicText.map((t) => t.replace(/\s+/g, " ").trim()).filter(Boolean));
+  if (italic.size === 0) return;
+  // Which rows are set in italic — necessary, but not sufficient. A row may
+  // carry the italic read AND the line that pays it off ("…the one and only /
+  // LADIES AND GENTLEMEN, WELCOME TO THE FIELD … THEIR NAME!"), which the sheet
+  // sets in bold. Those belong together, so a non-italic line is tolerated as
+  // long as it too is speech.
+  const allItalic = rows.map((row) => {
+    if (row.kind === "spacer") return false;
+    const lines = row.title.split("\n").map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean);
+    if (lines.length === 0) return false;
+    const italicLines = lines.filter((l) => italic.has(l));
+    if (italicLines.length === 0) return false;
+    return lines.every((l) => italic.has(l) || isProse(l));
+  });
+
+  // Pass one seeds on italic PROSE: sentences someone says. An italic label
+  // ("WALK-ON - EDIT 2", "Back Announce") is a name or a stage direction, and
+  // putting either in front of a presenter mid-show would be worse than
+  // missing it. Timing and cue types are not disqualifying — the opening line
+  // of a read normally carries both.
+  for (let i = 0; i < rows.length; i++) {
+    if (!allItalic[i]) continue;
+    const lines = rows[i]!.title.split("\n").map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean);
+    if (lines.some(isProse)) rows[i]!.script = true;
+  }
+
+  // Pass two extends through the block: a short italic line sitting between
+  // two spoken ones is part of the same read — "<Captain to speak>",
+  // "Thank you." — and belongs with it.
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!;
+    if (!allItalic[i] || row.script) continue;
+    // …but never a row that names its own piece of media. An italic track
+    // title sitting right after a read is still a track, not a line to say.
+    if (Object.values(row.cells).some((v) => CUE_TYPE_TOKENS.has(v.trim().toLowerCase()))) continue;
+    if (rows[i - 1]?.script || rows[i + 1]?.script) row.script = true;
+  }
+
+  // Pass three picks up the lines a read runs into that are not italic at all:
+  // the hole left when an author misses the italics mid-sentence, and the
+  // pay-off line a sheet sets in bold to close a welcome ("Please welcome to
+  // the field, tonight's special guest!"). Both sit directly against
+  // spoken lines and have nothing of their own to do — no time, no duration,
+  // no cue. Judged against the rows marked BEFORE this pass, so one absorbed
+  // line cannot drag the next cue in after it.
+  const seeded = rows.map((r) => r.script === true);
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!;
+    if (row.script || row.kind === "spacer") continue;
+    if (!seeded[i - 1] && !seeded[i + 1]) continue;
+    if (row.startSec != null || row.durationSec != null) continue;
+    if (Object.values(row.cells).some((v) => v.trim())) continue;
+    const lines = row.title.split("\n").map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean);
+    if (lines.length > 0 && lines.every(isProse)) row.script = true;
+  }
+
+  // A read is not a section header. Rows with nothing but text classify as
+  // banners, which is how a paragraph of script ended up rendering as a great
+  // grey heading across the sheet — and, because banners carry no cells, is
+  // why the marker had nowhere to live. They are cues with no time of their own.
+  for (const row of rows) if (row.script && row.kind === "banner") row.kind = "cue";
 }
 
 export function detectNumberColumn(grid: string[][], headerIndex: number): number | null {
@@ -643,7 +746,7 @@ export function findRoleColumn(headers: string[], mapping: ColumnTarget[]): stri
 /** One-call pipeline: grid in, header + mapping + classified rows out. */
 export function planImport(
   grid: string[][],
-  opts: { headerIndex?: number; mergeWrapped?: boolean; lineMeta?: LineMeta[]; rowLines?: RowLines[] } = {},
+  opts: { headerIndex?: number; mergeWrapped?: boolean; lineMeta?: LineMeta[]; rowLines?: RowLines[]; italicText?: string[] } = {},
 ): {
   grid: string[][];
   headerIndex: number;
@@ -754,7 +857,7 @@ export function planImport(
   const finalGrid = opts.mergeWrapped
     ? mergeWrappedRows(grid, headerIndex, opts.lineMeta, opts.rowLines, mapping)
     : grid;
-  const rows = classifySheet(finalGrid, headerIndex, mapping);
+  const rows = classifySheet(finalGrid, headerIndex, mapping, opts.italicText);
   return {
     grid: finalGrid,
     headerIndex,
@@ -885,6 +988,38 @@ export interface BuiltRow {
   cells?: Record<string, string>;
 }
 
+/** The value written into a sheet's cue column to send a row to the prompter. */
+export const PROMPTER_TAG = "prompter";
+
+/**
+ * The column a sheet uses to say what KIND of thing each row is — SCR, TYPE,
+ * SOURCE — recognised by its contents (VTR, GFX, LED, CAM…) rather than its
+ * name, because every house calls it something different. That is where a
+ * marker belongs: the showcaller can see it, and change it, in the same place
+ * they already read the cue from.
+ */
+export function findCueTypeColumn(mapping: ColumnTarget[], rows: ClassifiedRow[]): string | null {
+  let best: string | null = null;
+  let bestScore = 0;
+  for (const target of mapping) {
+    if (target.kind !== "department") continue;
+    let filled = 0;
+    let cueish = 0;
+    for (const row of rows) {
+      const value = (row.cells[target.key] ?? "").trim().toLowerCase();
+      if (!value) continue;
+      filled += 1;
+      if (CUE_TYPE_TOKENS.has(value)) cueish += 1;
+    }
+    if (filled < 5 || cueish / filled < 0.6) continue;
+    if (cueish > bestScore) {
+      bestScore = cueish;
+      best = target.key;
+    }
+  }
+  return best;
+}
+
 export interface BuiltSheet {
   rows: BuiltRow[];
   columns: { key: string; title: string; width?: number }[];
@@ -932,6 +1067,11 @@ export function buildSheet(
   const cueish = importable.filter((r) => r.kind !== "banner");
   const sparseTimed = cueish.length >= 10 && cueish.filter((r) => r.startSec != null).length / cueish.length < 0.5;
 
+  // Rows the sheet meant to be read aloud are TAGGED in the sheet's own cue
+  // column, so the prompter can find them and a showcaller can see — and
+  // change — the decision in the place they already read cues from.
+  const cueTypeKey = findCueTypeColumn(mapping, importable);
+
   const rows: BuiltRow[] = importable.map((r) => {
     if (r.kind === "banner") return { type: "group", title: r.title, sourceNumber: r.sourceNumber, outcome: r.outcome ?? undefined };
     if (r.kind === "milestone") {
@@ -956,6 +1096,8 @@ export function buildSheet(
     const spilled: Record<string, string> = {};
     if (r.startRaw) spilled[UNPARSED_START_KEY] = r.startRaw;
     if (r.durationRaw) spilled[UNPARSED_DURATION_KEY] = r.durationRaw;
+    // Never overwrite a cue the sheet already gave the row.
+    if (r.script && cueTypeKey && !(r.cells[cueTypeKey] ?? "").trim()) spilled[cueTypeKey] = PROMPTER_TAG;
     return {
       type: "cue",
       title: r.title,

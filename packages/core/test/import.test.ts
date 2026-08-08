@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSheet, classifyRows, detectHeaderRow, detectOutcomes, detectRoles, findRoleColumn, mapColumns, mergeWrappedRows, parseDurationLoose, parseTimeLoose, planImport, suggestDurationFix, suggestTimeFix, UNPARSED_DURATION_KEY } from "../src/import";
+import { buildSheet, classifySheet, findCueTypeColumn, PROMPTER_TAG, classifyRows, detectHeaderRow, detectOutcomes, detectRoles, findRoleColumn, mapColumns, mergeWrappedRows, parseDurationLoose, parseTimeLoose, planImport, suggestDurationFix, suggestTimeFix, UNPARSED_DURATION_KEY } from "../src/import";
 
 describe("parseDurationLoose", () => {
   it("parses worded durations", () => {
@@ -490,5 +490,71 @@ describe("buildSheet fidelity", () => {
     ];
     const built = buildSheet(planImport(grid));
     expect(built.columns.map((c) => c.key)).not.toContain("column-5");
+  });
+});
+
+describe("script detection", () => {
+  // A run sheet marks the words a presenter says by setting them in italic.
+  const sheet = (): string[][] => [
+    ["ITEM", "TIME", "DUR", "SCR", "ACTION", "WHO"],
+    ["1", "19:00:00", "01:00", "CAM", "WELCOME", "LC"],
+    ["2", "", "", "", "Ladies and gentlemen, please welcome to the field a proud son of this club,", ""],
+    ["3", "", "", "", "a premiership winner and a true champion of the game.", ""],
+    ["4", "", "", "TRK", "WALK-ON MUSIC - EDIT 2", ""],
+    ["5", "", "", "", "LX - STAGE LIGHTS TO FULL", ""],
+    ["6", "19:02:00", "00:30", "VTR", "SPONSOR REEL", ""],
+    ["7", "19:02:30", "00:30", "GFX", "SCORE BUG", ""],
+    ["8", "19:03:00", "00:20", "LED", "CROWD PROMPT", ""],
+    ["9", "19:03:20", "00:10", "CAM", "WIDE SHOT", ""],
+  ];
+  const italics = [
+    "Ladies and gentlemen, please welcome to the field a proud son of this club,",
+    "a premiership winner and a true champion of the game.",
+    "WALK-ON MUSIC - EDIT 2",
+  ];
+  const build = () => buildSheet(planImport(sheet(), { italicText: italics }));
+
+  it("marks italic sentences as script", () => {
+    const rows = classifySheet(sheet(), 0, mapColumns(sheet()[0]!, sheet().slice(1)), italics);
+    expect(rows.filter((r) => r.script).map((r) => r.sourceNumber)).toEqual(["2", "3"]);
+  });
+
+  it("does not mark an italic LABEL — a track name is not a read", () => {
+    const rows = classifySheet(sheet(), 0, mapColumns(sheet()[0]!, sheet().slice(1)), italics);
+    expect(rows.find((r) => r.sourceNumber === "4")?.script).toBeFalsy();
+  });
+
+  it("does not mark an all-caps instruction, however long", () => {
+    const rows = classifySheet(sheet(), 0, mapColumns(sheet()[0]!, sheet().slice(1)), italics);
+    expect(rows.find((r) => r.sourceNumber === "5")?.script).toBeFalsy();
+  });
+
+  it("marks nothing at all when the source carries no italics", () => {
+    const rows = classifySheet(sheet(), 0, mapColumns(sheet()[0]!, sheet().slice(1)), undefined);
+    expect(rows.some((r) => r.script)).toBe(false);
+  });
+
+  it("tags script rows in the sheet's own cue column", () => {
+    const built = build();
+    const tagged = built.rows.filter((r) => r.cells?.scr === PROMPTER_TAG);
+    expect(tagged.map((r) => r.sourceNumber)).toEqual(["2", "3"]);
+  });
+
+  it("never overwrites a cue the sheet already gave a row", () => {
+    const built = build();
+    expect(built.rows.find((r) => r.sourceNumber === "1")?.cells?.scr).toBe("CAM");
+    expect(built.rows.find((r) => r.sourceNumber === "4")?.cells?.scr).toBe("TRK");
+  });
+
+  it("keeps a read as a row, not a section header", () => {
+    // Text-only rows classify as banners; a read rendered as a grey heading is
+    // both wrong to look at and loses the cells the marker lives in.
+    expect(build().rows.filter((r) => r.sourceNumber === "2")[0]?.type).toBe("cue");
+  });
+
+  it("finds the cue column by its contents, not its name", () => {
+    const grid = sheet();
+    const mapping = mapColumns(grid[0]!, grid.slice(1));
+    expect(findCueTypeColumn(mapping, classifySheet(grid, 0, mapping))).toBe("scr");
   });
 });

@@ -172,6 +172,9 @@ export function ImportPanel({
   const [rawGrid, setRawGrid] = useState<string[][] | null>(null); // as extracted, pre-merge
   const [lineMeta, setLineMeta] = useState<{ page: number; y: number }[] | undefined>(undefined);
   const [rowLines, setRowLines] = useState<{ page: number; ys: number[] }[] | undefined>(undefined);
+  // Text the source set in ITALIC — how a run sheet marks words to be read
+  // aloud. Kept in state because rows are re-classified as cells are fixed.
+  const [italicText, setItalicText] = useState<string[] | undefined>(undefined);
   const [isPdf, setIsPdf] = useState(false);
   const [grid, setGrid] = useState<string[][] | null>(null);
   const [headerIndex, setHeaderIndex] = useState(0);
@@ -190,8 +193,8 @@ export function ImportPanel({
     // classifySheet, not classifyRows: the item numbers and outcome branches
     // come with it. Re-classifying without them is how imports lost the
     // sheet’s own numbering.
-    () => (grid ? classifySheet(grid, headerIndex, mapping) : []),
-    [grid, headerIndex, mapping],
+    () => (grid ? classifySheet(grid, headerIndex, mapping, italicText) : []),
+    [grid, headerIndex, mapping, italicText],
   );
   const importable = rows.filter((r) => r.kind !== "spacer");
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
@@ -268,10 +271,11 @@ export function ImportPanel({
     setBusy(true);
     try {
       const pdf = /\.pdf$/i.test(file.name);
-      const { grid: extracted, widths: extractedWidths, lineMeta: meta, rowLines: rules } = await extractGrid(file);
+      const { grid: extracted, widths: extractedWidths, lineMeta: meta, rowLines: rules, italicText: italics } = await extractGrid(file);
       setRawGrid(extracted);
       setLineMeta(meta);
       setRowLines(rules);
+      setItalicText(italics);
       setIsPdf(pdf);
       setWidths(extractedWidths);
       setSourceFile(file);

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { projectRundownDoc } from "@opencall/db/doc";
+import { computeTiming, formatTimeOfDay, PROMPTER_TAG } from "@opencall/core";
 import { useRundownDoc, useWakeLock } from "../lib/useRundownDoc";
 import { useShowChannel } from "../lib/showChannel";
 
@@ -13,7 +14,7 @@ import { useShowChannel } from "../lib/showChannel";
 export function PrompterView({ rundownId, joinCode }: { rundownId: string; joinCode?: string }) {
   useWakeLock();
   const { doc } = useRundownDoc(rundownId);
-  const { columns, rows } = projectRundownDoc(doc);
+  const { columns, rows, meta } = projectRundownDoc(doc);
   const channel = useShowChannel(rundownId, "companion", joinCode);
   const show = channel.show;
 
@@ -24,9 +25,24 @@ export function PrompterView({ rundownId, joinCode }: { rundownId: string; joinC
   const containerRef = useRef<HTMLDivElement>(null);
   const lastActiveRef = useRef<string | null>(null);
 
+  // What to read, in order of how explicit the sheet was:
+  //  1. rows marked "prompter" in the sheet's own cue column — set on import
+  //     for the passages written to be read aloud, and editable by hand;
+  //  2. failing that, a Script column, which some sheets carry outright.
+  // The words are the row's own text in case 1 and the Script cell in case 2.
   const scriptKey = columns.find((c) => c.key === "script")?.key ?? "script";
-  const cues = rows.filter((r) => r.type === "cue");
-  const wordCount = cues.reduce((n, r) => n + (r.cells[scriptKey]?.split(/\s+/).filter(Boolean).length ?? 0), 0);
+  const tagged = rows.filter((r) => Object.values(r.cells).some((v) => v.trim().toLowerCase() === PROMPTER_TAG));
+  const usingTags = tagged.length > 0;
+  const cues = usingTags ? tagged : rows.filter((r) => r.type === "cue" && r.cells[scriptKey]?.trim());
+  const wordsOf = (r: (typeof rows)[number]): string => (usingTags ? r.title : (r.cells[scriptKey] ?? ""));
+
+  // Every read carries the clock time it is due — the person holding the
+  // prompter needs to know how long they have as much as what to say.
+  const timing = computeTiming(rows, meta.plannedStartSec);
+  const startById = new Map(rows.map((r, i) => [r.id, timing.rows[i]?.startSec ?? null]));
+  const use24h = meta.use24h ?? false;
+
+  const wordCount = cues.reduce((n, r) => n + wordsOf(r).split(/\s+/).filter(Boolean).length, 0);
   const estMinutes = Math.max(1, Math.round(wordCount / 150));
 
   // Follow the caller: smooth-jump to the active cue when it changes.
@@ -103,26 +119,43 @@ export function PrompterView({ rundownId, joinCode }: { rundownId: string; joinC
           transform: mirror ? "scaleX(-1)" : undefined,
         }}
       >
-        {cues.map((row, i) => (
-          <section key={row.id} id={`prompt-${row.id}`} style={{ marginBottom: "1.2em" }}>
-            <div
-              style={{
-                color: activeId === row.id ? "#2f81f7" : "#555",
-                fontSize: "0.85rem",
-                textTransform: "uppercase",
-                letterSpacing: "0.1em",
-                marginBottom: 6,
-              }}
-            >
-              {i + 1} · {row.title}
-            </div>
-            {row.cells[scriptKey] && (
-              <div style={{ fontSize, lineHeight: 1.45, color: "#f2f2f2", fontWeight: 500 }}>
-                {row.cells[scriptKey]}
+        {cues.length === 0 && (
+          <div style={{ color: "#777", fontSize: "1.1rem", lineHeight: 1.6, maxWidth: "40ch" }}>
+            Nothing to read yet. Mark a row <strong style={{ color: "#f2f2f2" }}>{PROMPTER_TAG}</strong> in the run
+            sheet&rsquo;s cue column — the words in that row then appear here, with the time they are due.
+          </div>
+        )}
+        {cues.map((row, i) => {
+          const startSec = startById.get(row.id) ?? null;
+          const words = wordsOf(row);
+          return (
+            <section key={row.id} id={`prompt-${row.id}`} style={{ marginBottom: "1.2em" }}>
+              <div
+                style={{
+                  color: activeId === row.id ? "#2f81f7" : "#555",
+                  fontSize: "0.85rem",
+                  letterSpacing: "0.1em",
+                  marginBottom: 6,
+                  display: "flex",
+                  gap: 12,
+                }}
+              >
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {startSec != null ? formatTimeOfDay(startSec, use24h) : "—"}
+                </span>
+                {row.durationSec != null && (
+                  <span style={{ color: "#444" }}>
+                    {Math.floor(row.durationSec / 60)}:{String(row.durationSec % 60).padStart(2, "0")}
+                  </span>
+                )}
+                <span style={{ color: "#444" }}>{row.sourceNumber ? `#${row.sourceNumber}` : `${i + 1}`}</span>
               </div>
-            )}
-          </section>
-        ))}
+              {words && (
+                <div style={{ fontSize, lineHeight: 1.45, color: "#f2f2f2", fontWeight: 500 }}>{words}</div>
+              )}
+            </section>
+          );
+        })}
       </div>
 
       <footer
