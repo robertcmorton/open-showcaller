@@ -1509,6 +1509,32 @@ th.col-drop-target {
   }
 }
 
+/* ---------- Phone: the show page is an app shell, not a document ----------
+   Pinning it to the viewport rather than sizing it in flow. On iOS the
+   document stays fractionally scrollable behind a 100dvh block — the browser
+   chrome collapsing changes what that height means — and the page drifts up,
+   taking the clock off the top of the screen and leaving dead space under the
+   sheet. Fixed to the viewport there is nothing to scroll but the sheet. */
+@media (max-width: 760px) {
+  .show-page {
+    position: fixed;
+    inset: 0;
+    height: auto;
+    padding-left: 0.7rem !important;
+    padding-right: 0.7rem !important;
+    overscroll-behavior: none;
+  }
+  .show-page .show-topbar {
+    margin: 0 -0.7rem;
+    padding-left: 0.7rem;
+    padding-right: 0.7rem;
+  }
+  /* The sheet's name starts clear of the menu button pinned to the corner. */
+  .show-page .topbar-left {
+    padding-left: 34px;
+  }
+}
+
 /* Event artwork slots: the ✕ appears on hover only. */
 .img-slot-x {
   position: absolute;
@@ -1551,20 +1577,65 @@ th.col-drop-target {
   .hide-mobile {
     display: none !important;
   }
+  /* display:contents wrappers must collapse too — the children are what show. */
+  span.hide-mobile {
+    display: none !important;
+  }
   .admin-main {
     padding: 1.1rem 0.8rem;
   }
   .admin-main h1 {
     font-size: 1.2rem;
   }
-  /* Phones show the essentials: title, start, duration, and the role column.
-     The "All columns" toggle brings the full sheet back (with side-scroll). */
-  .grid-scroll:not(.mobile-show-all) .col-rich:not(.col-role) {
+  /* Phones show the essentials — WHEN and WHAT — plus one role column so the
+     cue kind (VTR, GFX, CAM) stays visible. A sheet can record assignments in
+     several columns; all of them at once leaves the action text a sliver, and
+     the action text is the thing being read. "All columns" brings the rest
+     back with a side-scroll. */
+  .grid-scroll:not(.mobile-show-all) .col-rich:not(.col-role),
+  .grid-scroll:not(.mobile-show-all) .col-role ~ .col-role {
     display: none;
   }
   .grid-scroll:not(.mobile-show-all) .rundown-grid {
     min-width: 0;
     width: 100%;
+    table-layout: fixed;
+  }
+  /* The action column takes everything the fixed ones leave, and wraps. */
+  .grid-scroll:not(.mobile-show-all) .rundown-grid td,
+  .grid-scroll:not(.mobile-show-all) .rundown-grid th {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  /* Fixed layout takes its widths from the header row, so the action column
+     is simply the one left unsized — it gets whatever remains. The imported
+     widths are inline styles, hence the overrides. */
+  .grid-scroll:not(.mobile-show-all) th[data-colkey="rownum"] {
+    width: 32px !important;
+  }
+  .grid-scroll:not(.mobile-show-all) th[data-colkey="start"] {
+    width: 84px !important;
+  }
+  .grid-scroll:not(.mobile-show-all) th[data-colkey="duration"] {
+    width: 54px !important;
+  }
+  .grid-scroll:not(.mobile-show-all) th.col-role {
+    width: 42px !important;
+    min-width: 0 !important;
+  }
+  /* Times and durations are read at a glance, not studied: a touch smaller
+     keeps each on ONE line, which is worth more than the extra pixel of type. */
+  .grid-scroll:not(.mobile-show-all) .rundown-grid .mono {
+    font-size: 0.7rem;
+    letter-spacing: -0.02em;
+  }
+  .grid-scroll:not(.mobile-show-all) th[data-colkey="zero"] {
+    display: none;
+  }
+  /* Column edges are dragged with a mouse; on a phone the handle only pushes
+     the sheet a few pixels wide and invites a sideways scroll that does nothing. */
+  .col-resize {
+    display: none;
   }
   .with-sidenav,
   .with-sidenav.sidenav-closed {

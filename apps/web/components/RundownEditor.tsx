@@ -298,7 +298,8 @@ export function RundownEditor({
   }, [selected, rows.length]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!gapFocus) return;
-    document.querySelector("tr.gap-row-to")?.scrollIntoView({ block: "center", behavior: "smooth" });
+    const gapRow = document.querySelector("tr.gap-row-to");
+    if (gapRow) centreInSheet(gapRow);
   }, [gapFocus?.toId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [hiddenCols, setHiddenCols] = useState<ReadonlySet<string>>(new Set());
   // Per-user column width overrides (drag the header edges); imported sheets
@@ -370,6 +371,24 @@ export function RundownEditor({
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
+  /**
+   * Centre a row WITHIN THE SHEET, never by scrolling the page.
+   *
+   * scrollIntoView walks up and scrolls every scrollable ancestor it finds, so
+   * on a phone — where the document can still shift by a few hundred pixels —
+   * syncing to the cue also dragged the clock and the transport off the top of
+   * the screen. The sheet has its own scroller; that is the only thing that
+   * should move.
+   */
+  const centreInSheet = (el: Element): void => {
+    const scroller = el.closest(".grid-scroll") as HTMLElement | null;
+    if (!scroller) return;
+    const row = el.getBoundingClientRect();
+    const box = scroller.getBoundingClientRect();
+    const target = scroller.scrollTop + (row.top - box.top) - (box.height - row.height) / 2;
+    scroller.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+  };
+
   // Auto-scroll keeps the active row centered while following. A manual
   // scroll (wheel/touch) disengages following instead of fighting the user;
   // the floating "Sync Cue" button re-engages it.
@@ -387,7 +406,7 @@ export function RundownEditor({
       const el = document.querySelector("tr.active-row, tr.walk-row");
       if (el) {
         programmaticScroll.current = true;
-        el.scrollIntoView({ block: "center", behavior: "smooth" });
+        centreInSheet(el);
         settle = window.setTimeout(() => {
           programmaticScroll.current = false;
         }, 1000);
@@ -1069,7 +1088,13 @@ export function RundownEditor({
     <WithSideNav title={meta.name} settings={settings}>
     {/* --diag-h is published by the diagnostics bar (fixed to the bottom) so
         the page never hides its own failure message behind it. */}
-    <div className="show-page" style={{ padding: "0.6rem 1.5rem calc(1.25rem + var(--diag-h, 0px))" }}>
+    <div
+      className="show-page"
+      // --diag-h is published by the diagnostics bar; dockBottom is the role
+      // bar's height. Both are fixed to the bottom of the screen, and the sheet
+      // has to end ABOVE them — a row hidden under a bar is a row not read.
+      style={{ padding: "0.6rem 1.5rem calc(1.25rem + var(--diag-h, 0px) + var(--rolebar-h, 0px))" }}
+    >
       <div className="show-topbar no-print">
       <header className="topbar-head">
         <div className="topbar-left">
@@ -1240,7 +1265,9 @@ export function RundownEditor({
           </button>
         )}
         {canEditContent && (
-          <>
+          // Building a sheet is desk work. On a phone these five push the sheet
+          // itself off the screen, and the phone is where the sheet is READ.
+          <span className="hide-mobile" style={{ display: "contents" }}>
             <button
               className="btn btn-sm"
               disabled={undoMgr.undoStack.length === 0}
@@ -1274,7 +1301,7 @@ export function RundownEditor({
             >
               {Icon.plus} Milestone
             </button>
-          </>
+          </span>
         )}
         {canEditContent && timingGaps.length > 0 && !reconciling && (
           <button
@@ -1406,7 +1433,8 @@ export function RundownEditor({
             onClick={() => {
               setFollowScroll(true);
               programmaticScroll.current = true;
-              document.querySelector("tr.active-row")?.scrollIntoView({ block: "center", behavior: "smooth" });
+              const live = document.querySelector("tr.active-row");
+              if (live) centreInSheet(live);
               window.setTimeout(() => {
                 programmaticScroll.current = false;
               }, 1000);

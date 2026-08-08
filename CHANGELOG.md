@@ -11,6 +11,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.23.0] — 2026-08-08
+
+### Fixed
+- **The page drifted on a phone, taking the clock with it.** The show screen sized itself to the viewport, which on iOS still leaves the document fractionally scrollable — the browser's own chrome collapsing changes what that height means. The page slid up, the timer and transport went off the top, and dead space appeared under the sheet. The screen is now pinned to the viewport on phones, so the only thing that scrolls is the sheet.
+- **Syncing to the cue no longer hides the clock.** Centring the live row asked the browser to bring it into view, and that scrolls *every* container it sits in — including the page. It now moves the sheet alone.
+- **The bottom bar no longer covers the last rows.** The crew bar is fixed to the bottom and changes height with what it says; the sheet now always ends above it, whatever it is showing.
+
+### Changed
+- **A phone shows what a phone is for.** The action text was being squeezed into a fifth of the screen while five columns and eleven buttons took the rest — on a 25-page sheet the thing you actually read was the thing you couldn't. Phones now give the action column everything the times leave, keep one cue column, and drop the sheet-building controls (undo, redo, add row/group/milestone) which belong on a desk. Transport, clock-follow, roles and "All columns" all stay.
+
+
 ## [0.22.1] — 2026-08-08
 
 ### Fixed

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { formatDuration, zoneSecondsOfDay, type LiveShowTiming, type PlanTiming } from "@opencall/core";
 import type { ProjectedRow, RoleDef } from "@opencall/db/doc";
 import type { ShowChannel } from "../lib/showChannel";
@@ -41,6 +41,27 @@ export function rowMatchesRole(row: ProjectedRow, role: string, roleColumnKeys?:
   const keys = (roleColumnKeys ?? []).filter(Boolean);
   if (keys.length > 0) return keys.some((k) => row.cells[k]?.toLowerCase().includes(needle) ?? false);
   return Object.values(row.cells).some((v) => v.toLowerCase().includes(needle));
+}
+
+/**
+ * Publishes the crew bar's height so the sheet above can end clear of it.
+ *
+ * The bar is fixed to the bottom of the screen, and its height changes with
+ * what it is saying — one line for a standing role, three when a cue is on
+ * air. Measuring it from the page above meant reading a height before the bar
+ * had rendered; the bar itself always knows.
+ */
+export function usePublishedBarHeight(): (el: HTMLDivElement | null) => void {
+  return useCallback((el: HTMLDivElement | null) => {
+    const root = document.documentElement;
+    if (!el) {
+      root.style.removeProperty("--rolebar-h");
+      return;
+    }
+    const measure = () => root.style.setProperty("--rolebar-h", `${Math.ceil(el.getBoundingClientRect().height)}px`);
+    measure();
+    new ResizeObserver(measure).observe(el);
+  }, []);
 }
 
 /** A user can hold several roles — the first of theirs this row involves (for its colour), or null. */
@@ -215,6 +236,8 @@ export function RoleBar({
   channel: ShowChannel;
   activeRowId: string | null;
 }) {
+  // Declared before the early return: hooks cannot be conditional.
+  const publishHeight = usePublishedBarHeight();
   if (!live || !activeRowId || myRoles.length === 0) return null;
 
   const activeIndex = rows.findIndex((r) => r.id === activeRowId);
@@ -230,7 +253,7 @@ export function RoleBar({
           ? `+${formatDuration(live.rowOverSec)}`
           : formatDuration(live.remainingInRowSec);
     return (
-      <div className="role-bar on-air no-print">
+      <div className="role-bar on-air no-print" ref={publishHeight}>
         <span className="rb-onair">● YOU’RE ON</span>
         <span className="rb-role" style={{ color: roleColorFor(onAirRole) }}>{onAirRole}</span>
         <span className="rb-title">{activeRow!.title || "—"}</span>
@@ -254,7 +277,7 @@ export function RoleBar({
 
   if (!next) {
     return (
-      <div className="role-bar no-print">
+      <div className="role-bar no-print" ref={publishHeight}>
         <span className="rb-role" style={{ color: roleColorFor(myRoles[0]!) }}>{rolesLabel}</span>
         <span className="rb-done">No more items for you in this show.</span>
       </div>
@@ -269,7 +292,7 @@ export function RoleBar({
   const imminent = countdown != null && countdown <= 60;
 
   return (
-    <div className={`role-bar no-print ${imminent ? "imminent" : ""}`}>
+    <div className={`role-bar no-print ${imminent ? "imminent" : ""}`} ref={publishHeight}>
       <span className="rb-role" style={{ color: roleColorFor(next.role) }}>{next.role} · next</span>
       <span className="rb-title">{next.row.title || "—"}</span>
       <span className="rb-count">
