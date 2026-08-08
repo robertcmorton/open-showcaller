@@ -429,7 +429,7 @@ export function RundownEditor({
   const myRowColors = new Map<string, string>();
   if (myRoles.length > 0)
     for (const r of rows) {
-      const match = matchingRole(r, myRoles, meta.roleColumnKey);
+      const match = matchingRole(r, myRoles, meta.roleColumnKeys);
       if (match) myRowColors.set(r.id, roleColorFor(match));
     }
 
@@ -890,7 +890,7 @@ export function RundownEditor({
   const fixedStyle = tableStyle(orderedColKeys);
 
   const richColClass = (column: ColumnDef): string =>
-    column.kind !== "richtext" ? "" : `col-rich${column.key === meta.roleColumnKey ? " col-role" : ""}`;
+    column.kind !== "richtext" ? "" : `col-rich${meta.roleColumnKeys.includes(column.key) ? " col-role" : ""}`;
 
   const renderRichCell = (rowRecord: ProjectedRow, column: ColumnDef) => {
     const isActive = activeCell?.rowId === rowRecord.id && activeCell.columnId === column.id;
@@ -1771,7 +1771,7 @@ export function RundownEditor({
         <RoleBar
           myRoles={myRoles}
           roleColorFor={roleColorFor}
-          roleColumnKey={meta.roleColumnKey}
+          roleColumnKeys={meta.roleColumnKeys}
           rows={rows}
           timing={timing}
           live={live}

@@ -157,6 +157,12 @@ export function createApiHandler(
       }
     };
 
+    /** Which columns record who a row is for — strings only, deduplicated. */
+    const roleColumnKeysOf = (body: Record<string, unknown>): string[] =>
+      Array.isArray(body.roleColumnKeys)
+        ? [...new Set((body.roleColumnKeys as unknown[]).filter((k): k is string => typeof k === "string" && !!k))].slice(0, 8)
+        : [];
+
     /** Column keys in the source sheet's left-to-right order, if supplied. */
     const columnOrderOf = (body: Record<string, unknown>): string[] =>
       Array.isArray(body.columnOrder)
@@ -852,6 +858,7 @@ export function createApiHandler(
               plannedStartSec,
               use24h: event.use24h,
               roleColumnKey: typeof body.roleColumnKey === "string" && body.roleColumnKey ? body.roleColumnKey : null,
+              roleColumnKeys: roleColumnKeysOf(body),
               baseTitles: baseTitlesOf(body),
             },
             extraColumns,
@@ -942,6 +949,7 @@ export function createApiHandler(
             plannedStartSec,
             use24h: event?.use24h ?? false,
             roleColumnKey: typeof body.roleColumnKey === "string" && body.roleColumnKey ? body.roleColumnKey : null,
+            roleColumnKeys: roleColumnKeysOf(body),
             baseTitles: baseTitlesOf(body),
           },
           extraColumns,

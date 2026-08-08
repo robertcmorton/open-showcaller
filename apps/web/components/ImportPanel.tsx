@@ -6,6 +6,7 @@ import {
   classifySheet,
   looksLikeBotchedValue,
   detectRoles,
+  findCueTypeColumn,
   findRoleColumn,
   formatDuration,
   formatTimeOfDay,
@@ -255,7 +256,13 @@ export function ImportPanel({
   };
   // The sheet's own role column (WHO, ROLE…) is the roster when it exists.
   const roleKey = useMemo(() => findRoleColumn(headers, mapping), [headers, mapping]);
-  const roles = useMemo(() => detectRoles(importable, 12, roleKey), [importable, roleKey]);
+  // Both columns that assign work: the WHO column naming people, and the cue
+  // column naming the positions that run the show (VTR, GFX, LED, CAM).
+  const roleKeys = useMemo(
+    () => [roleKey, findCueTypeColumn(mapping, importable)].filter((k): k is string => !!k),
+    [roleKey, mapping, importable],
+  );
+  const roles = useMemo(() => detectRoles(importable, 12, roleKeys), [importable, roleKeys]);
 
   const applyPlan = (
     source: string[][],
@@ -327,6 +334,7 @@ export function ImportPanel({
         columns: built.columns,
         roles: built.roles,
         roleColumnKey: built.roleColumnKey,
+        roleColumnKeys: built.roleColumnKeys,
         plannedStartSec: built.plannedStartSec,
         baseTitles: built.baseTitles,
         columnOrder: built.columnOrder,

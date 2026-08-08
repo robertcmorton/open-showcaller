@@ -970,15 +970,19 @@ export function roleTokens(cell: string): string[] {
   return [v];
 }
 
-export function detectRoles(rows: ClassifiedRow[], max = 12, roleColumnKey?: string | null): DetectedRole[] {
+export function detectRoles(
+  rows: ClassifiedRow[],
+  max = 12,
+  roleColumns?: string | string[] | null,
+): DetectedRole[] {
+  const keys = (typeof roleColumns === "string" ? [roleColumns] : (roleColumns ?? [])).filter(Boolean);
   const counts = new Map<string, { name: string; count: number }>();
-  const minCount = roleColumnKey ? 2 : 3;
+  const minCount = keys.length > 0 ? 2 : 3;
   for (const row of rows) {
-    const values = roleColumnKey
-      ? row.cells[roleColumnKey] != null
-        ? [row.cells[roleColumnKey]!]
-        : []
-      : Object.values(row.cells);
+    const values =
+      keys.length > 0
+        ? keys.map((k) => row.cells[k]).filter((v): v is string => v != null)
+        : Object.values(row.cells);
     for (const value of values) {
       // Multi-role cells are common ("VTR | LED", "GA, GFX") — each part is a role.
       for (const line of value.split(/\n|\s*[|,+]\s*|\s+&\s+|\s+and\s+/i)) {
@@ -986,6 +990,8 @@ export function detectRoles(rows: ClassifiedRow[], max = 12, roleColumnKey?: str
         if (!v || v.length > 24) continue;
         if (/^\d/.test(v)) continue; // numbering, times, "2 x wedges"…
         if (parseTimeLoose(v) != null || parseDurationLoose(v) != null) continue;
+        // The prompter marker is something this app writes, not a crew position.
+        if (v.toLowerCase() === PROMPTER_TAG) continue;
         const key = v.toLowerCase();
         const entry = counts.get(key);
         if (entry) entry.count += 1;
@@ -1061,6 +1067,8 @@ export interface BuiltSheet {
   columns: { key: string; title: string; width?: number }[];
   roles: DetectedRole[];
   roleColumnKey: string | null;
+  /** Every column that says who a row is for — the WHO column and the cue column. */
+  roleColumnKeys: string[];
   plannedStartSec: number | null;
   baseTitles: { title?: string; start?: string; duration?: string };
   columnOrder: string[];
@@ -1083,7 +1091,12 @@ export function buildSheet(
   // Spacers are the sheet's blank separator lines — they carry nothing.
   const importable = plan.rows.filter((r) => r.kind !== "spacer");
   const roleKey = opts.roleColumnKey !== undefined ? opts.roleColumnKey : findRoleColumn(headers, mapping);
-  const roles = opts.roles ?? detectRoles(importable, 12, roleKey);
+  // The cue column names positions — VTR, GFX, LED, CAM — and the people on
+  // those desks need to find their rows just as much as the ones named by
+  // initials in WHO. Both are role columns.
+  const cueKey = findCueTypeColumn(mapping, importable);
+  const roleKeys = [roleKey, cueKey].filter((k): k is string => !!k);
+  const roles = opts.roles ?? detectRoles(importable, 12, roleKeys);
   const widths = opts.widths ?? [];
 
   // When the sheet has NO role column of its own, every detected role that
@@ -1106,7 +1119,7 @@ export function buildSheet(
   // Rows the sheet meant to be read aloud are TAGGED in the sheet's own cue
   // column, so the prompter can find them and a showcaller can see — and
   // change — the decision in the place they already read cues from.
-  const cueTypeKey = findCueTypeColumn(mapping, importable);
+  const cueTypeKey = cueKey;
 
   const rows: BuiltRow[] = importable.map((r) => {
     if (r.kind === "banner") return { type: "group", title: r.title, sourceNumber: r.sourceNumber, outcome: r.outcome ?? undefined };
@@ -1208,6 +1221,7 @@ export function buildSheet(
     columns,
     roles,
     roleColumnKey: roleKey ?? (roles.length > 0 ? "roles" : null),
+    roleColumnKeys: roleKeys.length > 0 ? roleKeys : roles.length > 0 ? ["roles"] : [],
     plannedStartSec: importable.find((r) => r.startSec != null)?.startSec ?? null,
     baseTitles: { title: headerFor("title"), start: headerFor("start"), duration: headerFor("duration") },
     columnOrder,

@@ -11,6 +11,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.22.0] — 2026-08-08
+
+### Added
+- **The positions that run the show are roles too.** A sheet records who a row is for in more than one place: a WHO column naming people, and a cue column naming the desks that operate it — VTR, GFX, LED, CAM, TRK. Only the first was ever offered under "My role", so the graphics operator had no way to pick themselves out and the camera operator had to read every row. Both columns are read now, and a row lights up when it names any role its holder has. On one 25-page sheet that takes the list from four names to nine names and positions, and picking GFX marks 64 rows out of 463.
+- Rundowns record every column that carries an assignment rather than a single one, so highlighting and the role picker agree with each other. Existing rundowns keep working — one column is simply a list of one.
+
+### Fixed
+- The prompter marker the import writes is no longer offered as a crew position. It is something this app adds, not a job on the sheet.
+
+
 ## [0.21.0] — 2026-08-08
 
 ### Fixed

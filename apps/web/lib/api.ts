@@ -179,6 +179,7 @@ export const api = {
     columns?: { key: string; title: string; width?: number }[];
     roles?: { name: string; color: string }[];
     roleColumnKey?: string | null;
+    roleColumnKeys?: string[];
     sourceName?: string;
     sourceFileB64?: string;
     baseTitles?: { title?: string; start?: string; duration?: string };
@@ -191,6 +192,7 @@ export const api = {
       columns?: { key: string; title: string; width?: number }[];
       roles?: { name: string; color: string }[];
       roleColumnKey?: string | null;
+    roleColumnKeys?: string[];
       plannedStartSec?: number | null;
       sourceName?: string;
       sourceFileB64?: string;

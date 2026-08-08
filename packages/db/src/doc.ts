@@ -61,6 +61,12 @@ export interface DocMeta {
   versionLabel?: string;
   /** The imported column that carries role assignments (WHO, ROLE…), if any. */
   roleColumnKey?: string | null;
+  /**
+   * Every column that records WHO a row is for. A sheet usually has more than
+   * one: a WHO column naming people, and a cue column naming the positions
+   * that operate the show (VTR, GFX, LED, CAM). Crew hold roles from both.
+   */
+  roleColumnKeys?: string[];
   /** The source sheet's own header names for the structural columns
    *  (e.g. ACTIVITY/TIME) — shown instead of the generic Title/Start/Duration. */
   baseTitles?: { title?: string; start?: string; duration?: string };
@@ -105,6 +111,7 @@ export function buildRundownDoc(
     if (docMeta.plannedStartSec != null) meta.set("plannedStartSec", docMeta.plannedStartSec);
     if (docMeta.use24h != null) meta.set("use24h", docMeta.use24h);
     if (docMeta.roleColumnKey != null) meta.set("roleColumnKey", docMeta.roleColumnKey);
+    if (docMeta.roleColumnKeys?.length) meta.set("roleColumnKeys", docMeta.roleColumnKeys);
 
     const columns = doc.getArray<Y.Map<unknown>>("columns");
     const columnIdByKey = new Map<string, string>();
@@ -247,6 +254,10 @@ export function projectRundownDoc(doc: Y.Doc): {
     use24h: (metaMap.get("use24h") as boolean | undefined) ?? false,
     versionLabel: (metaMap.get("versionLabel") as string | undefined) ?? "",
     roleColumnKey: (metaMap.get("roleColumnKey") as string | undefined) ?? null,
+    // Rundowns made before role columns could be plural carry only the one.
+    roleColumnKeys:
+      (metaMap.get("roleColumnKeys") as string[] | undefined) ??
+      ((metaMap.get("roleColumnKey") as string | undefined) ? [metaMap.get("roleColumnKey") as string] : []),
     // Sheet header names live on the columns themselves after building; the
     // projection never needs them separately.
     baseTitles: {},

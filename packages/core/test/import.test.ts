@@ -574,3 +574,33 @@ describe("looksLikeBotchedValue", () => {
     }
   });
 });
+
+describe("roles from every column that assigns work", () => {
+  const grid = (): string[][] => [
+    ["ITEM", "TIME", "DUR", "SCR", "ACTION", "WHO"],
+    ["1", "19:00:00", "00:30", "VTR", "SPONSOR REEL", "GH"],
+    ["2", "19:00:30", "00:30", "GFX", "SCORE BUG", "LC"],
+    ["3", "19:01:00", "00:20", "LED", "CROWD PROMPT", "GH"],
+    ["4", "19:01:20", "00:10", "CAM", "WIDE SHOT", "LC JM"],
+    ["5", "19:01:30", "00:30", "VTR", "HIGHLIGHTS", "cue DP"],
+    ["6", "19:02:00", "00:30", "GFX", "TEAM LIST", "DP cue"],
+  ];
+  const built = () => buildSheet(planImport(grid()));
+
+  it("finds the people AND the positions that run the show", () => {
+    const names = built().roles.map((r) => r.name);
+    for (const expected of ["GH", "LC", "DP", "VTR", "GFX"]) expect(names).toContain(expected);
+  });
+
+  it("reports both columns as places an assignment is recorded", () => {
+    expect(built().roleColumnKeys).toEqual(expect.arrayContaining(["who", "scr"]));
+  });
+
+  it("never turns the prompter marker into a crew position", () => {
+    const withScript = grid();
+    withScript.push(["7", "", "", "", "Ladies and gentlemen, please welcome our guest tonight.", ""]);
+    const b = buildSheet(planImport(withScript, { italicText: ["Ladies and gentlemen, please welcome our guest tonight."] }));
+    expect(b.rows.some((r) => r.cells?.scr === PROMPTER_TAG)).toBe(true);
+    expect(b.roles.map((r) => r.name.toLowerCase())).not.toContain(PROMPTER_TAG);
+  });
+});

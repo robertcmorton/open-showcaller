@@ -28,27 +28,24 @@ export function highlightRoles(text: string, roles: RoleDef[]): React.ReactNode 
 }
 
 /**
- * Does this row involve the given role? When the rundown knows its role
- * column (WHO, ROLE, the imported Roles column…) that column is the
- * assignment record — matching against it (plus the title) avoids false
- * positives from prose like "DJ tracks" in a notes column. Without one,
- * any cell may name the role.
+ * Does this row involve the given role? When the rundown knows which columns
+ * record an assignment — the WHO column naming people, the cue column naming
+ * the positions that operate the show — those are the record, and matching
+ * against them (plus the title) avoids false positives from prose like "DJ
+ * tracks" in a notes column. Without any, every cell may name the role.
  */
-export function rowMatchesRole(row: ProjectedRow, role: string, roleColumnKey?: string | null): boolean {
+export function rowMatchesRole(row: ProjectedRow, role: string, roleColumnKeys?: string[] | null): boolean {
   const needle = role.trim().toLowerCase();
   if (!needle) return false;
   if (row.title.toLowerCase().includes(needle)) return true;
-  if (roleColumnKey) {
-    const assigned = row.cells[roleColumnKey];
-    if (assigned != null) return assigned.toLowerCase().includes(needle);
-    return false;
-  }
+  const keys = (roleColumnKeys ?? []).filter(Boolean);
+  if (keys.length > 0) return keys.some((k) => row.cells[k]?.toLowerCase().includes(needle) ?? false);
   return Object.values(row.cells).some((v) => v.toLowerCase().includes(needle));
 }
 
 /** A user can hold several roles — the first of theirs this row involves (for its colour), or null. */
-export function matchingRole(row: ProjectedRow, roles: string[], roleColumnKey?: string | null): string | null {
-  for (const role of roles) if (rowMatchesRole(row, role, roleColumnKey)) return role;
+export function matchingRole(row: ProjectedRow, roles: string[], roleColumnKeys?: string[] | null): string | null {
+  for (const role of roles) if (rowMatchesRole(row, role, roleColumnKeys)) return role;
   return null;
 }
 
@@ -202,7 +199,7 @@ export function RolePicker({
 export function RoleBar({
   myRoles,
   roleColorFor,
-  roleColumnKey,
+  roleColumnKeys,
   rows,
   timing,
   live,
@@ -211,7 +208,7 @@ export function RoleBar({
 }: {
   myRoles: string[];
   roleColorFor: (role: string) => string;
-  roleColumnKey?: string | null;
+  roleColumnKeys?: string[] | null;
   rows: ProjectedRow[];
   timing: PlanTiming;
   live: LiveShowTiming | null;
@@ -222,7 +219,7 @@ export function RoleBar({
 
   const activeIndex = rows.findIndex((r) => r.id === activeRowId);
   const activeRow = activeIndex >= 0 ? rows[activeIndex]! : null;
-  const onAirRole = activeRow != null ? matchingRole(activeRow, myRoles, roleColumnKey) : null;
+  const onAirRole = activeRow != null ? matchingRole(activeRow, myRoles, roleColumnKeys) : null;
 
   if (onAirRole != null) {
     const over = live.remainingInRowSec != null && live.remainingInRowSec < 0;
@@ -247,7 +244,7 @@ export function RoleBar({
   for (let i = Math.max(0, activeIndex) + 1; i < rows.length; i++) {
     const row = rows[i]!;
     if (row.type === "group" || row.skipped) continue;
-    const role = matchingRole(row, myRoles, roleColumnKey);
+    const role = matchingRole(row, myRoles, roleColumnKeys);
     if (!role) continue;
     next = { row, startSec: timing.rows[i]!.startSec, role };
     break;
