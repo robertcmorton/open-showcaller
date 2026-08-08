@@ -353,6 +353,15 @@ export function classifyRows(grid: string[][], headerIndex: number, mapping: Col
  * them to matter. Drives wrapped-row merging AND the rundown's row numbering
  * (which mirrors the sheet — see `sourceNumber`).
  */
+/**
+ * An item number in the sheet's own numbering column. Real run sheets insert
+ * late additions as "129a"/"129b" rather than renumber the whole document, so
+ * a trailing letter still opens a row — treating those as unnumbered
+ * continuation lines merges them into the row above and drags their times
+ * with them, which scrambles the running order.
+ */
+const ITEM_NUMBER = /^\d{1,4}[a-z]?$/i;
+
 export function detectNumberColumn(grid: string[][], headerIndex: number): number | null {
   const dataRows = grid.slice(headerIndex + 1);
   if (dataRows.length === 0) return null;
@@ -366,7 +375,7 @@ export function detectNumberColumn(grid: string[][], headerIndex: number): numbe
       const v = (row[c] ?? "").trim();
       if (!v) continue;
       nonEmpty += 1;
-      if (/^\d+$/.test(v)) ints += 1;
+      if (ITEM_NUMBER.test(v)) ints += 1;
     }
     if (ints >= 5 && ints / Math.max(1, nonEmpty) >= 0.8 && ints > bestInts) {
       best = c;
@@ -422,11 +431,34 @@ export function mergeWrappedRows(
   const groupCol = detectNumberColumn(grid, headerIndex);
   if (groupCol == null) return grid;
 
+  // Page furniture: the title block, running heads, and footers a document
+  // repeats on every page. They carry no item number and no time, so they
+  // would otherwise be absorbed as continuation lines of whatever row happens
+  // to precede a page break — dragging a page's masthead into a cue title.
+  // Identified by repetition: the same text on three or more pages.
+  const pagesOfText = new Map<string, Set<number>>();
+  if (lineMeta) {
+    for (let i = headerIndex + 1; i < grid.length; i++) {
+      const row = grid[i]!;
+      const text = row.join("|").trim();
+      const page = lineMeta[i]?.page;
+      if (!text || page == null) continue;
+      const numbered = ITEM_NUMBER.test((row[groupCol] ?? "").trim());
+      const timed = row.some((v) => parseTimeLoose(v) != null || parseDurationLoose(v) != null);
+      if (numbered || timed) continue; // real content, however often it repeats
+      const seen = pagesOfText.get(text) ?? new Set<number>();
+      seen.add(page);
+      pagesOfText.set(text, seen);
+    }
+  }
+  const isFurniture = (i: number): boolean => (pagesOfText.get(grid[i]!.join("|").trim())?.size ?? 0) >= 3;
+
   // Data lines in order, page headers repeated by pagination dropped.
   const lineIdxs: number[] = [];
   for (let i = headerIndex + 1; i < grid.length; i++) {
     const row = grid[i]!;
     if (headerScore(row) >= 2 && row.join("|") === headerRow.join("|")) continue;
+    if (isFurniture(i)) continue;
     if (row.some((v) => v.trim())) lineIdxs.push(i);
   }
 
@@ -434,7 +466,7 @@ export function mergeWrappedRows(
   const itemOf = new Map<number, number>();
   const numbered: number[] = [];
   for (const i of lineIdxs) {
-    if (/^\d+$/.test((grid[i]![groupCol] ?? "").trim())) {
+    if (ITEM_NUMBER.test((grid[i]![groupCol] ?? "").trim())) {
       itemOf.set(i, numbered.length);
       numbered.push(i);
     }
@@ -476,6 +508,24 @@ export function mergeWrappedRows(
     return title;
   };
 
+  /**
+   * A line that carries its own clock time is a ROW of the sheet, not a
+   * wrapped continuation of the one above. Whole blocks go unnumbered on real
+   * sheets (everything before the first cue — call times, rehearsals, doors),
+   * and folding them into a neighbour swallows every one of their times and
+   * collapses the block into a single row hours long.
+   */
+  const hasOwnTime = (i: number): boolean => {
+    if (!mapping) return false;
+    for (let c = 0; c < (grid[i]?.length ?? 0); c++) {
+      const v = (grid[i]![c] ?? "").trim();
+      // Anything the author put in the time column counts, parseable or not:
+      // call-time rows are routinely written "TBC" and are still real rows.
+      if (v && mapping[c]?.kind === "start") return true;
+    }
+    return false;
+  };
+
   const itemLines: number[][] = numbered.map((i) => [i]);
   const soloBands = new Map<string, number[]>(); // banner rows, merged per band
   const standalone: number[] = []; // unattachable lines, kept as their own rows
@@ -500,12 +550,18 @@ export function mergeWrappedRows(
         soloBands.set(band, lines);
         continue;
       }
+      if (hasOwnTime(i)) {
+        standalone.push(i);
+        continue;
+      }
       const nextNum = numbered.find((n) => n > i);
       const target = prevNum != null ? itemOf.get(prevNum)! : nextNum != null ? itemOf.get(nextNum)! : null;
       if (target != null) itemLines[target]!.push(i);
       else standalone.push(i);
       continue;
     }
+    // Without ruled lines there is no way to tell a genuine row from a
+    // wrapped cell, so a time here still belongs to the item it follows.
     const nextNum = numbered.find((n) => n > i);
     let target: number | null = prevNum != null ? itemOf.get(prevNum)! : null;
     if (lineMeta && nextNum != null) {
@@ -628,7 +684,7 @@ export function planImport(
 
     rescue("start", (v) => parseTimeLoose(v) != null, 3);
     rescue("duration", (v) => parseDurationLoose(v) != null, 3);
-    rescue("title", undefined, 2);
+    rescue("title", undefined, 6);
   }
   const finalGrid = opts.mergeWrapped
     ? mergeWrappedRows(grid, headerIndex, opts.lineMeta, opts.rowLines, mapping)
@@ -640,7 +696,7 @@ export function planImport(
   if (numberCol != null) {
     for (const r of rows) {
       const value = (finalGrid[r.sourceIndex]?.[numberCol] ?? "").split("\n")[0]!.trim();
-      if (/^\d+$/.test(value)) r.sourceNumber = value;
+      if (ITEM_NUMBER.test(value)) r.sourceNumber = value;
     }
   }
   detectOutcomes(rows);

@@ -11,6 +11,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.15.0] — 2026-08-08
+
+### Fixed — run-sheet import fidelity
+Four import faults were found by re-reading a 25-page production sheet against its source and fixing what didn't match. On that sheet the imported rundown gained 20 rows it had previously swallowed, every row gained its title, and the timing check dropped from 13 items to 11 — with the remaining ones being genuine properties of the sheet rather than import damage.
+
+- **Rows that carry their own clock time are no longer folded into their neighbour.** Whole blocks go unnumbered on real sheets — everything before the first cue: call times, content checks, rehearsals, doors — and the importer treated each of those lines as wrapped text belonging to the row above. An entire afternoon of preparation collapsed into a single row hours long, which the timing check then reported as one enormous unexplained gap. Lines with their own time (including ones written "TBC") now stand as their own rows.
+- **Late-addition item numbers are respected.** Sheets insert additions as "129a" and "129b" rather than renumber the document; those rows were treated as continuation text and merged upward, dragging their times with them and scrambling the running order — which surfaced as several impossible gaps where the clock appeared to run backwards.
+- **Page furniture is dropped instead of being absorbed into cues.** The title block a document repeats on every page was merged into whichever cue happened to sit at a page break, putting the sheet's masthead inside a cue title. Text that repeats on three or more pages and carries no time or item number is now recognised as furniture.
+- **A wide, centred title column is matched to its content.** When a column's header is centred but its text is left-aligned, the two land in different bands; the search for the real content only looked two columns away, so sheets like this imported with every row untitled. The search now reaches across the full width of such a column.
+
 ## [0.14.2] — 2026-08-08
 
 ### Fixed
