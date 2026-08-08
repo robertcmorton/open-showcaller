@@ -11,6 +11,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.18.1] — 2026-08-08
+
+### Fixed
+- **Signing in as an administrator with an email and password could not open any run sheet.** Both live channels recognised only the literal admin token string, so an account carrying the administrator grant was turned away from the sheet and the show — while the rest of the app cheerfully treated the same sign-in as an administrator. Anyone using the pasted token never saw it; anyone signing in properly could not work at all. Administrator accounts now have administrator reach everywhere.
+- The show channel and the "who am I" answer now **name the administrator account** instead of a bare "Admin".
+
+### Changed
+- The access-control matrix covers administrator accounts on both live channels, not only over HTTP (72 checks) — the gap that let this through.
+
 ## [0.18.0] — 2026-08-08
 
 ### Added

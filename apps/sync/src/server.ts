@@ -76,6 +76,9 @@ async function resolveAuth(
     if (authMod.isOpenAccess()) return { role: "caller", label: "Caller" };
     // Company (showcaller) tokens call shows within their own company only.
     const bearer = await authMod.resolveBearer(dbHandle, auth.token);
+    // An account holding the admin grant is an admin here too — the check
+    // above only recognises the literal ADMIN_TOKEN string.
+    if (bearer?.kind === "admin") return { role: "admin", label: bearer.name ?? "Admin" };
     if (bearer?.kind === "company" && (await authMod.teamIdForRundown(dbHandle, rundownId)) === bearer.teamId)
       return { role: "caller", label: bearer.teamName };
     // User accounts: managers call, view-grants follow.

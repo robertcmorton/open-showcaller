@@ -242,7 +242,7 @@ export function createApiHandler(
           return true;
         }
         if (!ctx) json(res, 200, { role: null });
-        else if (ctx.kind === "admin") json(res, 200, { role: "admin" });
+        else if (ctx.kind === "admin") json(res, 200, { role: "admin", name: ctx.name });
         else if (ctx.kind === "company") json(res, 200, { role: "company", teamId: ctx.teamId, teamName: ctx.teamName });
         else if (ctx.kind === "user") {
           const row = await db.query.users.findFirst({ where: eq(schema.users.id, ctx.userId), columns: { email: true } });

@@ -71,6 +71,11 @@ export function createDocServer(handle: DbHandle): Hocuspocus {
       // deployment that is simply nobody, and saying so is the whole point.
       if (token && token !== "dev") {
         const bearer = await resolveBearer(handle, token);
+        // An account holding the admin grant is an admin everywhere. Only the
+        // literal ADMIN_TOKEN string was accepted above, so signing in with an
+        // admin ACCOUNT (email and password) was refused on this channel while
+        // the HTTP API happily treated the same session as an admin.
+        if (bearer?.kind === "admin") return;
         if (bearer?.kind === "company" && (await teamIdForRundown(handle, rundownId)) === bearer.teamId) return;
         if (bearer?.kind === "user") {
           const rundown = await handle.db.query.rundowns.findFirst({

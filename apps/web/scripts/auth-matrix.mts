@@ -134,6 +134,7 @@ const superUser = await mkUser("Matrix Super", [{ kind: "admin" }]);
 {
   const me = await req("/me", superUser.accessToken);
   check("admin-grant user: /me → admin", me.body?.role === "admin", me.body);
+  check("admin-grant user: /me names the account", me.body?.name === "Matrix Super", me.body);
   const ev = await req("/events", superUser.accessToken);
   check("admin-grant user: sees everything", (ev.body as any[]).some((e) => e.name === "Matrix Event B"));
 }
@@ -267,6 +268,19 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   check("doc: viewer on ungranted rundown → auth failed", conn.state.failed && !conn.state.authed, conn.state);
   check("doc: refusal names the cause (no access)", conn.state.reason === "no-access-for-this-account", conn.state.reason);
   conn.provider.destroy();
+}
+{
+  // An account holding the admin grant must work on the LIVE CHANNELS, not
+  // only over HTTP. Signing in as an admin account and being refused the sheet
+  // (while /me cheerfully answered "admin") is exactly the failure that sent a
+  // phone into an endless load; the raw ADMIN_TOKEN string had masked it.
+  const conn = docConnect(rdB.body.id, superUser.accessToken);
+  await sleep(1500);
+  check("doc: admin-grant account authenticates", conn.state.authed && !conn.state.failed, conn.state);
+  conn.provider.destroy();
+  const r = await showChannel(rdB.body.id, superUser.accessToken, false);
+  check("show: admin-grant account → admin role", r.welcome?.role === "admin", r.welcome);
+  check("show: admin-grant account named on the channel", r.welcome?.userLabel === "Matrix Super", r.welcome);
 }
 {
   // Each refusal must arrive with a reason the client can put on screen —
