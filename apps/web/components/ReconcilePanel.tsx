@@ -2,42 +2,10 @@
 
 import { useEffect, useState } from "react";
 import * as Y from "yjs";
-import { formatDuration, formatTimeOfDay, type PlanTiming } from "@opencall/core";
+import { findTimingGaps, formatDuration, formatTimeOfDay, type PlanTiming, type TimingGap } from "@opencall/core";
+
+export { findTimingGaps, type TimingGap };
 import type { ProjectedRow } from "@opencall/db/doc";
-
-export interface TimingGap {
-  /** Index of the anchored row that opens the segment. */
-  fromIndex: number;
-  /** Index of the anchored row whose start disagrees with the cascade. */
-  toIndex: number;
-  /** anchoredStart − expectedStart: positive = unexplained gap, negative = overlap. */
-  gapSec: number;
-}
-
-/**
- * Finds every place where an anchored start disagrees with the durations
- * above it — the classic imported-sheet problem where TIME and DURATION
- * columns don't add up.
- */
-export function findTimingGaps(rows: ProjectedRow[], timing: PlanTiming): TimingGap[] {
-  const gaps: TimingGap[] = [];
-  let lastAnchor = -1;
-  let expected: number | null = null;
-  rows.forEach((row, i) => {
-    const t = timing.rows[i]!;
-    if (row.hardStartSec != null) {
-      if (lastAnchor >= 0 && expected != null) {
-        const gap = row.hardStartSec - expected;
-        if (Math.abs(gap) >= 1) gaps.push({ fromIndex: lastAnchor, toIndex: i, gapSec: Math.round(gap) });
-      }
-      lastAnchor = i;
-      expected = row.hardStartSec + t.effectiveDurationSec;
-    } else if (expected != null) {
-      expected += t.effectiveDurationSec;
-    }
-  });
-  return gaps;
-}
 
 /**
  * Step-by-step reconciliation: for each mismatch the showcaller chooses —

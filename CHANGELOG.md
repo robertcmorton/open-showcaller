@@ -11,6 +11,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.21.0] — 2026-08-08
+
+### Fixed
+- **The timing check stopped calling correct sheets wrong.** A run sheet is not one unbroken chain: alongside the running order it carries rows that happen *at* a time rather than taking time in it — two things booked for the same moment, a deadline ("team sheets due"), a standing cue ("2 min bell"), a note that something elsewhere has finished. Read as links in the chain, each one appeared to open a gap and then close it again. One 25-page sheet reported 11 disagreements and had none: every chain reconciled exactly once those rows were allowed to sit alongside it. A row is only queried now after checking the obvious alternative — that skipping it lets the running order pick up precisely where it left off. Genuine disagreements are still reported.
+- **Two spellings of one person are no longer two people.** A cue column saying "cue DP" on some rows and "DP cue" on others produced two roles, neither of them a person; the word "cue" is the instruction, not part of a name. And a cell naming two people by their initials with only a space between them ("LC JM") read as one unknown role, so neither person's rows lit up for them. Names are left alone — a two-word name is still one person.
+
+### Changed
+- Timing-gap detection moved out of the reconcile screen into the shared core, where it can be tested. It now has tests, including that a real disagreement is still caught.
+
+
 ## [0.20.1] — 2026-08-08
 
 ### Fixed

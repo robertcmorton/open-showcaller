@@ -946,6 +946,30 @@ export interface DetectedRole {
  * sheet has its own role column (WHO, ROLE…) pass its key — roles come from
  * that column alone, with a lower repeat threshold since it IS the roster.
  */
+/**
+ * One WHO cell → the people it names.
+ *
+ * Two things get in the way of reading it straight. A cell often says what to
+ * DO with someone rather than naming them — "cue DP", "DP cue" — and treated
+ * literally those become two separate roles, neither of which is a person.
+ * And a cell naming two people by their initials separates them with nothing
+ * but a space ("LC JM"), so the pair reads as one unknown role and neither
+ * person's rows light up for them.
+ *
+ * Names are left alone: "Wayne Bennett" is one person, not two.
+ */
+export function roleTokens(cell: string): string[] {
+  let v = cell.trim();
+  if (!v) return [];
+  // "cue" is the verb, not part of anyone's name.
+  v = v.replace(/^cue\s+/i, "").replace(/\s+cue$/i, "").trim();
+  if (!v) return [];
+  const parts = v.split(/\s+/);
+  // Initials only — two or three capitals — split into one role each.
+  if (parts.length > 1 && parts.every((p) => /^[A-Z]{2,3}$/.test(p))) return parts;
+  return [v];
+}
+
 export function detectRoles(rows: ClassifiedRow[], max = 12, roleColumnKey?: string | null): DetectedRole[] {
   const counts = new Map<string, { name: string; count: number }>();
   const minCount = roleColumnKey ? 2 : 3;
@@ -958,7 +982,7 @@ export function detectRoles(rows: ClassifiedRow[], max = 12, roleColumnKey?: str
     for (const value of values) {
       // Multi-role cells are common ("VTR | LED", "GA, GFX") — each part is a role.
       for (const line of value.split(/\n|\s*[|,+]\s*|\s+&\s+|\s+and\s+/i)) {
-        const v = line.trim();
+        for (const v of roleTokens(line)) {
         if (!v || v.length > 24) continue;
         if (/^\d/.test(v)) continue; // numbering, times, "2 x wedges"…
         if (parseTimeLoose(v) != null || parseDurationLoose(v) != null) continue;
@@ -966,6 +990,7 @@ export function detectRoles(rows: ClassifiedRow[], max = 12, roleColumnKey?: str
         const entry = counts.get(key);
         if (entry) entry.count += 1;
         else counts.set(key, { name: v, count: 1 });
+        }
       }
     }
   }

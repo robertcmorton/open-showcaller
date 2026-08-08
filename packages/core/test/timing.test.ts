@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeTiming, parseDurationShorthand, formatTimeOfDay, type PlanRow } from "../src/index";
+import { computeTiming, findTimingGaps, parseDurationShorthand, formatTimeOfDay, type PlanRow } from "../src/index";
 
 const row = (id: string, patch: Partial<PlanRow> = {}): PlanRow => ({
   id,
@@ -124,5 +124,69 @@ describe("format helpers", () => {
     expect(parseTimeOfDay("21:05:10")).toBe(21 * 3600 + 310);
     expect(parseTimeOfDay("25:00")).toBeNull();
     expect(parseTimeOfDay("13pm")).toBeNull();
+  });
+});
+
+describe("findTimingGaps", () => {
+  const at = (h: number, m: number, s = 0) => h * 3600 + m * 60 + s;
+  const gapsOf = (rows: { hardStartSec: number | null; durationSec: number | null }[]) => {
+    const planRows: PlanRow[] = rows.map((r, i) => ({ ...r, id: `r${i}`, type: "cue" as const }));
+    return findTimingGaps(rows, computeTiming(planRows, rows[0]!.hardStartSec));
+  };
+
+  it("reports a real disagreement", () => {
+    // 10:00 + 10m should reach 10:10, but the next row is anchored at 10:30.
+    const gaps = gapsOf([
+      { hardStartSec: at(10, 0), durationSec: 600 },
+      { hardStartSec: at(10, 30), durationSec: 600 },
+    ]);
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0]!.gapSec).toBe(1200);
+  });
+
+  it("accepts two rows booked at the same moment", () => {
+    // A sheet routinely lists concurrent items: both start at 12:00, and the
+    // running order picks up at 12:15 as the first row's duration says.
+    expect(
+      gapsOf([
+        { hardStartSec: at(12, 0), durationSec: 900 },
+        { hardStartSec: at(12, 0), durationSec: null },
+        { hardStartSec: at(12, 15), durationSec: 2700 },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("accepts a deadline sitting inside a block", () => {
+    // "Team sheets due" happens DURING the half; the half still ends on time.
+    expect(
+      gapsOf([
+        { hardStartSec: at(18, 0), durationSec: 1500 },
+        { hardStartSec: at(18, 7), durationSec: 1800 },
+        { hardStartSec: at(18, 25), durationSec: null },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("accepts a run of markers alongside the order", () => {
+    // Two notes ("mini league concludes", "teams warm up") between a block
+    // that ends at 18:52:25 and the row that resumes at 18:52:25.
+    expect(
+      gapsOf([
+        { hardStartSec: at(18, 48, 25), durationSec: 240 },
+        { hardStartSec: at(18, 53), durationSec: null },
+        { hardStartSec: at(18, 55), durationSec: null },
+        { hardStartSec: at(18, 52, 25), durationSec: 30 },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("still reports a disagreement that no later row explains", () => {
+    expect(
+      gapsOf([
+        { hardStartSec: at(9, 0), durationSec: 600 },
+        { hardStartSec: at(9, 5), durationSec: 600 },
+        { hardStartSec: at(9, 40), durationSec: 600 },
+      ]).length,
+    ).toBeGreaterThan(0);
   });
 });
