@@ -73,6 +73,10 @@ async function sourceSide(): Promise<{ name: string; rows: BuiltRow[] }> {
     mergeWrapped: pdf,
     lineMeta: extracted.lineMeta,
     rowLines: extracted.rowLines,
+    // Without this the source side misses the script passages entirely and
+    // every one of them reads as a difference — the audit must run the same
+    // pipeline the import does, not most of it.
+    italicText: extracted.italicText,
   });
   return { name, rows: buildSheet(plan, { widths: extracted.widths }).rows };
 }
