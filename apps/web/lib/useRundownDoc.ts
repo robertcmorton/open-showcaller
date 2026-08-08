@@ -18,10 +18,15 @@ const DOC_WS_URL = resolveSyncUrl(process.env.NEXT_PUBLIC_DOC_WS_URL, "ws://loca
  * the hook refetches the epoch and, if it moved, reconnects with a FRESH
  * Y.Doc — pre-restore state can never merge back.
  */
-export function useRundownDoc(rundownId: string, joinCode?: string): { doc: Y.Doc; connected: boolean } {
+export function useRundownDoc(rundownId: string, joinCode?: string): { doc: Y.Doc; connected: boolean; synced: boolean } {
   const [epoch, setEpoch] = useState<number | null>(null);
   const [doc, setDoc] = useState(() => new Y.Doc());
   const [connected, setConnected] = useState(false);
+  // The socket opening is not the same as the CONTENT arriving: a long sheet
+  // over a phone connection takes a moment, and until it lands the document
+  // is legitimately empty. Surfaces use this to say "loading" rather than
+  // claiming the rundown has no rows.
+  const [synced, setSynced] = useState(false);
   const [, setTick] = useState(0);
 
   const fetchEpoch = (id: string): Promise<number> =>
@@ -44,6 +49,7 @@ export function useRundownDoc(rundownId: string, joinCode?: string): { doc: Y.Do
     if (epoch == null) return;
     const fresh = new Y.Doc();
     setDoc(fresh);
+    setSynced(false);
     const token = joinCode ?? localStorage.getItem("oc:admintoken") ?? "dev";
     const provider = new HocuspocusProvider({
       url: DOC_WS_URL,
@@ -51,6 +57,7 @@ export function useRundownDoc(rundownId: string, joinCode?: string): { doc: Y.Do
       document: fresh,
       token,
       onConnect: () => setConnected(true),
+      onSynced: () => setSynced(true),
       onDisconnect: () => setConnected(false),
       onAuthenticationFailed: () => {
         // Possibly a stale epoch after an in-place restore — follow it.
@@ -67,7 +74,7 @@ export function useRundownDoc(rundownId: string, joinCode?: string): { doc: Y.Do
     };
   }, [rundownId, joinCode, epoch]);
 
-  return { doc, connected };
+  return { doc, connected, synced };
 }
 
 /** Keeps the screen awake while the surface is visible (companion surfaces in show use). */

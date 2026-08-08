@@ -205,7 +205,7 @@ export function RundownEditor({
 }) {
   const isShow = mode === "show";
   const canEditContent = mode !== "view";
-  const { doc, connected } = useRundownDoc(rundownId, joinCode);
+  const { doc, connected, synced } = useRundownDoc(rundownId, joinCode);
   // The hook re-renders on every doc update, so projecting during render stays fresh.
   const { meta, keyTimes, roles, columns, rows } = projectRundownDoc(doc);
   const timing = computeTiming(rows, meta.plannedStartSec);
@@ -1605,12 +1605,26 @@ export function RundownEditor({
         />
       )}
 
-      {rows.length === 0 && (
-        <div className="empty">
-          <div className="glyph">◴</div>
-          <div>Empty rundown — add your first row above.</div>
-        </div>
-      )}
+      {rows.length === 0 &&
+        // Until the document has arrived it is legitimately empty — saying so
+        // would be a lie on a slow connection, and hides a real failure when
+        // the sheet never loads at all.
+        (synced ? (
+          <div className="empty">
+            <div className="glyph">◴</div>
+            <div>Empty rundown — add your first row above.</div>
+          </div>
+        ) : (
+          <div className="empty">
+            <div className="glyph">◴</div>
+            <div>{connected ? "Loading the run sheet…" : "Connecting to the server…"}</div>
+            <div style={{ color: "var(--text-3)", fontSize: "var(--fs-sm)", marginTop: 6 }}>
+              {connected
+                ? "This can take a moment on a phone connection."
+                : "Still trying — check this device is online and can reach the server."}
+            </div>
+          </div>
+        ))}
 
       <div className="print-only print-footer">
         <span>

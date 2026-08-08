@@ -210,6 +210,16 @@ a {
 /* ---------- Inputs ---------- */
 
 .input,
+/* Inputs carry an intrinsic minimum width (roughly 20 characters). Inside a
+   grid or flex panel that floor wins over `width: 100%` and pushes the page
+   wider than a phone screen — long placeholders overflow the whole layout. */
+input.input,
+input.inline-edit,
+select.input,
+textarea.input {
+  min-width: 0;
+}
+
 input.inline-edit,
 select.input,
 textarea.input {

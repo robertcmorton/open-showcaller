@@ -115,9 +115,11 @@ export default function Landing() {
           <input
             className="input mono"
             autoFocus
-            placeholder="Join code (e.g. 3YD8PJ) or access token"
+            size={1}
+            placeholder="Join code or access token"
             style={{
               width: "100%",
+              minWidth: 0,
               fontSize: "1.05rem",
               letterSpacing: looksLikeAccessToken(code.trim()) ? "0.02em" : "0.15em",
               textTransform: looksLikeAccessToken(code.trim()) ? "none" : "uppercase",

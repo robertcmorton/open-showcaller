@@ -11,6 +11,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.14.2] — 2026-08-08
+
+### Fixed
+- **A run sheet that is still loading no longer claims to be empty.** Opening a rundown showed "Untitled Rundown — Empty rundown, add your first row above" while the document was still arriving, which on a phone connection (or whenever the document channel can't connect at all) looked exactly like a broken or blank sheet. It now says **"Loading the run sheet…"** while the content is on its way, and **"Connecting to the server…"** with what to check when the connection is the problem. The genuine empty-rundown message only appears once the document has actually loaded.
+- **The sign-in page no longer overflows a phone screen.** Text input fields carry a built-in minimum width that beat the layout, pushing the page sideways and cutting off the heading and help text; every form field can now shrink to its container.
+
 ## [0.14.1] — 2026-08-08
 
 ### Fixed
