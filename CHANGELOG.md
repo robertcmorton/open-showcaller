@@ -11,6 +11,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.18.0] — 2026-08-08
+
+### Added
+- **A screen that is refused now says why, and what to do about it.** Instead of loading forever, it names the fault in plain words — not signed in on this device, sign-in expired, this account has no access to this event, the sheet was restored, the sheet no longer exists — together with whose sign-in was used and the one action that fixes it. Sign-in links carry the sheet address, so signing in returns straight to it rather than to the dashboard.
+- The server now sends a **reason with every refused document connection**. Previously the reason was discarded on the way out and every failure looked identical from the browser, which made a stranded phone impossible to diagnose from a screenshot.
+- The diagnostics strip reports the **account a credential belongs to**, and appears immediately on a refusal rather than after the usual wait.
+- `PGLITE_DIR` points a sync instance at its own embedded database, so a locked test instance can run alongside a dev server.
+
+### Fixed
+- **A refused sheet no longer retries forever.** The connection was reconnecting indefinitely against a refusal that could never succeed, putting a steady stream of requests on the server from a screen that was going nowhere.
+- The diagnostics strip no longer **covers the message underneath it** — the page now keeps clear of the strip's height, which on a phone had hidden the explanation and its sign-in button entirely.
+
+### Changed
+- The access-control matrix now checks the **refusal reason** on each rejected document connection (68 checks). Its fixtures name the second company explicitly: an event created without one falls back to the first company on record, which on an empty database silently made the scoping checks test nothing.
+
 ## [0.17.0] — 2026-08-08
 
 ### Added

@@ -31,6 +31,69 @@ export interface DocStatus {
   /** Kind of credential sent — never the credential itself. */
   tokenKind: string;
   lastError: string | null;
+  /**
+   * Set once the server has refused for good. While this is null the screen is
+   * still legitimately loading; once it is set, waiting will never help and the
+   * surface must say what is wrong instead of spinning forever.
+   */
+  blocked: DocBlock | null;
+}
+
+/** A refusal the server explained, resolved against who the credential turned out to be. */
+export interface DocBlock {
+  reason: string;
+  /** Plain words for whoever is holding the device. */
+  title: string;
+  detail: string;
+  /** The fix that will actually work: sign in again, or ask for access. */
+  action: "sign-in" | "reload" | "ask-for-access" | "none";
+  /** Who the server says the credential belongs to — the missing half of the diagnosis. */
+  identity: string | null;
+}
+
+/** Maps a server refusal onto something worth reading on a phone at a venue. */
+function describeRefusal(reason: string, identity: string | null, signedIn: boolean): DocBlock {
+  const known: Record<string, { title: string; detail: string; action: DocBlock["action"] }> = {
+    "no-such-rundown": {
+      title: "This run sheet no longer exists",
+      detail: "It was deleted, or this link points at a different server.",
+      action: "none",
+    },
+    "sheet-restored-reload": {
+      title: "This run sheet was restored from a snapshot",
+      detail: "Reload to pick up the restored version.",
+      action: "reload",
+    },
+    "not-signed-in": {
+      title: "You are not signed in on this device",
+      detail: "Signing in on a computer does not sign in this phone or tablet — each device needs its own sign-in.",
+      action: "sign-in",
+    },
+    "signin-not-recognised": {
+      title: "This device's sign-in has expired",
+      detail: "The saved sign-in is no longer valid — it expired, or was revoked. Signing in again fixes it.",
+      action: "sign-in",
+    },
+    "no-access-for-this-account": {
+      title: "This account cannot open this run sheet",
+      detail: "The sign-in works, but it has not been given access to this event. Ask for access, or open the sheet with a join code.",
+      action: "ask-for-access",
+    },
+  };
+  // With no credential at all there is no identity worth reporting — saying
+  // "not recognised" implies a sign-in that failed, which is a different story.
+  const shown = reason === "not-signed-in" ? null : identity;
+  const hit = known[reason];
+  if (hit) return { reason, identity: shown, ...hit };
+  // An unknown refusal still beats an endless spinner: name it and let the
+  // screenshot carry the exact string back.
+  return {
+    reason,
+    identity,
+    title: "The server refused this connection",
+    detail: `Reason: ${reason}.`,
+    action: signedIn ? "ask-for-access" : "sign-in",
+  };
 }
 
 export function useRundownDoc(
@@ -50,6 +113,7 @@ export function useRundownDoc(
   const [attempts, setAttempts] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
   const [tokenKind, setTokenKind] = useState("none");
+  const [blocked, setBlocked] = useState<DocBlock | null>(null);
   const [, setTick] = useState(0);
 
   const fetchEpoch = (id: string): Promise<number> =>
@@ -78,9 +142,11 @@ export function useRundownDoc(
 
   useEffect(() => {
     if (epoch == null) return;
+    let cancelled = false;
     const fresh = new Y.Doc();
     setDoc(fresh);
     setSynced(false);
+    setBlocked(null);
     const stored = localStorage.getItem("oc:admintoken");
     const token = joinCode ?? stored ?? "dev";
     // Only ever record the KIND of credential — a screenshot must never carry
@@ -100,6 +166,7 @@ export function useRundownDoc(
     );
     setPhase("connecting");
     setAttempts((n) => n + 1);
+    let concluded = false;
     const provider = new HocuspocusProvider({
       url: DOC_WS_URL,
       name: `${rundownId}@${epoch}`,
@@ -126,15 +193,53 @@ export function useRundownDoc(
         setAuthFailed(true);
         setPhase("authentication refused");
         setLastError(`auth refused${reason ? `: ${reason}` : ""}`);
-        // Possibly a stale epoch after an in-place restore — follow it.
-        void fetchEpoch(rundownId).then((current) => {
-          if (current !== epoch) setEpoch(current);
+        // The provider retries forever. Diagnosing the same refusal on every
+        // attempt would put a steady stream of requests on the server from a
+        // screen that is going nowhere, so conclude it once.
+        if (concluded) return;
+        concluded = true;
+        // Possibly a stale epoch after an in-place restore — follow it. If the
+        // epoch has NOT moved the refusal is final: this used to fall through
+        // to nothing at all, leaving the screen loading forever with no hint of
+        // why, which is exactly the failure a crew member cannot report.
+        void fetchEpoch(rundownId).then(async (current) => {
+          if (cancelled) return;
+          if (current !== epoch) {
+            concluded = false; // a moved epoch is a fresh start, not a refusal
+            setEpoch(current);
+            return;
+          }
+          // Nothing about this will change by asking again: stop reconnecting
+          // so the device isn't retrying a hopeless socket for the rest of the
+          // show. "Try again" and sign-in both reload the page.
+          provider.disconnect();
+          // Ask the server who this credential belongs to. That single answer
+          // separates "your sign-in died" from "your account lacks access" —
+          // the two causes look identical from inside the socket.
+          let identity: string | null = null;
+          let signedIn = false;
+          try {
+            const res = await fetch(`${API_URL}/me`, { headers: { authorization: `Bearer ${token}` } });
+            if (res.ok) {
+              const me = (await res.json()) as { role?: string | null; name?: string; teamName?: string };
+              if (me.role) {
+                signedIn = true;
+                identity = me.name ?? me.teamName ?? me.role;
+              } else {
+                identity = "not recognised by the server";
+              }
+            }
+          } catch {
+            identity = null;
+          }
+          if (!cancelled) setBlocked(describeRefusal(reason ?? "permission-denied", identity, signedIn));
         });
       },
     });
     const bump = () => setTick((n) => n + 1);
     fresh.on("update", bump);
     return () => {
+      cancelled = true;
       fresh.off("update", bump);
       provider.destroy();
     };
@@ -144,7 +249,7 @@ export function useRundownDoc(
     doc,
     connected,
     synced,
-    status: { connected, synced, phase, authFailed, attempts, epoch, url: DOC_WS_URL, tokenKind, lastError },
+    status: { connected, synced, phase, authFailed, attempts, epoch, url: DOC_WS_URL, tokenKind, lastError, blocked },
   };
 }
 

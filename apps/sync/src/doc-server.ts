@@ -29,6 +29,27 @@ export function parseDocName(name: string): { rundownId: string; epoch: number }
  * a READ-ONLY connection; caller/editor codes may write. Guests never reach
  * this channel at all (they get the filtered HTTP projection).
  */
+/**
+ * Refuses a document connection with a reason the client can SHOW someone.
+ *
+ * Hocuspocus forwards `error.reason` to the browser verbatim and falls back to
+ * the useless string "permission-denied" when it is absent — so a plain thrown
+ * message never reaches the person staring at a screen that will not load.
+ * These strings are read off phones in venues: they name the fault, never a
+ * credential, and are safe to show to whoever is holding the device.
+ */
+const refuse = (reason: DocRefusal): never => {
+  throw Object.assign(new Error(reason), { reason });
+};
+
+/** Why a document connection was refused. The client maps these to plain words. */
+export type DocRefusal =
+  | "no-such-rundown"
+  | "sheet-restored-reload"
+  | "not-signed-in"
+  | "signin-not-recognised"
+  | "no-access-for-this-account";
+
 export function createDocServer(handle: DbHandle): Hocuspocus {
   const currentEpoch = async (rundownId: string): Promise<number | null> => {
     const row = await handle.db.query.rundowns.findFirst({
@@ -42,10 +63,13 @@ export function createDocServer(handle: DbHandle): Hocuspocus {
     async onAuthenticate({ documentName, token, connection }) {
       const { rundownId, epoch } = parseDocName(documentName);
       const liveEpoch = await currentEpoch(rundownId);
-      if (liveEpoch == null || epoch !== liveEpoch) throw new Error("stale doc epoch — reload");
+      if (liveEpoch == null) refuse("no-such-rundown");
+      if (epoch !== liveEpoch) refuse("sheet-restored-reload");
       if (isOpenAccess()) return; // dev-open deployment
       if (token && token === adminToken()) return;
-      if (token) {
+      // "dev" is what a client with no stored credential sends; on a locked
+      // deployment that is simply nobody, and saying so is the whole point.
+      if (token && token !== "dev") {
         const bearer = await resolveBearer(handle, token);
         if (bearer?.kind === "company" && (await teamIdForRundown(handle, rundownId)) === bearer.teamId) return;
         if (bearer?.kind === "user") {
@@ -70,8 +94,12 @@ export function createDocServer(handle: DbHandle): Hocuspocus {
           if (resolved.role === "follower") connection.readOnly = true;
           return;
         }
+        // A credential that resolves to somebody but carries no grant for this
+        // sheet is a different problem from one the server does not know at
+        // all — the first needs access, the second needs a fresh sign-in.
+        refuse(bearer ? "no-access-for-this-account" : "signin-not-recognised");
       }
-      throw new Error("doc auth failed");
+      refuse("not-signed-in");
     },
     async onLoadDocument({ documentName, document }) {
       const { rundownId } = parseDocName(documentName);

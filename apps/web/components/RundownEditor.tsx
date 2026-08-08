@@ -30,6 +30,7 @@ import { RoleBar, RolePicker, highlightRoles, matchingRole } from "./RoleBar";
 import { RichCellText } from "./RichCellText";
 import { useColWidths } from "../lib/useColWidths";
 import { DiagnosticsBar } from "./DiagnosticsBar";
+import { DocBlockedPanel } from "./DocBlockedPanel";
 import { useShowChannel } from "../lib/showChannel";
 import { useLiveTiming } from "../lib/useLiveTiming";
 import { useRundownDoc } from "../lib/useRundownDoc";
@@ -1066,7 +1067,9 @@ export function RundownEditor({
 
   return (
     <WithSideNav title={meta.name} settings={settings}>
-    <div className="show-page" style={{ padding: "0.6rem 1.5rem 1.25rem" }}>
+    {/* --diag-h is published by the diagnostics bar (fixed to the bottom) so
+        the page never hides its own failure message behind it. */}
+    <div className="show-page" style={{ padding: "0.6rem 1.5rem calc(1.25rem + var(--diag-h, 0px))" }}>
       <div className="show-topbar no-print">
       <header className="topbar-head">
         <div className="topbar-left">
@@ -1780,8 +1783,11 @@ export function RundownEditor({
       {rows.length === 0 &&
         // Until the document has arrived it is legitimately empty — saying so
         // would be a lie on a slow connection, and hides a real failure when
-        // the sheet never loads at all.
-        (synced ? (
+        // the sheet never loads at all. A refusal, though, is final: waiting
+        // will never help, so say what is wrong and what to do about it.
+        (docStatus.blocked ? (
+          <DocBlockedPanel block={docStatus.blocked} rundownPath={`/${mode}/${rundownId}`} />
+        ) : synced ? (
           <div className="empty">
             <div className="glyph">◴</div>
             <div>Empty rundown — add your first row above.</div>

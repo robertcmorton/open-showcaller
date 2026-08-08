@@ -1,11 +1,13 @@
 /**
- * Locked-server access-control matrix: 33 checks across the HTTP API (event
+ * Locked-server access-control matrix: 68 checks across the HTTP API (event
  * scoping per credential), the show channel (caller vs follower roles), and
- * the doc channel (read-only enforcement for view grants). Run it before
- * releases that touch auth.
+ * the doc channel (read-only enforcement for view grants, and the refusal
+ * REASON each rejection carries back). Run it before releases that touch auth.
  *
- * Usage (from repo root, with no other sync instance using .pglite):
- *   cd apps/sync && ADMIN_TOKEN=oc_test_admin ALLOW_DEV_JOIN=0 SYNC_PORT=8899 npx tsx src/server.ts &
+ * Usage (from repo root). PGLITE_DIR gives the test instance its own database,
+ * so the dev server can keep running on the repo's .pglite:
+ *   cd apps/sync && PGLITE_DIR=/tmp/matrix.pglite ADMIN_TOKEN=oc_test_admin \
+ *     ALLOW_DEV_JOIN=0 SYNC_PORT=8899 npx tsx src/server.ts &
  *   cd apps/web  && ../sync/node_modules/.bin/tsx scripts/auth-matrix.mts
  *
  * Creates its own fixtures (companies/events/users prefixed "Matrix") and
@@ -43,7 +45,13 @@ const req = async (path: string, token: string | null, init: RequestInit = {}) =
 const company = await req("/companies", ADMIN, { method: "POST", body: JSON.stringify({ name: "Matrix Test Co" }) });
 const companyToken: string = company.body.companyToken;
 const eventA = await req("/events", ADMIN, { method: "POST", body: JSON.stringify({ name: "Matrix Event A", teamId: company.body.id }) });
-const eventB = await req("/events", ADMIN, { method: "POST", body: JSON.stringify({ name: "Matrix Event B" }) });
+// Event B must sit in a DIFFERENT company — that is the whole point of the
+// scoping checks. Naming its company explicitly matters: an event created with
+// no teamId falls back to the first team in the table, which on an empty
+// database is Matrix Test Co, and the scoping checks would then be testing
+// nothing while appearing to pass.
+const otherCompany = await req("/companies", ADMIN, { method: "POST", body: JSON.stringify({ name: "Matrix Other Co" }) });
+const eventB = await req("/events", ADMIN, { method: "POST", body: JSON.stringify({ name: "Matrix Event B", teamId: otherCompany.body.id }) });
 const rdA = await req("/rundowns", ADMIN, { method: "POST", body: JSON.stringify({ eventId: eventA.body.id, name: "Matrix RD A" }) });
 const rdB = await req("/rundowns", ADMIN, { method: "POST", body: JSON.stringify({ eventId: eventB.body.id, name: "Matrix RD B" }) });
 
@@ -212,14 +220,19 @@ const showChannel = (rundownId: string, token: string, sendCmd: boolean): Promis
 // ── Doc channel ───────────────────────────────────────────────────────────────
 const docConnect = (rundownId: string, token: string) => {
   const doc = new Y.Doc();
-  const state = { authed: false, failed: false };
+  // The REASON matters as much as the refusal: it is what a stranded phone
+  // shows its holder, so a wrong or missing one is a real defect.
+  const state = { authed: false, failed: false, reason: null as string | null };
   const provider = new HocuspocusProvider({
     url: `${WS}/doc`,
     name: rundownId,
     document: doc,
     token,
     onAuthenticated: () => (state.authed = true),
-    onAuthenticationFailed: () => (state.failed = true),
+    onAuthenticationFailed: ({ reason }: { reason?: string }) => {
+      state.failed = true;
+      state.reason = reason ?? null;
+    },
   });
   return { doc, provider, state };
 };
@@ -252,7 +265,24 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const conn = docConnect(rdB.body.id, viewer.accessToken);
   await sleep(1500);
   check("doc: viewer on ungranted rundown → auth failed", conn.state.failed && !conn.state.authed, conn.state);
+  check("doc: refusal names the cause (no access)", conn.state.reason === "no-access-for-this-account", conn.state.reason);
   conn.provider.destroy();
+}
+{
+  // Each refusal must arrive with a reason the client can put on screen —
+  // a bare "permission-denied" leaves a stranded device with nothing to act on.
+  const cases: [string, string, string, string][] = [
+    ["unknown credential", rdA.body.id, "usr_not_a_real_token", "signin-not-recognised"],
+    ["no credential at all", rdA.body.id, "dev", "not-signed-in"],
+    ["missing rundown", "01ZZZZZZZZZZZZZZZZZZZZZZZZ", ADMIN, "no-such-rundown"],
+    ["stale doc epoch", `${rdA.body.id}@9`, ADMIN, "sheet-restored-reload"],
+  ];
+  for (const [label, name, token, expected] of cases) {
+    const conn = docConnect(name, token);
+    await sleep(1200);
+    check(`doc: ${label} → "${expected}"`, conn.state.failed && conn.state.reason === expected, conn.state);
+    conn.provider.destroy();
+  }
 }
 
 // ── Accounts: password login & sessions ───────────────────────────────────────
@@ -372,6 +402,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 for (const u of [viewer, eventMgr, companyMgr, superUser]) await req(`/users/${u.id}`, ADMIN, { method: "DELETE" });
 await req(`/events/${eventB.body.id}`, ADMIN, { method: "DELETE" });
 await req(`/companies/${company.body.id}`, ADMIN, { method: "DELETE" });
+await req(`/companies/${otherCompany.body.id}`, ADMIN, { method: "DELETE" });
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

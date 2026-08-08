@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DocStatus } from "../lib/useRundownDoc";
 
 const VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "dev";
@@ -29,6 +29,7 @@ export function DiagnosticsBar({
   const [stuck, setStuck] = useState(false);
   const [online, setOnline] = useState(true);
   const [copied, setCopied] = useState(false);
+  const barRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setForced(new URLSearchParams(window.location.search).get("diag") === "1");
@@ -52,7 +53,30 @@ export function DiagnosticsBar({
     return () => window.clearTimeout(t);
   }, [doc.synced, doc.attempts]);
 
-  if (!forced && (doc.synced || !stuck)) return null;
+  // A refusal needs no waiting period — it is already final.
+  const visible = forced || !!doc.blocked || (!doc.synced && stuck);
+
+  // The bar is fixed to the bottom, so it would sit ON TOP of whatever the
+  // screen is trying to say — including the message explaining the failure and
+  // its sign-in button. Publishing its height lets the page keep clear of it.
+  useEffect(() => {
+    const root = document.documentElement;
+    const el = barRef.current;
+    if (!el) {
+      root.style.removeProperty("--diag-h");
+      return;
+    }
+    const measure = () => root.style.setProperty("--diag-h", `${Math.ceil(el.getBoundingClientRect().height)}px`);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty("--diag-h");
+    };
+  }, [visible]);
+
+  if (!visible) return null;
 
   const lines = [
     `OpenCall ${VERSION} · ${BUILD}`,
@@ -60,11 +84,12 @@ export function DiagnosticsBar({
     `content: ${doc.phase}${doc.attempts > 1 ? ` · try ${doc.attempts}` : ""}`,
     `show channel: ${show.connected ? `connected as ${show.role ?? "?"}` : "not connected"} · device ${online ? "online" : "OFFLINE"}`,
     `server: ${doc.url}`,
+    doc.blocked?.identity ? `account: ${doc.blocked.identity}` : null,
     doc.lastError ? `last error: ${doc.lastError}` : null,
   ].filter(Boolean) as string[];
 
   return (
-    <div className="diag-bar no-print">
+    <div className="diag-bar no-print" ref={barRef}>
       <div className="diag-lines">
         {lines.map((l) => (
           <div key={l}>{l}</div>

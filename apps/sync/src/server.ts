@@ -26,7 +26,12 @@ const HELLO_TIMEOUT_MS = 5000;
 const HEARTBEAT_MS = 15000;
 
 // PGlite lives at the repo root so seed + sync share one database in dev.
-const dbHandle = await createDb(process.env.DATABASE_URL, fileURLToPath(new URL("../../../.pglite", import.meta.url)));
+// PGLITE_DIR points a second instance at its own database — one directory can
+// only be opened by one process, so test instances (the auth matrix) need it.
+const dbHandle = await createDb(
+  process.env.DATABASE_URL,
+  process.env.PGLITE_DIR || fileURLToPath(new URL("../../../.pglite", import.meta.url)),
+);
 // Fresh databases self-initialize (idempotent DDL).
 await ensureSchema(dbHandle.db);
 

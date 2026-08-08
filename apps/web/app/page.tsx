@@ -1,11 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, getAdminToken, setAdminToken } from "../lib/api";
 
 const ROUTE_BY_ROLE = { caller: "show", editor: "edit", follower: "view" } as const;
+
+/**
+ * A screen that refused a connection sends people here with `?next=` so they
+ * land back where they were trying to go. Only same-site paths are honoured —
+ * `//host` would leave the site entirely, so it is rejected.
+ */
+const safeNext = (value: string | null): string | null =>
+  value && value.startsWith("/") && !value.startsWith("//") ? value : null;
 
 /** Personal/company/admin access tokens are pasted here too — they start with a known prefix. */
 const looksLikeAccessToken = (v: string): boolean => /^(usr_|co_|oc_)/i.test(v);
@@ -25,6 +33,13 @@ export default function Landing() {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginBusy, setLoginBusy] = useState(false);
+  const [next, setNext] = useState<string | null>(null);
+
+  // Read after mount: this page prerenders, and reading the query string during
+  // render would disagree with the server-rendered HTML.
+  useEffect(() => {
+    setNext(safeNext(new URLSearchParams(window.location.search).get("next")));
+  }, []);
 
   const submitLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +50,7 @@ export default function Landing() {
       .login(email.trim(), password)
       .then(({ token }) => {
         setAdminToken(token);
-        router.push("/admin");
+        router.push(next ?? "/admin");
       })
       .catch((err) => {
         setLoginError(
@@ -68,7 +83,7 @@ export default function Landing() {
             setBusy(false);
             return;
           }
-          router.push("/admin");
+          router.push(next ?? "/admin");
         })
         .catch(() => {
           setAdminToken(previous);
