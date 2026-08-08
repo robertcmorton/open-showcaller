@@ -373,10 +373,15 @@ export function ImportPanel({
     // The sheet's own first time becomes the planned start.
     const firstStart = importable.find((r) => r.startSec != null)?.startSec ?? null;
     // The structural columns keep the sheet's own header names (ACTIVITY, TIME…).
+    // Several bands can map to one structural target (a centred header and the
+    // data beneath it); the NAMED one is the sheet's own heading.
     const headerFor = (kind: "title" | "start" | "duration"): string | undefined => {
-      const i = mapping.findIndex((t) => t.kind === kind);
-      const h = i >= 0 ? headers[i]?.trim() : undefined;
-      return h || undefined;
+      for (let i = 0; i < mapping.length; i++) {
+        if (mapping[i]?.kind !== kind) continue;
+        const h = headers[i]?.trim();
+        if (h) return h;
+      }
+      return undefined;
     };
     // …and their exact left-to-right POSITIONS: the grid renders this order,
     // so a sheet with TIME before ACTIVITY looks the same on screen.

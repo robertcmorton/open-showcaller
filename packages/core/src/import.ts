@@ -685,6 +685,41 @@ export function planImport(
     rescue("start", (v) => parseTimeLoose(v) != null, 3);
     rescue("duration", (v) => parseDurationLoose(v) != null, 3);
     rescue("title", undefined, 6);
+
+    // The same band mismatch hits NAMED department columns: a centred ACTION
+    // or NOTES header sits in one band while its left-aligned text sits in
+    // another, so the sheet's own column imports empty next to an anonymous
+    // "Column 7" holding the real content. Give that content the sheet's name
+    // and drop the empty shell, so a rundown carries the sheet's headings over
+    // the sheet's data.
+    // The test is RELATIVE, not a fixed share of the sheet: notes and other
+    // optional columns are legitimately sparse (a couple of dozen rows out of
+    // hundreds), so a neighbour only needs to hold clearly more than the
+    // named column to be recognised as that column's real content.
+    const adopted = new Set<number>();
+    mapping.forEach((t, i) => {
+      if (t.kind !== "department" || t.key.startsWith("column-")) return;
+      const named = coverage(i);
+      if (named / dataRows.length >= 0.15) return; // the named column has its data
+      let best = -1;
+      let bestCoverage = 0;
+      for (let distance = 1; distance <= 6 && best < 0; distance++) {
+        for (const j of [i - distance, i + distance]) {
+          const candidate = mapping[j];
+          if (!candidate || candidate.kind !== "department" || !candidate.key.startsWith("column-")) continue;
+          if (adopted.has(j) || claimed.has(j)) continue;
+          const c = coverage(j);
+          if (c > bestCoverage) {
+            bestCoverage = c;
+            best = j;
+          }
+        }
+      }
+      if (best < 0 || bestCoverage < 3 || bestCoverage < named * 3 + 1) return;
+      mapping[best] = { kind: "department", key: t.key, title: t.title };
+      mapping[i] = { kind: "skip" };
+      adopted.add(best);
+    });
   }
   const finalGrid = opts.mergeWrapped
     ? mergeWrappedRows(grid, headerIndex, opts.lineMeta, opts.rowLines, mapping)

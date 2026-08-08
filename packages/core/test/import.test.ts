@@ -395,3 +395,27 @@ describe("detectOutcomes", () => {
     expect(rows.every((r) => !r.outcome)).toBe(true);
   });
 });
+
+describe("centred department headers", () => {
+  it("gives an anonymous data band the sheet's own column name", () => {
+    // A NOTES header sits in its own band while the note text lands one band
+    // to the left — the PDF layout case that imports "Column 7" beside an
+    // empty "NOTES".
+    const grid: string[][] = [
+      ["ITEM", "TIME", "ACTION", "", "NOTES"],
+      ...Array.from({ length: 20 }, (_, i) => [
+        String(i + 1),
+        `1${String(i).padStart(2, "0")}0`,
+        `Cue ${i + 1}`,
+        i % 3 === 0 ? `note ${i}` : "",
+        "",
+      ]),
+    ];
+    const { mapping } = planImport(grid);
+    const notes = mapping
+      .map((t, i) => ({ t, i }))
+      .filter((x) => x.t.kind === "department" && (x.t as { title: string }).title === "NOTES");
+    expect(notes.length).toBe(1);
+    expect(notes[0]!.i).toBe(3); // the band holding the notes, not the empty header band
+  });
+});

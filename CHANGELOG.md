@@ -11,6 +11,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.15.1] — 2026-08-08
+
+### Fixed
+- **A column's data now imports under the sheet's own heading.** Where a heading is centred over left-aligned text, the two land in different bands, so the sheet's named column arrived empty beside an anonymous "Column 7" holding the real content. A named column that came up empty now adopts the neighbouring band that holds its data — judged by relative fullness, since notes and similar columns are legitimately sparse.
+- The title column keeps the sheet's own heading (ACTION, ACTIVITY…) rather than falling back to a generic label when several bands feed it.
+
 ## [0.15.0] — 2026-08-08
 
 ### Fixed — run-sheet import fidelity
