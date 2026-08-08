@@ -11,6 +11,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.14.1] — 2026-08-08
+
+### Fixed
+- Double-tapping a cell to edit it works again on tablets — the zoom lock was also cancelling the tap that opens the editor. Pinch zoom is still refused; double-tap zoom is handled without touching the tap itself.
+
 ## [0.14.0] — 2026-08-08
 
 ### Fixed
