@@ -11,6 +11,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.16.0] — 2026-08-08
+
+### Added
+- **Timing nudges on every row** — `−30 −15 −5 · CUE · +5 +15 +30`, in seconds, for pulling a show back on time without typing into cells. Hovering a row reveals them at the right edge, clear of the cue text; they appear instantly, since this is a live control. Available to anyone who can run or edit the show — never on read-only views.
+  - **CUE** means "this item is happening now": the row is pinned to the clock and everything below it re-times by the same amount. It re-times the sheet only — it does not move the show's live position.
+  - **+ / −** change that item's duration, and **the live cue is the anchor**: time is absorbed on the far side of the edit, so whatever is on air never moves. Edit an item *after* the live cue and later items shift; edit one *before* it and the item's end is held while it and the items above it shift instead — the "kick-off can't move, claw the time back earlier" case.
+  - Each press is a single undo step and syncs to every screen, exactly like a typed edit. A muted or skipped row changes its own duration without moving anything else, and no duration is ever pushed below zero.
+  - **On tablets and phones**, which have no hover, the same controls dock along the bottom of the screen and act on the selected row — or the live cue when nothing is selected — sitting clear of the role bar.
+
 ## [0.15.1] — 2026-08-08
 
 ### Fixed

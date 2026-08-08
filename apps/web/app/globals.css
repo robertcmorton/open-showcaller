@@ -1378,6 +1378,104 @@ kbd {
   min-width: 680px;
 }
 
+/* ---------- Timing nudges (row-level ± seconds and CUE) ---------- */
+
+.timing-nudge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border-radius: var(--r-md);
+  background: var(--overlay);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-overlay);
+}
+.timing-nudge .tn-btn {
+  min-width: 34px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--raised);
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  /* Deliberately quick: this is a live-show control. */
+  transition: background 60ms var(--ease), color 60ms var(--ease), border-color 60ms var(--ease);
+}
+.timing-nudge .tn-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text);
+}
+.timing-nudge .tn-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.timing-nudge .tn-cue {
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--accent-text);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.timing-nudge .tn-cue:hover:not(:disabled) {
+  background: var(--accent);
+  color: #0b1220;
+}
+
+/* Pointer devices: rides the right edge of the hovered row, never covering
+   the cue text. Appears immediately — no fade-in to wait through. */
+.timing-nudge-hover {
+  position: absolute;
+  right: 10px;
+  z-index: 7;
+  margin-top: 2px;
+  animation: none;
+}
+@media (hover: none) {
+  .timing-nudge-hover {
+    display: none;
+  }
+}
+
+/* Touch devices have no hover, so the nudges dock above the role bar. */
+.timing-nudge-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 64;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--overlay);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.4);
+}
+.timing-nudge-dock .tn-target {
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  max-width: 38vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (hover: none) {
+  .timing-nudge-dock {
+    display: flex;
+  }
+}
+@media print {
+  .timing-nudge-hover,
+  .timing-nudge-dock {
+    display: none !important;
+  }
+}
+
 /* Spreadsheet-style headers: click a label to rename, drag it to move the
    column; the drop target shows an accent edge. */
 .col-label {

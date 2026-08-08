@@ -78,6 +78,7 @@ function SortableRow({
     <tr
       ref={setNodeRef}
       className={`${row.type === "group" ? "group-row" : ""} ${row.type === "milestone" ? "milestone-row" : ""} ${selected ? "selected" : ""} ${active ? "active-row" : ""} ${next ? "next-row" : ""} ${walk ? "walk-row" : ""} ${gapMark ? `gap-row gap-row-${gapMark}` : ""} ${active && paused ? "paused" : ""} ${mine ? "my-role-row" : ""} ${row.skipped ? "skipped-row" : ""} ${clockMark ? "clock-row" : ""}`}
+      data-rowid={row.id}
       title={walk ? "Walkthrough position — synced to every screen" : clockMark ? "Event time is here per the TIME column" : undefined}
       style={{
         transform: CSS.Transform.toString(transform),
@@ -192,6 +193,59 @@ function BigTimer({
   );
 }
 
+/**
+ * Timing nudges for one row: take seconds out or put them in when the show
+ * runs ahead or behind, or pin the row to the clock with CUE. Seconds, not
+ * minutes — these are live corrections.
+ */
+function TimingNudge({
+  onNudge,
+  onCue,
+  disabled,
+}: {
+  onNudge: (deltaSec: number) => void;
+  onCue: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="timing-nudge" onPointerDown={(e) => e.stopPropagation()}>
+      {[-30, -15, -5].map((d) => (
+        <button
+          key={d}
+          type="button"
+          className="tn-btn"
+          disabled={disabled}
+          title={`Take ${-d} seconds out of this item`}
+          onClick={() => onNudge(d)}
+        >
+          {d}
+        </button>
+      ))}
+      <button
+        type="button"
+        className="tn-btn tn-cue"
+        disabled={disabled}
+        title="This item is happening NOW — pin it to the clock and re-time everything below it"
+        onClick={onCue}
+      >
+        CUE
+      </button>
+      {[5, 15, 30].map((d) => (
+        <button
+          key={d}
+          type="button"
+          className="tn-btn"
+          disabled={disabled}
+          title={`Give this item ${d} more seconds`}
+          onClick={() => onNudge(d)}
+        >
+          +{d}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export type EditorMode = "show" | "edit" | "view";
 
 export function RundownEditor({
@@ -229,6 +283,8 @@ export function RundownEditor({
   // The timing-check issue currently on screen: its rows are highlighted in
   // the grid and the disagreeing row is scrolled into view.
   const [gapFocus, setGapFocus] = useState<{ fromId: string; toId: string } | null>(null);
+  // Row the timing nudges act on when hovering (pointer devices).
+  const [nudgeRowAt, setNudgeRowAt] = useState<{ id: string; top: number } | null>(null);
   // The selection bar floats just BELOW the last selected row — never on top
   // of the rows being acted on — inside the scroller so it moves with them.
   const [selBarTop, setSelBarTop] = useState(36);
@@ -250,6 +306,21 @@ export function RundownEditor({
   const [followScroll, setFollowScroll] = useState(true);
   // A user can hold several roles at once (Camera 1 AND PA). Stored per browser.
   const [myRoles, setMyRoles] = useState<string[]>([]);
+  // Touch devices have no hover, so the nudges dock at the bottom instead —
+  // clear of the role bar, which is also fixed to the bottom.
+  const [dockBottom, setDockBottom] = useState(0);
+  useEffect(() => {
+    const measure = () => {
+      const bar = document.querySelector(".role-bar") as HTMLElement | null;
+      setDockBottom(bar ? Math.ceil(bar.getBoundingClientRect().height) : 0);
+    };
+    measure();
+    const bar = document.querySelector(".role-bar");
+    if (!bar) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(bar);
+    return () => ro.disconnect();
+  }, [myRoles.length, activeRowId]);
   // Ticks the event-local clock cursor along the TIME column.
   const [, setNowTick] = useState(0);
   useEffect(() => {
@@ -456,6 +527,64 @@ export function RundownEditor({
       if (first) channel.sendCmd("jump", first.id);
     }
   };
+  // ── Timing nudges ───────────────────────────────────────────────────────
+  // Fixed corrections taken from the row itself when the show runs ahead or
+  // behind. The LIVE cue is the anchor: time is absorbed on the far side of
+  // the edit, so whatever is on air never moves. One transaction per press,
+  // so one undo takes the whole correction back.
+  const shiftFixedTimes = (from: number, to: number, deltaSec: number): void => {
+    for (let i = from; i <= to; i++) {
+      const row = rows[i];
+      if (!row) continue;
+      const yRow = yRows.get(row.id);
+      const fixed = yRow?.get("hardStartSec") as number | null | undefined;
+      if (fixed != null) yRow!.set("hardStartSec", fixed + deltaSec);
+    }
+  };
+
+  /** ±seconds on this item's duration, rippled away from the live cue. */
+  const nudgeRow = (rowId: string, deltaSec: number): void => {
+    const idx = rows.findIndex((r) => r.id === rowId);
+    if (idx < 0) return;
+    const row = rows[idx]!;
+    const current = row.durationSec ?? 0;
+    const next = Math.max(0, current + deltaSec);
+    const applied = next - current; // never below zero
+    if (applied === 0) return;
+    // A muted or skipped row sits outside the running order — its duration
+    // changes, but nothing else moves.
+    const inTiming = !row.durationMuted && !row.skipped;
+    const liveIdx = activeRowId ? rows.findIndex((r) => r.id === activeRowId) : -1;
+    const rippleUp = liveIdx >= 0 && idx < liveIdx;
+    doc.transact(() => {
+      yRows.get(rowId)?.set("durationSec", next);
+      if (!inTiming) return;
+      if (rippleUp) {
+        // Hold this item's END: its own start and everything above move back.
+        const own = yRows.get(rowId)?.get("hardStartSec") as number | null | undefined;
+        if (own != null) yRows.get(rowId)!.set("hardStartSec", own - applied);
+        shiftFixedTimes(0, idx - 1, -applied);
+      } else {
+        shiftFixedTimes(idx + 1, rows.length - 1, applied);
+      }
+    });
+  };
+
+  /** "This is happening now": pin the row to the clock, ripple the rest down. */
+  const cueRow = (rowId: string): void => {
+    const idx = rows.findIndex((r) => r.id === rowId);
+    if (idx < 0) return;
+    // The clock carries sub-second precision for the smooth now-line; a
+    // written start time is whole seconds like every other time in the sheet.
+    const nowSec = Math.round(zoneSecondsOfDay(channel.serverNow(), channel.timezone));
+    const currentStart = timing.rows[idx]?.startSec ?? null;
+    const delta = currentStart != null ? nowSec - currentStart : 0;
+    doc.transact(() => {
+      yRows.get(rowId)?.set("hardStartSec", nowSec);
+      if (delta !== 0) shiftFixedTimes(idx + 1, rows.length - 1, delta);
+    });
+  };
+
   const clearOutcome = (): void => {
     doc.transact(() => {
       for (const r of outcomeRows) yRows.get(r.id)?.set("skipped", false);
@@ -1282,7 +1411,26 @@ export function RundownEditor({
             ⇣ Sync Cue
           </button>
         )}
-        <div className={`grid-scroll ${mobileAllCols ? "mobile-show-all" : ""}`}>
+        <div
+          className={`grid-scroll ${mobileAllCols ? "mobile-show-all" : ""}`}
+          onMouseOver={
+            canEditContent
+              ? (e) => {
+                  const tr = (e.target as HTMLElement).closest?.("tr[data-rowid]") as HTMLElement | null;
+                  const id = tr?.dataset.rowid;
+                  if (!id) return;
+                  if (nudgeRowAt?.id !== id) setNudgeRowAt({ id, top: tr!.offsetTop });
+                }
+              : undefined
+          }
+          onMouseLeave={canEditContent ? () => setNudgeRowAt(null) : undefined}
+        >
+        {/* Hover nudges ride the right edge of the sheet, clear of the text. */}
+        {canEditContent && nudgeRowAt && (
+          <div className="timing-nudge-hover" style={{ top: nudgeRowAt.top }}>
+            <TimingNudge onNudge={(d) => nudgeRow(nudgeRowAt.id, d)} onCue={() => cueRow(nudgeRowAt.id)} />
+          </div>
+        )}
         {canEditContent && selected.size > 0 && (
           // Floats just below the last selected row — the actions clearly
           // belong to the rows they act on without covering any of them.
@@ -1590,6 +1738,23 @@ export function RundownEditor({
       </DndContext>
 
       {/* Cue pool parked for now (2026-08-08, user call) — flip to re-enable. */}
+      {/* Touch devices cannot hover, so the nudges dock at the bottom and act
+          on the row you picked — or the live cue when nothing is selected. */}
+      {canEditContent &&
+        (() => {
+          const targetId = selected.size === 1 ? [...selected][0]! : activeRowId;
+          const target = targetId ? rows.find((r) => r.id === targetId) : null;
+          if (!target) return null;
+          return (
+            <div className="timing-nudge-dock" style={{ bottom: dockBottom }}>
+              <span className="tn-target" title={target.title || "untitled"}>
+                {selected.size === 1 ? "Selected" : "Live"}: {target.title || "untitled"}
+              </span>
+              <TimingNudge onNudge={(d) => nudgeRow(target.id, d)} onCue={() => cueRow(target.id)} />
+            </div>
+          );
+        })()}
+
       {CUE_POOL_ENABLED && <CuePool doc={doc} mode={mode} channel={channel} />}
       {myRoles.length > 0 && activeRowId && <div style={{ height: 72 }} />}
       {myRoles.length > 0 && (
