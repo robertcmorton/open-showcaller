@@ -37,11 +37,37 @@ function walk(node: Node, key: number): ReactNode {
   return <Fragment key={key}>{children}</Fragment>; // unknown wrapper → text only
 }
 
+// Angle brackets a person typed — "<player name>", "<Captain to speak>" — are
+// content, not markup. Escaping everything that is not one of the editor's own
+// marks keeps that text on screen instead of feeding it to the XML parser,
+// which would swallow it as an unknown element.
+const EDITOR_TAG_OPEN = /^<\/?(?:paragraph|p|bold|italic|underline|strike|highlight|link|strong|em|u|s|mark)(?:\s[^<>]*)?\/?>/i;
+
+function escapeStrayAngles(xml: string): string {
+  let out = "";
+  for (let i = 0; i < xml.length; i++) {
+    if (xml[i] !== "<") {
+      out += xml[i];
+      continue;
+    }
+    const rest = xml.slice(i);
+    const tag = rest.match(EDITOR_TAG_OPEN);
+    if (tag) {
+      out += tag[0];
+      i += tag[0].length - 1;
+    } else {
+      out += "&lt;";
+    }
+  }
+  return out;
+}
+
 /** Renders a formatted cell's XML (bold/underline/highlight…) outside the editor. */
 export function RichCellText({ xml }: { xml: string }) {
   if (typeof window === "undefined") return null; // grid renders client-side anyway
-  const parsed = new DOMParser().parseFromString(`<root>${xml}</root>`, "text/xml");
-  if (parsed.querySelector("parsererror")) return <>{xml.replace(/<[^>]+>/g, "")}</>;
+  const safe = escapeStrayAngles(xml);
+  const parsed = new DOMParser().parseFromString(`<root>${safe}</root>`, "text/xml");
+  if (parsed.querySelector("parsererror")) return <>{safe.replace(EDITOR_TAG_OPEN, "").replace(/&lt;/g, "<")}</>;
   const out = walk(parsed.documentElement, 0);
   return <>{out}</>;
 }

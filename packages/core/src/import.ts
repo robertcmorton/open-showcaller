@@ -362,6 +362,32 @@ export function classifyRows(grid: string[][], headerIndex: number, mapping: Col
  */
 const ITEM_NUMBER = /^\d{1,4}[a-z]?$/i;
 
+/**
+ * Classification PLUS everything that makes a row match its source line: the
+ * sheet's own item number, and which alternate ending it belongs to.
+ *
+ * This exists as one function because it used not to be. The import screen
+ * re-classified the grid on its own — so it could reflect the user's fixes to
+ * unparseable cells — and in doing so quietly produced rows with NO item
+ * numbers and NO outcome branches, while the preview it was built from had
+ * both. Every sheet imported that way lost its numbering. Anything that turns
+ * a grid into rows must come through here.
+ */
+export function classifySheet(grid: string[][], headerIndex: number, mapping: ColumnTarget[]): ClassifiedRow[] {
+  const rows = classifyRows(grid, headerIndex, mapping);
+  // Row numbering mirrors the sheet: each row carries ITS OWN number (first
+  // line of it for merged rows); rows the sheet didn't number get none.
+  const numberCol = detectNumberColumn(grid, headerIndex);
+  if (numberCol != null) {
+    for (const r of rows) {
+      const value = (grid[r.sourceIndex]?.[numberCol] ?? "").split("\n")[0]!.trim();
+      if (ITEM_NUMBER.test(value)) r.sourceNumber = value;
+    }
+  }
+  detectOutcomes(rows);
+  return rows;
+}
+
 export function detectNumberColumn(grid: string[][], headerIndex: number): number | null {
   const dataRows = grid.slice(headerIndex + 1);
   if (dataRows.length === 0) return null;
@@ -630,7 +656,11 @@ export function planImport(
   const headers = grid[headerIndex] ?? [];
   const dataRows = grid.slice(headerIndex + 1);
   // A data sample lets untitled columns be identified by their contents.
-  const mapping = mapColumns(headers, dataRows.slice(0, 60));
+  // The WHOLE sheet, not a sample: an untitled column is identified by what it
+  // contains, and "contains nothing" drops it. A column whose data starts on
+  // page five — a countdown, a late-running note — looked empty in a 60-row
+  // sample and was silently discarded.
+  const mapping = mapColumns(headers, dataRows);
 
   // Centered/right-aligned columns (common in PDF layouts) put header text in
   // a different x-band than the data beneath, leaving the mapped column nearly
@@ -724,17 +754,7 @@ export function planImport(
   const finalGrid = opts.mergeWrapped
     ? mergeWrappedRows(grid, headerIndex, opts.lineMeta, opts.rowLines, mapping)
     : grid;
-  const rows = classifyRows(finalGrid, headerIndex, mapping);
-  // Row numbering mirrors the sheet: each row carries ITS OWN number (first
-  // line of it for merged rows); rows the sheet didn't number get none.
-  const numberCol = detectNumberColumn(finalGrid, headerIndex);
-  if (numberCol != null) {
-    for (const r of rows) {
-      const value = (finalGrid[r.sourceIndex]?.[numberCol] ?? "").split("\n")[0]!.trim();
-      if (ITEM_NUMBER.test(value)) r.sourceNumber = value;
-    }
-  }
-  detectOutcomes(rows);
+  const rows = classifySheet(finalGrid, headerIndex, mapping);
   return {
     grid: finalGrid,
     headerIndex,
@@ -840,4 +860,178 @@ export function detectRoles(rows: ClassifiedRow[], max = 12, roleColumnKey?: str
     .sort((a, b) => b.count - a.count)
     .slice(0, max)
     .map((e, i) => ({ name: e.name, color: ROLE_COLORS[i % ROLE_COLORS.length]! }));
+}
+
+// ── Plan → rundown ────────────────────────────────────────────────────────────
+
+/**
+ * Where text rescued from a structural column lands. A sheet's TIME or DUR cell
+ * that holds a label rather than a value keeps its content under the sheet's
+ * own heading for that column.
+ */
+export const UNPARSED_START_KEY = "start-text";
+export const UNPARSED_DURATION_KEY = "duration-text";
+
+/** A row as the rundown stores it. Structural mirror of the doc package's SeedRow. */
+export interface BuiltRow {
+  type: "cue" | "group" | "milestone";
+  title: string;
+  durationSec?: number | null;
+  hardStartSec?: number | null;
+  durationMuted?: boolean;
+  untimed?: boolean;
+  sourceNumber?: string;
+  outcome?: string | null;
+  cells?: Record<string, string>;
+}
+
+export interface BuiltSheet {
+  rows: BuiltRow[];
+  columns: { key: string; title: string; width?: number }[];
+  roles: DetectedRole[];
+  roleColumnKey: string | null;
+  plannedStartSec: number | null;
+  baseTitles: { title?: string; start?: string; duration?: string };
+  columnOrder: string[];
+}
+
+/**
+ * Turns a classified sheet into the rundown that gets created.
+ *
+ * This lived inside the import screen, which meant the rules that decide what
+ * the sheet BECOMES — which rows are groups, which times are real, which
+ * columns survive and in what order — could not be tested or checked against a
+ * source sheet without driving a browser. It is the same conversion either
+ * way; only its address changed.
+ */
+export function buildSheet(
+  plan: { headers: string[]; mapping: ColumnTarget[]; rows: ClassifiedRow[] },
+  opts: { widths?: (number | null)[]; roleColumnKey?: string | null; roles?: DetectedRole[] } = {},
+): BuiltSheet {
+  const { headers, mapping } = plan;
+  // Spacers are the sheet's blank separator lines — they carry nothing.
+  const importable = plan.rows.filter((r) => r.kind !== "spacer");
+  const roleKey = opts.roleColumnKey !== undefined ? opts.roleColumnKey : findRoleColumn(headers, mapping);
+  const roles = opts.roles ?? detectRoles(importable, 12, roleKey);
+  const widths = opts.widths ?? [];
+
+  // When the sheet has NO role column of its own, every detected role that
+  // appears in a row's cells lands in a synthesized "Roles" column.
+  const rolesFor = (r: ClassifiedRow): string => {
+    if (roleKey) return "";
+    const hay = `${r.title}\n${Object.values(r.cells).join("\n")}`.toLowerCase();
+    return roles
+      .filter((role) => hay.includes(role.name.toLowerCase()))
+      .map((role) => role.name)
+      .join(", ");
+  };
+
+  // Sparse-timed sheets (cue-sheet style) time only PARENT rows; rows with a
+  // blank TIME cell are sub-cues inside that block. Marking them `untimed`
+  // keeps the grid faithful — no invented cascade times.
+  const cueish = importable.filter((r) => r.kind !== "banner");
+  const sparseTimed = cueish.length >= 10 && cueish.filter((r) => r.startSec != null).length / cueish.length < 0.5;
+
+  const rows: BuiltRow[] = importable.map((r) => {
+    if (r.kind === "banner") return { type: "group", title: r.title, sourceNumber: r.sourceNumber, outcome: r.outcome ?? undefined };
+    if (r.kind === "milestone") {
+      const fallback = Object.values(r.cells).find((v) => v.trim());
+      return {
+        type: "milestone",
+        title: r.title || fallback || "—",
+        durationSec: null,
+        hardStartSec: r.startSec,
+        sourceNumber: r.sourceNumber,
+        outcome: r.outcome ?? undefined,
+        cells: r.cells,
+      };
+    }
+    const assigned = rolesFor(r);
+    const untimed = sparseTimed && r.startSec == null;
+    // Text in a TIME or DUR column that is not a time or a duration — a sheet
+    // that puts "Fullback" or "Interchange" in the duration column of a team
+    // list — has nowhere to live in a structural column, and used to simply
+    // vanish. Keep it beside the row so the rundown still says what the sheet
+    // said; the import preview offers to turn it into a real value.
+    const spilled: Record<string, string> = {};
+    if (r.startRaw) spilled[UNPARSED_START_KEY] = r.startRaw;
+    if (r.durationRaw) spilled[UNPARSED_DURATION_KEY] = r.durationRaw;
+    return {
+      type: "cue",
+      title: r.title,
+      durationSec: r.durationSec,
+      hardStartSec: r.startSec,
+      untimed: untimed || undefined,
+      durationMuted: untimed && r.durationSec != null ? true : undefined,
+      sourceNumber: r.sourceNumber,
+      outcome: r.outcome ?? undefined,
+      cells: { ...r.cells, ...spilled, ...(assigned ? { roles: assigned } : {}) },
+    };
+  });
+
+  // The structural columns keep the sheet's own header names. Several bands can
+  // map to one structural target (a centred header and the data beneath it);
+  // the NAMED one is the sheet's own heading.
+  const headerFor = (kind: "title" | "start" | "duration"): string | undefined => {
+    for (let i = 0; i < mapping.length; i++) {
+      if (mapping[i]?.kind !== kind) continue;
+      const h = headers[i]?.trim();
+      if (h) return h;
+    }
+    return undefined;
+  };
+
+  // The rundown mirrors the sheet: every department column with data, in
+  // source order, with the source's own name and a proportional width.
+  const usedKeys = new Set(rows.flatMap((r) => Object.keys(r.cells ?? {})));
+  const clampWidth = (w: number | null | undefined): number | undefined =>
+    w ? Math.min(420, Math.max(80, w)) : undefined;
+  const roleColumn: { key: string; title: string; width?: number }[] =
+    roles.length > 0 && !roleKey ? [{ key: "roles", title: "Roles", width: 140 }] : [];
+  const columns: { key: string; title: string; width?: number }[] = roleColumn.concat(
+    mapping
+      .map((t, i) => ({ t, i }))
+      .filter((x): x is { t: Extract<ColumnTarget, { kind: "department" }>; i: number } => x.t.kind === "department" && usedKeys.has(x.t.key))
+      .map(({ t, i }) => ({ key: t.key, title: t.title, width: clampWidth(widths[i]) })),
+  );
+
+  // Rescued structural text gets its own column, named after the sheet's
+  // heading for the column it came from, and sits immediately beside it.
+  const spillColumns: { key: string; title: string; after: string }[] = [];
+  if (usedKeys.has(UNPARSED_START_KEY))
+    spillColumns.push({ key: UNPARSED_START_KEY, title: `${headerFor("start") ?? "Start"} (text)`, after: "start" });
+  if (usedKeys.has(UNPARSED_DURATION_KEY))
+    spillColumns.push({ key: UNPARSED_DURATION_KEY, title: `${headerFor("duration") ?? "Duration"} (text)`, after: "duration" });
+  for (const c of spillColumns) columns.push({ key: c.key, title: c.title, width: 110 });
+
+  // …and their exact left-to-right POSITIONS: the grid renders this order.
+  const columnOrder: string[] = [];
+  const push = (key: string) => {
+    if (!columnOrder.includes(key)) columnOrder.push(key);
+    for (const c of spillColumns) if (c.after === key && !columnOrder.includes(c.key)) columnOrder.push(c.key);
+  };
+  for (const t of mapping) {
+    const key =
+      t.kind === "title"
+        ? "title"
+        : t.kind === "start"
+          ? "start"
+          : t.kind === "duration"
+            ? "duration"
+            : t.kind === "department" && usedKeys.has(t.key)
+              ? t.key
+              : null;
+    if (key) push(key);
+  }
+  if (roleColumn.length > 0) columnOrder.push("roles");
+
+  return {
+    rows,
+    columns,
+    roles,
+    roleColumnKey: roleKey ?? (roles.length > 0 ? "roles" : null),
+    plannedStartSec: importable.find((r) => r.startSec != null)?.startSec ?? null,
+    baseTitles: { title: headerFor("title"), start: headerFor("start"), duration: headerFor("duration") },
+    columnOrder,
+  };
 }

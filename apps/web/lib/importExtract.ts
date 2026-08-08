@@ -20,11 +20,19 @@ export interface ExtractedSheet {
   rowLines?: { page: number; ys: number[] }[];
 }
 
-export async function extractGrid(file: File): Promise<ExtractedSheet> {
+/**
+ * How to load the PDF engine. The browser build needs a DOM, so anything
+ * running headless (the import audit) supplies the legacy build instead. It is
+ * injected rather than branched on so the client bundle still carries exactly
+ * one copy of the engine.
+ */
+export type PdfjsLoader = () => Promise<typeof import("pdfjs-dist")>;
+
+export async function extractGrid(file: File, pdfjsLoader?: PdfjsLoader): Promise<ExtractedSheet> {
   const name = file.name.toLowerCase();
   if (name.endsWith(".csv")) return { grid: parseCsv(await file.text()), widths: [] };
   if (name.endsWith(".xlsx") || name.endsWith(".xls")) return extractXlsx(await file.arrayBuffer());
-  if (name.endsWith(".pdf")) return extractPdf(await file.arrayBuffer());
+  if (name.endsWith(".pdf")) return extractPdf(await file.arrayBuffer(), pdfjsLoader);
   throw new Error("Unsupported file type — use .xlsx, .xls, .csv, or .pdf");
 }
 
@@ -58,23 +66,32 @@ const matApply = (m: Matrix, x: number, y: number): [number, number] => [
 ];
 
 /**
- * The table's ruled horizontal lines, from the page's drawing operators:
- * wide flat strokes/fills are row borders; wide filled rectangles (section
- * banner backgrounds, cell fills) contribute both edges. These are the
+ * The table's ruled lines, from the page's drawing operators.
+ *
+ * Horizontal: wide flat strokes/fills are row borders; wide filled rectangles
+ * (section banner backgrounds, cell fills) contribute both edges. These are the
  * AUTHORITATIVE row boundaries the wrapped-row merge groups lines by.
+ *
+ * Vertical: tall thin strokes and the left/right edges of cell fills are COLUMN
+ * borders. They matter because a single cell often contains several text runs
+ * at different x positions — a bold label beside an italic aside, a name
+ * followed by a note — and clustering text by position alone splits one column
+ * into several. The ruled grid says where the columns really are.
  */
-async function extractRuleYs(
+async function extractRules(
   page: { getOperatorList: () => Promise<{ fnArray: number[]; argsArray: unknown[] }> },
   OPS: Record<string, number>,
-): Promise<number[]> {
+): Promise<{ ys: number[]; xs: number[] }> {
   const { fnArray, argsArray } = await page.getOperatorList();
   const ys: number[] = [];
+  const xs: number[] = [];
   let ctm: Matrix = [1, 0, 0, 1, 0, 0];
   const stack: Matrix[] = [];
   const addSegment = (x1: number, y1: number, x2: number, y2: number) => {
     const [tx1, ty1] = matApply(ctm, x1, y1);
     const [tx2, ty2] = matApply(ctm, x2, y2);
     if (Math.abs(ty2 - ty1) <= 1.5 && Math.abs(tx2 - tx1) >= 100) ys.push((ty1 + ty2) / 2);
+    else if (Math.abs(tx2 - tx1) <= 1.5 && Math.abs(ty2 - ty1) >= 8) xs.push((tx1 + tx2) / 2);
   };
   for (let i = 0; i < fnArray.length; i++) {
     const fn = fnArray[i];
@@ -144,8 +161,13 @@ async function extractRuleYs(
           const [, ty1] = matApply(ctm, x, y);
           const [tx2, ty2] = matApply(ctm, x + w, y + h);
           const [tx1] = matApply(ctm, x, y);
-          if (Math.abs(tx2 - tx1) < 100) continue; // narrow verticals & decorations
-          if (Math.abs(ty2 - ty1) <= 3) ys.push((ty1 + ty2) / 2); // a border drawn as a thin filled bar
+          const wide = Math.abs(tx2 - tx1) >= 100;
+          const tall = Math.abs(ty2 - ty1) > 3;
+          // A tall thin bar is a column border; a filled cell contributes both
+          // of its vertical edges, which are column borders too.
+          if (tall && (Math.abs(tx2 - tx1) <= 3 || wide)) xs.push(tx1, tx2);
+          if (!wide) continue; // narrow verticals & decorations carry no row edge
+          if (!tall) ys.push((ty1 + ty2) / 2); // a border drawn as a thin filled bar
           else ys.push(ty1, ty2); // cell/banner background — both edges are borders
         } else if (op === OPS.curveTo) p += 6;
         else if (op === OPS.curveTo2 || op === OPS.curveTo3) p += 4;
@@ -155,11 +177,16 @@ async function extractRuleYs(
   }
   // Cluster: borders are drawn per-cell, producing dozens of hits per rule.
   ys.sort((a, b) => b - a);
-  const clustered: number[] = [];
+  const clusteredYs: number[] = [];
   for (const y of ys) {
-    if (clustered.length === 0 || clustered[clustered.length - 1]! - y > 1.5) clustered.push(y);
+    if (clusteredYs.length === 0 || clusteredYs[clusteredYs.length - 1]! - y > 1.5) clusteredYs.push(y);
   }
-  return clustered;
+  xs.sort((a, b) => a - b);
+  const clusteredXs: number[] = [];
+  for (const x of xs) {
+    if (clusteredXs.length === 0 || x - clusteredXs[clusteredXs.length - 1]! > 2) clusteredXs.push(x);
+  }
+  return { ys: clusteredYs, xs: clusteredXs };
 }
 
 /**
@@ -168,9 +195,9 @@ async function extractRuleYs(
  * runs to bands. Works for text-based exports (spreadsheet "Save as PDF");
  * scanned documents have no text layer and produce a clear error upstream.
  */
-async function extractPdf(buffer: ArrayBuffer): Promise<ExtractedSheet> {
-  const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+async function extractPdf(buffer: ArrayBuffer, loader?: PdfjsLoader): Promise<ExtractedSheet> {
+  const pdfjs = loader ? await loader() : await import("pdfjs-dist");
+  if (!loader) pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
 
   const doc = await pdfjs.getDocument({ data: buffer }).promise;
   const Y_TOLERANCE = 4; // px: same visual line
@@ -179,11 +206,14 @@ async function extractPdf(buffer: ArrayBuffer): Promise<ExtractedSheet> {
   interface Run {
     x: number;
     y: number;
+    /** Rendered width, so a run can be placed by its CENTRE rather than its left edge. */
+    w: number;
     text: string;
   }
 
   const pages: Run[][] = [];
   const rowLines: { page: number; ys: number[] }[] = [];
+  const ruleXs: number[] = [];
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p);
     const content = await page.getTextContent();
@@ -191,12 +221,13 @@ async function extractPdf(buffer: ArrayBuffer): Promise<ExtractedSheet> {
     for (const item of content.items) {
       if (!("str" in item) || !item.str.trim()) continue;
       const [, , , , x, y] = item.transform as number[];
-      runs.push({ x: x!, y: y!, text: item.str });
+      runs.push({ x: x!, y: y!, w: (item as { width?: number }).width ?? 0, text: item.str });
     }
     pages.push(runs);
     try {
-      const ys = await extractRuleYs(page, pdfjs.OPS as unknown as Record<string, number>);
-      if (ys.length > 0) rowLines.push({ page: p - 1, ys });
+      const rules = await extractRules(page, pdfjs.OPS as unknown as Record<string, number>);
+      if (rules.ys.length > 0) rowLines.push({ page: p - 1, ys: rules.ys });
+      ruleXs.push(...rules.xs);
     } catch {
       // No rules extracted → the merge falls back to nearest-number heuristics.
     }
@@ -205,21 +236,65 @@ async function extractPdf(buffer: ArrayBuffer): Promise<ExtractedSheet> {
     throw new Error("This PDF has no text layer (likely a scan) — export it from the original spreadsheet instead.");
   }
 
-  // Column bands from the x positions of every run on every page.
-  const xs = pages
-    .flat()
-    .map((r) => r.x)
-    .sort((a, b) => a - b);
-  const bands: number[] = [];
-  for (const x of xs) {
-    if (bands.length === 0 || x - bands[bands.length - 1]! > X_GAP) bands.push(x);
+  // Column boundaries. The ruled grid is authoritative when the table has one:
+  // a single cell routinely holds several runs at different x positions (a name
+  // then an italic aside, a label then a value), and clustering by run position
+  // alone splits that one column into several — which is how a sheet's NOTES
+  // end up half under NOTES and half under "Column 17".
+  //
+  // A border must appear on most pages to count: stray verticals from a logo or
+  // a one-off callout are not columns.
+  const pageCount = pages.length;
+  const columnEdges: number[] = [];
+  {
+    const sorted = [...ruleXs].sort((a, b) => a - b);
+    const groups: { x: number; count: number }[] = [];
+    for (const x of sorted) {
+      const last = groups[groups.length - 1];
+      if (last && x - last.x <= 2) last.count += 1;
+      else groups.push({ x, count: 1 });
+    }
+    const minPages = Math.max(2, Math.ceil(pageCount * 0.6));
+    const kept: number[] = [];
+    for (const g of groups) if (g.count >= minPages) kept.push(g.x);
+    // Cell fills are often inset a few points from the border they sit against,
+    // leaving a sliver too narrow to be a column. Merging those into the column
+    // on their left keeps the real grid — and the sliver is exactly where wide
+    // BOLD text spills out of its cell, so dropping it recovers those values.
+    const MIN_COLUMN = 14; // pt — narrower than any column that holds text
+    for (const x of kept) {
+      if (columnEdges.length === 0 || x - columnEdges[columnEdges.length - 1]! >= MIN_COLUMN) columnEdges.push(x);
+    }
   }
-  const bandFor = (x: number): number => {
+  const ruled = columnEdges.length >= 3;
+
+  // Fallback: cluster the x positions of every run on every page.
+  const bands: number[] = [];
+  if (!ruled) {
+    const xs = pages
+      .flat()
+      .map((r) => r.x)
+      .sort((a, b) => a - b);
+    for (const x of xs) {
+      if (bands.length === 0 || x - bands[bands.length - 1]! > X_GAP) bands.push(x);
+    }
+  }
+  const bandFor = (run: Run): number => {
+    if (ruled) {
+      // Place by the run's CENTRE, not its left edge: bold and centred text is
+      // wider than the plain text the column was ruled for and routinely starts
+      // a few points outside its own cell. Its middle is still in the right one.
+      const mid = run.x + run.w / 2;
+      let cell = 0;
+      for (let i = 0; i < columnEdges.length; i++) if (mid >= columnEdges[i]!) cell = i;
+      return cell;
+    }
     let best = 0;
-    for (let i = 0; i < bands.length; i++) if (x >= bands[i]! - X_GAP / 2) best = i;
+    for (let i = 0; i < bands.length; i++) if (run.x >= bands[i]! - X_GAP / 2) best = i;
     return best;
   };
 
+  const columnCount = ruled ? columnEdges.length : bands.length;
   const grid: string[][] = [];
   const lineMeta: { page: number; y: number }[] = [];
   pages.forEach((runs, pageIndex) => {
@@ -229,9 +304,9 @@ async function extractPdf(buffer: ArrayBuffer): Promise<ExtractedSheet> {
     let lineY: number | null = null;
     const flush = () => {
       if (line.length === 0) return;
-      const cells: string[] = Array.from({ length: bands.length }, () => "");
+      const cells: string[] = Array.from({ length: columnCount }, () => "");
       for (const run of line) {
-        const band = bandFor(run.x);
+        const band = bandFor(run);
         cells[band] = cells[band] ? `${cells[band]} ${run.text.trim()}` : run.text.trim();
       }
       grid.push(cells);
@@ -250,9 +325,10 @@ async function extractPdf(buffer: ArrayBuffer): Promise<ExtractedSheet> {
     }
     flush();
   });
-  // Band spans (pt ≈ px) give each source column a proportional width hint.
-  const widths = bands.map((x, i) => {
-    const next = bands[i + 1];
+  // Column spans (pt ≈ px) give each source column a proportional width hint.
+  const spans = ruled ? columnEdges : bands;
+  const widths = spans.map((x, i) => {
+    const next = spans[i + 1];
     return next != null ? Math.round((next - x) * 1.25) : null;
   });
   return { grid, widths, lineMeta, rowLines };

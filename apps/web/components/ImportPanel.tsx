@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  classifyRows,
+  buildSheet,
+  classifySheet,
   detectRoles,
   findRoleColumn,
   formatDuration,
@@ -186,7 +187,10 @@ export function ImportPanel({
   const [autoLoaded, setAutoLoaded] = useState<string | null>(null);
 
   const rows = useMemo(
-    () => (grid ? classifyRows(grid, headerIndex, mapping) : []),
+    // classifySheet, not classifyRows: the item numbers and outcome branches
+    // come with it. Re-classifying without them is how imports lost the
+    // sheet’s own numbering.
+    () => (grid ? classifySheet(grid, headerIndex, mapping) : []),
     [grid, headerIndex, mapping],
   );
   const importable = rows.filter((r) => r.kind !== "spacer");
@@ -304,103 +308,19 @@ export function ImportPanel({
   }, [replaceRundown?.id]);
 
   const doImport = () => {
-    // When the sheet has NO role column of its own, every detected role that
-    // appears in a row's cells lands in a synthesized "Roles" column (an item
-    // can carry several). Sheets with a WHO/ROLE column keep it as-is.
-    const rolesFor = (r: ClassifiedRow): string => {
-      if (roleKey) return "";
-      const hay = `${r.title}\n${Object.values(r.cells).join("\n")}`.toLowerCase();
-      return roles
-        .filter((role) => hay.includes(role.name.toLowerCase()))
-        .map((role) => role.name)
-        .join(", ");
-    };
-    // Sparse-timed sheets (cue-sheet style) time only PARENT rows; the rows
-    // with a blank TIME cell are sub-cues inside that block. Marking them
-    // `untimed` keeps the grid faithful (no invented cascade times) and their
-    // durations informational (excluded from the running order).
-    const cueish = importable.filter((r) => r.kind !== "banner");
-    const sparseTimed =
-      cueish.length >= 10 && cueish.filter((r) => r.startSec != null).length / cueish.length < 0.5;
-
-    const seedRows: SeedRow[] = importable.map((r) => {
-      if (r.kind === "banner") return { type: "group", title: r.title, sourceNumber: r.sourceNumber, outcome: r.outcome ?? undefined };
-      if (r.kind === "milestone") {
-        // Keep the cells, and let the banner title fall back to the first cell
-        // value — PDF extraction sometimes lands a title in a neighboring band.
-        const fallback = Object.values(r.cells).find((v) => v.trim());
-        return {
-          type: "milestone",
-          title: r.title || fallback || "—",
-          durationSec: null,
-          hardStartSec: r.startSec,
-          sourceNumber: r.sourceNumber,
-          outcome: r.outcome ?? undefined,
-          cells: r.cells,
-        };
-      }
-      const assigned = rolesFor(r);
-      const untimed = sparseTimed && r.startSec == null;
-      return {
-        type: "cue",
-        title: r.title,
-        durationSec: r.durationSec,
-        hardStartSec: r.startSec,
-        untimed: untimed || undefined,
-        durationMuted: untimed && r.durationSec != null ? true : undefined,
-        sourceNumber: r.sourceNumber,
-        outcome: r.outcome ?? undefined,
-        cells: assigned ? { ...r.cells, roles: assigned } : r.cells,
-      };
-    });
-    // The rundown mirrors the sheet: every department column with data, in
-    // source order, with the source's own name and a proportional width.
-    const usedKeys = new Set(importable.flatMap((r) => Object.keys(r.cells)));
-    const clampWidth = (w: number | null | undefined): number | undefined =>
-      w ? Math.min(420, Math.max(80, w)) : undefined;
-    const roleColumn: { key: string; title: string; width?: number }[] =
-      roles.length > 0 && !roleKey ? [{ key: "roles", title: "Roles", width: 140 }] : [];
-    const customColumns = roleColumn.concat(
-      mapping
-      .map((t, i) => ({ t, i }))
-      .filter(
-        (x): x is { t: Extract<ColumnTarget, { kind: "department" }>; i: number } =>
-          x.t.kind === "department" && usedKeys.has(x.t.key),
-      )
-      .map(({ t, i }) => ({ key: t.key, title: t.title, width: clampWidth(widths[i]) })),
-    );
+    // One conversion, shared with the audit script and the unit tests: what a
+    // sheet BECOMES must not be decided by code only a browser can run.
+    const built = buildSheet({ headers, mapping, rows }, { widths, roleColumnKey: roleKey, roles });
     setBusy(true);
-    // The sheet's own first time becomes the planned start.
-    const firstStart = importable.find((r) => r.startSec != null)?.startSec ?? null;
-    // The structural columns keep the sheet's own header names (ACTIVITY, TIME…).
-    // Several bands can map to one structural target (a centred header and the
-    // data beneath it); the NAMED one is the sheet's own heading.
-    const headerFor = (kind: "title" | "start" | "duration"): string | undefined => {
-      for (let i = 0; i < mapping.length; i++) {
-        if (mapping[i]?.kind !== kind) continue;
-        const h = headers[i]?.trim();
-        if (h) return h;
-      }
-      return undefined;
-    };
-    // …and their exact left-to-right POSITIONS: the grid renders this order,
-    // so a sheet with TIME before ACTIVITY looks the same on screen.
-    const columnOrder: string[] = [];
-    for (const t of mapping) {
-      const key =
-        t.kind === "title" ? "title" : t.kind === "start" ? "start" : t.kind === "duration" ? "duration" : t.kind === "department" && usedKeys.has(t.key) ? t.key : null;
-      if (key && !columnOrder.includes(key)) columnOrder.push(key);
-    }
-    if (roleColumn.length > 0) columnOrder.push("roles");
     const buildPayload = async () => {
       const payload: Parameters<typeof api.replaceRundownContent>[1] = {
-        rows: seedRows,
-        columns: customColumns,
-        roles,
-        roleColumnKey: roleKey ?? (roles.length > 0 ? "roles" : null),
-        plannedStartSec: firstStart,
-        baseTitles: { title: headerFor("title"), start: headerFor("start"), duration: headerFor("duration") },
-        columnOrder,
+        rows: built.rows as SeedRow[],
+        columns: built.columns,
+        roles: built.roles,
+        roleColumnKey: built.roleColumnKey,
+        plannedStartSec: built.plannedStartSec,
+        baseTitles: built.baseTitles,
+        columnOrder: built.columnOrder,
       };
       if (sourceFile && sourceFile.size <= 12_000_000) {
         payload.sourceName = sourceFile.name;

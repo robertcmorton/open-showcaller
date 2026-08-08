@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyRows, detectHeaderRow, detectOutcomes, detectRoles, findRoleColumn, mapColumns, mergeWrappedRows, parseDurationLoose, parseTimeLoose, planImport, suggestDurationFix, suggestTimeFix } from "../src/import";
+import { buildSheet, classifyRows, detectHeaderRow, detectOutcomes, detectRoles, findRoleColumn, mapColumns, mergeWrappedRows, parseDurationLoose, parseTimeLoose, planImport, suggestDurationFix, suggestTimeFix, UNPARSED_DURATION_KEY } from "../src/import";
 
 describe("parseDurationLoose", () => {
   it("parses worded durations", () => {
@@ -417,5 +417,78 @@ describe("centred department headers", () => {
       .filter((x) => x.t.kind === "department" && (x.t as { title: string }).title === "NOTES");
     expect(notes.length).toBe(1);
     expect(notes[0]!.i).toBe(3); // the band holding the notes, not the empty header band
+  });
+});
+
+// ── Import fidelity: what the sheet says is what the rundown says ─────────────
+// These encode the ways a real sheet lost content on the way in. The fixtures
+// are synthetic — shaped like production sheets, carrying none of their text.
+
+describe("buildSheet fidelity", () => {
+  /** A cue sheet with the shape that broke: ITEM/TIME/DUR/SCR/ACTION/WHO/NOTES. */
+  const sheet = (): string[][] => [
+    ["ITEM", "TIME", "DUR", "SCR", "ACTION", "WHO", "NOTES", ""],
+    ["1", "17:15:00", "", "", "GATES", "", "", ""],
+    ["2", "17:15:00", "01:00", "VTR", "HOLDING", "", "", "00:00"],
+    ["3", "17:16:00", "00:30", "", "WELCOME", "GH", "arrive 1pm", "00:15"],
+    ["4", "17:16:30", "00:30", "GFX", "PARTNER CARD", "", "check content", "00:45"],
+    ["5", "", "Fullback", "1", "A. Player", "", "", ""],
+    ["6", "", "Interchange", "", "", "", "", ""],
+    ["7", "17:17:00", "00:45", "GFX", "TEAM READ", "GH", "", "01:15"],
+  ];
+  const build = (grid: string[][]) => buildSheet(planImport(grid));
+
+  it("keeps every numbered row, with the sheet's own numbering", () => {
+    const built = build(sheet());
+    expect(built.rows.map((r) => r.sourceNumber)).toEqual(["1", "2", "3", "4", "5", "6", "7"]);
+  });
+
+  it("carries times, durations and cells across unchanged", () => {
+    const row = build(sheet()).rows.find((r) => r.sourceNumber === "3")!;
+    expect(row.hardStartSec).toBe(17 * 3600 + 16 * 60);
+    expect(row.durationSec).toBe(30);
+    expect(row.cells?.who).toBe("GH");
+    expect(row.cells?.notes).toBe("arrive 1pm");
+  });
+
+  it("keeps the sheet's headings and its left-to-right column order", () => {
+    const built = build(sheet());
+    expect(built.baseTitles).toEqual({ title: "ACTION", start: "TIME", duration: "DUR" });
+    expect(built.columnOrder.indexOf("start")).toBeLessThan(built.columnOrder.indexOf("duration"));
+    expect(built.columnOrder.indexOf("duration")).toBeLessThan(built.columnOrder.indexOf("title"));
+    expect(built.columnOrder.indexOf("title")).toBeLessThan(built.columnOrder.indexOf("notes"));
+  });
+
+  it("keeps text a structural column cannot hold, instead of dropping it", () => {
+    // "Fullback" sits in the DUR column of a team list. It is not a duration,
+    // and it used to vanish; now it lands beside the column it came from.
+    const built = build(sheet());
+    const row = built.rows.find((r) => r.sourceNumber === "5")!;
+    expect(row.cells?.[UNPARSED_DURATION_KEY]).toBe("Fullback");
+    expect(built.columns.some((c) => c.key === UNPARSED_DURATION_KEY)).toBe(true);
+    expect(built.columnOrder).toContain(UNPARSED_DURATION_KEY);
+  });
+
+  it("keeps an untitled column whose data starts far down the sheet", () => {
+    // A countdown column that is blank for the first pages was sampled as empty
+    // and dropped; identification now reads the whole sheet.
+    const grid = sheet();
+    const late = [["ITEM", "TIME", "DUR", "SCR", "ACTION", "WHO", "NOTES", ""]];
+    for (let i = 1; i <= 80; i++) late.push([String(i), "17:15:00", "00:30", "", `ITEM ${i}`, "", "", ""]);
+    late.push(["81", "17:20:00", "00:30", "", "LATE", "", "", "05:00"]);
+    const built = buildSheet(planImport(late));
+    expect(built.rows[80]!.cells?.["column-8"]).toBe("05:00");
+    void grid;
+  });
+
+  it("drops a right-hand column that only mirrors row numbers", () => {
+    const grid = [
+      ["ITEM", "TIME", "DUR", "ACTION", ""],
+      ["1", "17:15:00", "00:30", "ONE", "1"],
+      ["2", "17:15:30", "00:30", "TWO", "2"],
+      ["3", "17:16:00", "00:30", "THREE", "3"],
+    ];
+    const built = buildSheet(planImport(grid));
+    expect(built.columns.map((c) => c.key)).not.toContain("column-5");
   });
 });

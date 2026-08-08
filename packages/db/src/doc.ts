@@ -213,6 +213,25 @@ export interface ProjectedRow extends PlanRow {
 /** Marks the cell editor can produce — a cell mentioning one renders rich. */
 const RICH_MARK = /<(bold|italic|underline|strike|highlight|link|strong|em|u|s|mark)[\s/>]/;
 
+/**
+ * Only the tags the editor can actually produce count as markup.
+ *
+ * Run sheets write angle brackets as ordinary punctuation — `<player name>`,
+ * `<Captain to speak>`, `<Welcome rep>` are prompts a caller reads aloud.
+ * Stripping everything tag-shaped deleted them from the rundown outright, so
+ * the sheet said one thing and the screen another. Anything that is not a mark
+ * this app produces is text, and stays.
+ */
+const EDITOR_TAG = /<\/?(?:paragraph|p|bold|italic|underline|strike|highlight|link|strong|em|u|s|mark)(?:\s[^<>]*)?\/?>/g;
+
+/** A cell's XML → the plain text a person typed, angle brackets and all. */
+export function cellPlainText(xml: string): string {
+  return xml
+    .replace(/<\/paragraph>/g, "\n")
+    .replace(EDITOR_TAG, "")
+    .replace(/\n$/, "");
+}
+
 /** Project a rundown Y.Doc into plain rows for the timing engine and renderers. */
 export function projectRundownDoc(doc: Y.Doc): {
   meta: Required<DocMeta>;
@@ -278,9 +297,9 @@ export function projectRundownDoc(doc: Y.Doc): {
       const key = keyById.get(colId);
       if (!key) return;
       // DOM-free plain-text projection: paragraph breaks become newlines,
-      // every other tag is stripped.
+      // editor marks are stripped, and the sheet's own angle brackets survive.
       const xml = fragment.toString();
-      cells[key] = xml.replace(/<\/paragraph>/g, "\n").replace(/<[^>]+>/g, "").replace(/\n$/, "");
+      cells[key] = cellPlainText(xml);
       if (RICH_MARK.test(xml)) (cellsRich ??= {})[key] = xml;
     });
 

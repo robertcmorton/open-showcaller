@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computeTiming } from "@opencall/core";
-import { buildRundownDoc, decodeDoc, encodeDoc, projectRundownDoc } from "../src/doc";
+import { buildRundownDoc, cellPlainText, decodeDoc, encodeDoc, projectRundownDoc } from "../src/doc";
 
 describe("rundown doc round-trip", () => {
   it("builds, encodes, decodes, and projects with timing intact", () => {
@@ -52,5 +52,31 @@ describe("sheet-faithful columns and outcome tags", () => {
     const doc = buildRundownDoc([{ type: "cue", title: "A" }], {}, [{ key: "loc", title: "LOC" }], true, [], ["duration", "ghost", "loc"]);
     const { columns } = projectRundownDoc(doc);
     expect(columns.map((c) => c.key)).toEqual(["duration", "loc", "title", "start"]);
+  });
+});
+
+describe("cell text fidelity", () => {
+  it("keeps angle brackets a person typed", () => {
+    // Run sheets use them as prompts to read aloud; they are not markup.
+    const doc = buildRundownDoc([
+      { type: "cue", title: "PRESENTATION", cells: { script: "Now <player name> accepts the trophy" } },
+      { type: "cue", title: "<Captain to speak>" },
+    ]);
+    const rows = projectRundownDoc(doc).rows;
+    expect(rows[0]!.cells.script).toBe("Now <player name> accepts the trophy");
+    expect(rows[1]!.title).toBe("<Captain to speak>");
+  });
+
+  it("still strips the editor's own formatting marks", () => {
+    expect(cellPlainText("<paragraph><bold>LIVE</bold> now</paragraph>")).toBe("LIVE now");
+    expect(cellPlainText("<paragraph>a</paragraph><paragraph>b</paragraph>")).toBe("a\nb");
+  });
+
+  it("keeps the sheet's own item numbers on every row", () => {
+    const doc = buildRundownDoc([
+      { type: "cue", title: "ONE", sourceNumber: "1" },
+      { type: "cue", title: "SUB", sourceNumber: "129a" },
+    ]);
+    expect(projectRundownDoc(doc).rows.map((r) => r.sourceNumber)).toEqual(["1", "129a"]);
   });
 });

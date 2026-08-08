@@ -11,6 +11,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); the project is n
 
 _Nothing yet._
 
+## [0.19.0] — 2026-08-08
+
+### Fixed
+- **Imported run sheets lost their item numbers.** The import screen re-read the sheet as you corrected cells, and that second reading skipped the numbering and the alternate-ending detection the first one had done — so every sheet imported with no numbers at all, and no win/lose/draw branches. There is now one way to turn a sheet into rows, and everything uses it.
+- **Angle brackets were deleted from the text.** A run sheet uses them for prompts to read aloud — a captain to speak, a player's name to fill in — and anything shaped like a tag was stripped on the way to the screen, silently removing those lines. Only the app's own formatting is treated as formatting now.
+- **A column could arrive split in two.** In a ruled table, one cell often holds several pieces of text at different positions — a name beside an italic aside, a bold heading over plain rows — and columns were being worked out from those positions, so a sheet's NOTES arrived half under NOTES and half under "Column 17". The table's own ruled lines now decide where the columns are, and text is placed by its middle rather than its left edge, so bold and centred values stay in the column they were typed in.
+- **A column whose entries start late was thrown away.** Only the first 60 rows were read when deciding whether an untitled column held anything, so a countdown that begins on page five looked empty and was dropped. The whole sheet is read now — which also correctly discards a right-hand column that just repeats the row numbers.
+- **Text in a time or duration column no longer vanishes.** A team list that puts "Fullback" or "Interchange" in the duration column had nowhere to put it and dropped it. It is now kept beside the column it came from, under the sheet's own heading.
+
+### Added
+- **An import audit** (`apps/web/scripts/import-audit.mts`): re-reads a rundown's source sheet through the real pipeline, reads the live rundown, and reports every row where the two disagree — missing rows, drifted numbering, changed times or durations, cell text under the wrong column. Exits non-zero on any difference, so it can gate a release.
+
+### Changed
+- The conversion from a read sheet into a rundown moved out of the import screen into the shared core, so it can be tested and audited without a browser. Its rules are covered by tests for the first time.
+
 ## [0.18.1] — 2026-08-08
 
 ### Fixed
